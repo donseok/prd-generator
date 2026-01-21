@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /a \"C:\\Users\\USER\\prd-generator\")",
+      "Bash(tree:*)",
+      "Bash(dir /s /b \"C:\\Users\\USER\\prd-generator\")",
+      "Bash(dir /s /b \"C:\\Users\\USER\\prd-generator\\frontend\\src\\app\")",
+      "Bash(git init:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat: PRD 자동 생성 시스템 초기 구현\n\n4단계 AI 파이프라인을 통한 PRD 자동 생성 풀스택 웹 애플리케이션\n\n백엔드 (FastAPI):\n- 7개 입력 타입 지원 (텍스트, 이메일, 엑셀, PPT, 이미지, 채팅, 문서)\n- Layer 1: 파일 파싱 및 텍스트 추출\n- Layer 2: 요구사항 정규화 및 User Story 변환\n- Layer 3: 품질 검증 및 PM 검토 라우팅 (80% 임계값)\n- Layer 4: PRD 문서 생성 (마크다운/HTML)\n- Claude AI 통합 (Vision API 포함)\n- JSON 파일 기반 데이터 저장\n\n프론트엔드 (Next.js 14):\n- 대시보드: 통계 및 최근 항목\n- 파일 업로드: 드래그앤드롭 지원\n- 처리 상태: 실시간 파이프라인 시각화\n- PRD 뷰어: 탭 기반 문서 표시\n- PM 검토: 신뢰도 낮은 항목 검토 인터페이스\n- 히스토리: PRD/작업 목록 및 내보내기\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git config:*)"
+    ]
+  }
+}

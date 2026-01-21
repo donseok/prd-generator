@@ -1,0 +1,13 @@
+"""Normalization prompts for Claude AI."""
+
+from .normalization_prompts import (
+    REQUIREMENT_EXTRACTION_PROMPT,
+    USER_STORY_CONVERSION_PROMPT,
+    CONFIDENCE_SCORING_PROMPT,
+)
+
+__all__ = [
+    "REQUIREMENT_EXTRACTION_PROMPT",
+    "USER_STORY_CONVERSION_PROMPT",
+    "CONFIDENCE_SCORING_PROMPT",
+]
