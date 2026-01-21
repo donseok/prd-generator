@@ -1,0 +1,69 @@
+{
+    "feature_requests": [
+        {
+            "id": "FR-001",
+            "title": "소셜 로그인 통합",
+            "description": "사용자가 카카오, 네이버, 구글 계정으로 간편하게 로그인할 수 있는 기능",
+            "requester": "마케팅팀",
+            "request_date": "2026-01-05",
+            "priority": "high",
+            "business_value": "회원가입 전환율 30% 향상 예상",
+            "acceptance_criteria": [
+                "카카오 로그인 지원",
+                "네이버 로그인 지원",
+                "구글 로그인 지원",
+                "애플 로그인 지원 (iOS)",
+                "기존 계정과 소셜 계정 연동 가능"
+            ],
+            "constraints": [
+                "OAuth 2.0 표준 준수",
+                "개인정보 최소 수집 원칙"
+            ]
+        },
+        {
+            "id": "FR-002",
+            "title": "실시간 채팅 상담",
+            "description": "고객이 앱 내에서 실시간으로 상담원과 채팅할 수 있는 기능",
+            "requester": "CS팀",
+            "request_date": "2026-01-08",
+            "priority": "medium",
+            "business_value": "CS 응대 시간 50% 단축, 고객 만족도 향상",
+            "acceptance_criteria": [
+                "웹소켓 기반 실시간 메시징",
+                "파일 및 이미지 첨부 가능",
+                "상담 내역 저장 및 조회",
+                "상담원 배정 자동화",
+                "영업시간 외 챗봇 연동"
+            ],
+            "constraints": [
+                "메시지 암호화 (E2E)",
+                "상담 대기 시간 5분 이내"
+            ]
+        },
+        {
+            "id": "FR-003",
+            "title": "다국어 지원",
+            "description": "앱의 다국어 지원을 통한 글로벌 확장",
+            "requester": "사업개발팀",
+            "request_date": "2026-01-12",
+            "priority": "low",
+            "business_value": "동남아 시장 진출 준비",
+            "acceptance_criteria": [
+                "영어 지원",
+                "일본어 지원",
+                "베트남어 지원 (2단계)",
+                "언어 자동 감지",
+                "사용자 언어 설정 저장"
+            ],
+            "constraints": [
+                "RTL 언어는 1차 범위 제외",
+                "번역 품질 검수 프로세스 필요"
+            ]
+        }
+    ],
+    "metadata": {
+        "document_version": "1.0",
+        "last_updated": "2026-01-15",
+        "total_requests": 3
+    }
+}
