@@ -61,3 +61,11 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Temporary/Test files
+nul
+temp_test.txt
+test_generation.py
+test_input.txt
+test_login_feature.txt
+test_request.json
