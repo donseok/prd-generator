@@ -119,6 +119,8 @@ class PRDDocument(BaseModel):
             for req in self.functional_requirements:
                 lines.append(f"### {req.id}: {req.title}")
                 lines.append(f"**우선순위**: {req.priority.value} | **신뢰도**: {req.confidence_score:.0%}")
+                if req.source_reference:
+                    lines.append(f" | **출처**: {req.source_reference}")
                 lines.append("")
                 lines.append(req.description)
                 lines.append("")
@@ -138,6 +140,8 @@ class PRDDocument(BaseModel):
             for req in self.non_functional_requirements:
                 lines.append(f"### {req.id}: {req.title}")
                 lines.append(f"**우선순위**: {req.priority.value} | **신뢰도**: {req.confidence_score:.0%}")
+                if req.source_reference:
+                    lines.append(f" | **출처**: {req.source_reference}")
                 lines.append("")
                 lines.append(req.description)
                 lines.append("")
@@ -148,6 +152,8 @@ class PRDDocument(BaseModel):
             lines.append("")
             for req in self.constraints:
                 lines.append(f"### {req.id}: {req.title}")
+                if req.source_reference:
+                    lines.append(f"**출처**: {req.source_reference}")
                 lines.append(req.description)
                 lines.append("")
 
@@ -172,6 +178,16 @@ class PRDDocument(BaseModel):
                 lines.append(f"- **[{item.type.upper()}]** {item.description}")
                 if item.suggested_action:
                     lines.append(f"  - 제안: {item.suggested_action}")
+            lines.append("")
+
+        # Source Documents
+        if self.metadata.source_documents:
+            lines.append("## 출처 문서")
+            lines.append("")
+            lines.append("이 PRD는 다음 문서들을 기반으로 생성되었습니다:")
+            lines.append("")
+            for idx, doc in enumerate(self.metadata.source_documents, 1):
+                lines.append(f"{idx}. {doc}")
             lines.append("")
 
         # Footer
