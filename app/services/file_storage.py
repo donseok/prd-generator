@@ -142,10 +142,12 @@ class FileStorage:
         doc_dir.mkdir(parents=True, exist_ok=True)
 
         file_path = doc_dir / filename
-        async with aiofiles.open(file_path, "wb") as f:
-            await f.write(file_content)
+        # 동기 방식 사용 (Windows aiofiles 호환성 문제 해결)
+        with open(file_path, "wb") as f:
+            f.write(file_content)
 
-        return str(file_path)
+        # 절대 경로 반환 (상대 경로 사용 시 서버 CWD에 따라 파일을 못 찾는 문제 방지)
+        return str(file_path.resolve())
 
     async def get_upload(self, document_id: str, filename: str) -> Optional[bytes]:
         """Get uploaded file content."""
@@ -153,8 +155,9 @@ class FileStorage:
         if not file_path.exists():
             return None
 
-        async with aiofiles.open(file_path, "rb") as f:
-            return await f.read()
+        # 동기 방식 사용 (Windows aiofiles 호환성 문제 해결)
+        with open(file_path, "rb") as f:
+            return f.read()
 
     async def delete_upload(self, document_id: str) -> bool:
         """Delete all uploaded files for a document."""
@@ -187,8 +190,9 @@ class FileStorage:
 
     async def _save_model(self, file_path: Path, model: BaseModel):
         """Save Pydantic model to JSON file."""
-        async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-            await f.write(model.model_dump_json(indent=2))
+        # 동기 방식 사용 (Windows aiofiles 호환성 문제 해결)
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(model.model_dump_json(indent=2))
 
     async def _load_model(self, file_path: Path, model_class: Type[T]) -> Optional[T]:
         """Load Pydantic model from JSON file."""
@@ -196,8 +200,9 @@ class FileStorage:
             return None
 
         try:
-            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
-                content = await f.read()
+            # 동기 방식 사용 (Windows aiofiles 호환성 문제 해결)
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
                 return model_class.model_validate_json(content)
         except Exception as e:
             print(f"Error loading {file_path}: {e}")

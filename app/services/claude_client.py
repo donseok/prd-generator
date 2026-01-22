@@ -4,6 +4,7 @@ import json
 import subprocess
 import tempfile
 import os
+import sys
 import asyncio
 import logging
 from typing import Optional
@@ -145,12 +146,22 @@ class ClaudeClient:
         """Run Claude CLI synchronously."""
         # Get current environment and ensure PATH includes common locations
         env = os.environ.copy()
-        extra_paths = [
-            os.path.expanduser("~/.npm-global/bin"),
-            "/usr/local/bin",
-            "/opt/homebrew/bin",
-        ]
-        env["PATH"] = ":".join(extra_paths) + ":" + env.get("PATH", "")
+
+        # Windows와 Unix 환경에 맞는 PATH 설정
+        if sys.platform == "win32":
+            extra_paths = [
+                os.path.expanduser("~\\AppData\\Roaming\\npm"),
+            ]
+            path_separator = ";"
+        else:
+            extra_paths = [
+                os.path.expanduser("~/.npm-global/bin"),
+                "/usr/local/bin",
+                "/opt/homebrew/bin",
+            ]
+            path_separator = ":"
+
+        env["PATH"] = path_separator.join(extra_paths) + path_separator + env.get("PATH", "")
 
         prompt_preview = prompt[:200] + "..." if len(prompt) > 200 else prompt
         logger.info(f"[CLI] 프롬프트 길이: {len(prompt)} chars")
@@ -160,12 +171,16 @@ class ClaudeClient:
         logger.info(f"[CLI] subprocess 시작: {start_time.strftime('%H:%M:%S')}")
 
         try:
+            # Windows에서는 shell=True 필요 (claude.cmd 실행)
+            use_shell = sys.platform == "win32"
             result = subprocess.run(
                 ["claude", "-p", prompt, "--output-format", "text"],
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5 minute timeout
                 env=env,
+                shell=use_shell,
+                encoding='utf-8',  # Windows에서 UTF-8 출력 처리
             )
 
             elapsed = (datetime.now() - start_time).total_seconds()
@@ -192,23 +207,36 @@ class ClaudeClient:
         """Run Claude CLI synchronously with file attachments."""
         # Get current environment and ensure PATH includes common locations
         env = os.environ.copy()
-        extra_paths = [
-            os.path.expanduser("~/.npm-global/bin"),
-            "/usr/local/bin",
-            "/opt/homebrew/bin",
-        ]
-        env["PATH"] = ":".join(extra_paths) + ":" + env.get("PATH", "")
+
+        # Windows와 Unix 환경에 맞는 PATH 설정
+        if sys.platform == "win32":
+            extra_paths = [
+                os.path.expanduser("~\\AppData\\Roaming\\npm"),
+            ]
+            path_separator = ";"
+        else:
+            extra_paths = [
+                os.path.expanduser("~/.npm-global/bin"),
+                "/usr/local/bin",
+                "/opt/homebrew/bin",
+            ]
+            path_separator = ":"
+
+        env["PATH"] = path_separator.join(extra_paths) + path_separator + env.get("PATH", "")
 
         cmd = ["claude", "-p", prompt, "--output-format", "text"]
         for file_path in file_paths:
             cmd.extend(["--file", file_path])
 
+        use_shell = sys.platform == "win32"
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
             timeout=300,
             env=env,
+            shell=use_shell,
+            encoding='utf-8',
         )
 
         if result.returncode != 0:
@@ -219,12 +247,19 @@ class ClaudeClient:
 
     async def _execute_claude_cli(self, prompt: str) -> str:
         """Execute Claude Code CLI with the given prompt."""
+        from concurrent.futures import ThreadPoolExecutor
+
         last_error = None
 
         for attempt in range(self._max_retries):
             try:
                 logger.info(f"[execute] 시도 {attempt + 1}/{self._max_retries} 시작")
-                result = await asyncio.to_thread(self._run_claude_sync, prompt)
+                # ThreadPoolExecutor를 사용하여 동기 함수를 비동기로 실행
+                loop = asyncio.get_running_loop()
+                with ThreadPoolExecutor() as executor:
+                    result = await loop.run_in_executor(
+                        executor, self._run_claude_sync, prompt
+                    )
                 logger.info(f"[execute] 시도 {attempt + 1} 성공!")
                 return result
 
@@ -242,6 +277,80 @@ class ClaudeClient:
         logger.error(f"[execute] 모든 시도 실패! 마지막 에러: {last_error}")
         raise last_error
 
+    async def _run_claude_async(self, prompt: str) -> str:
+        """Run Claude CLI asynchronously using asyncio subprocess."""
+        env = os.environ.copy()
+
+        # Windows와 Unix 환경에 맞는 PATH 설정
+        if sys.platform == "win32":
+            extra_paths = [
+                os.path.expanduser("~\\AppData\\Roaming\\npm"),
+            ]
+            path_separator = ";"
+        else:
+            extra_paths = [
+                os.path.expanduser("~/.npm-global/bin"),
+                "/usr/local/bin",
+                "/opt/homebrew/bin",
+            ]
+            path_separator = ":"
+
+        env["PATH"] = path_separator.join(extra_paths) + path_separator + env.get("PATH", "")
+
+        prompt_preview = prompt[:200] + "..." if len(prompt) > 200 else prompt
+        logger.info(f"[CLI-async] 프롬프트 길이: {len(prompt)} chars")
+        logger.debug(f"[CLI-async] 프롬프트 미리보기: {prompt_preview}")
+
+        start_time = datetime.now()
+        logger.info(f"[CLI-async] subprocess 시작: {start_time.strftime('%H:%M:%S')}")
+
+        try:
+            if sys.platform == "win32":
+                # Windows: cmd /c를 통해 claude 실행
+                process = await asyncio.create_subprocess_exec(
+                    "cmd", "/c", "claude", "-p", prompt, "--output-format", "text",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+            else:
+                process = await asyncio.create_subprocess_exec(
+                    "claude", "-p", prompt, "--output-format", "text",
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+
+            try:
+                stdout, stderr = await asyncio.wait_for(
+                    process.communicate(),
+                    timeout=300  # 5 minute timeout
+                )
+            except asyncio.TimeoutError:
+                process.kill()
+                await process.wait()
+                raise subprocess.TimeoutExpired(cmd="claude", timeout=300)
+
+            elapsed = (datetime.now() - start_time).total_seconds()
+            logger.info(f"[CLI-async] subprocess 완료: {elapsed:.1f}초 소요, returncode={process.returncode}")
+
+            if process.returncode != 0:
+                error_msg = stderr.decode('utf-8', errors='replace') if stderr else "Unknown error"
+                logger.error(f"[CLI-async] 에러 발생: {error_msg}")
+                raise RuntimeError(f"Claude CLI error: {error_msg}")
+
+            result = stdout.decode('utf-8', errors='replace').strip()
+            response_preview = result[:300] if result else "empty"
+            logger.info(f"[CLI-async] 응답 길이: {len(result)} chars")
+            logger.debug(f"[CLI-async] 응답 미리보기: {response_preview}...")
+
+            return result
+
+        except subprocess.TimeoutExpired:
+            elapsed = (datetime.now() - start_time).total_seconds()
+            logger.error(f"[CLI-async] 타임아웃! {elapsed:.1f}초 후 타임아웃")
+            raise
+
     async def _execute_claude_cli_with_files(
         self, prompt: str, file_paths: list[str]
     ) -> str:
@@ -251,8 +360,10 @@ class ClaudeClient:
         for attempt in range(self._max_retries):
             try:
                 print(f"[ClaudeClient] Executing CLI with files (attempt {attempt + 1})...")
-                result = await asyncio.to_thread(
-                    self._run_claude_sync_with_files, prompt, file_paths
+                # Windows에서 asyncio.to_thread 문제 회피를 위해 run_in_executor 사용
+                loop = asyncio.get_event_loop()
+                result = await loop.run_in_executor(
+                    None, self._run_claude_sync_with_files, prompt, file_paths
                 )
                 print(f"[ClaudeClient] CLI with files completed successfully")
                 return result

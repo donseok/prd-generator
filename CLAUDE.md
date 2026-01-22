@@ -96,3 +96,4 @@ Swagger UI: `http://localhost:8000/docs`
 Remote: `https://github.com/donseok/prd-generator.git`
 
 Use `/git:git-commander` skill for automated commit and push workflow.
+- 프로그램 테스트 해보자

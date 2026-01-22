@@ -221,7 +221,19 @@ class PipelineOrchestrator:
                 # Parse document
                 if doc.source_path:
                     from pathlib import Path
-                    parsed = await parser.parse(Path(doc.source_path))
+                    source_path = Path(doc.source_path)
+                    
+                    # 상대 경로인 경우 절대 경로로 변환 (기존 문서 호환성)
+                    if not source_path.is_absolute():
+                        # 프로젝트 루트 기준으로 절대 경로 생성
+                        project_root = Path(__file__).parent.parent.parent
+                        source_path = project_root / source_path
+                    
+                    if not source_path.exists():
+                        print(f"[Parsing] WARNING: File not found: {source_path}")
+                        continue
+                        
+                    parsed = await parser.parse(source_path)
                 else:
                     # Use existing parsed content if available
                     parsed = doc.content
@@ -230,6 +242,8 @@ class PipelineOrchestrator:
 
             except Exception as e:
                 print(f"Parsing failed for {doc.id}: {e}")
+                import traceback
+                traceback.print_exc()
                 # Continue with other documents
 
         # Record layer result
