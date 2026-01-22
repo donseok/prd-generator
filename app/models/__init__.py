@@ -6,6 +6,7 @@ from .requirement import (
     Priority,
     NormalizedRequirement,
     ValidationResult,
+    SourceReference,
 )
 from .prd import (
     PRDOverview,
@@ -34,6 +35,7 @@ __all__ = [
     "Priority",
     "NormalizedRequirement",
     "ValidationResult",
+    "SourceReference",
     # PRD models
     "PRDOverview",
     "Milestone",

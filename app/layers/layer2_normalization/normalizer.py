@@ -10,6 +10,7 @@ from app.models import (
     NormalizedRequirement,
     RequirementType,
     Priority,
+    SourceReference,
 )
 from app.services import ClaudeClient, get_claude_client
 from .prompts.normalization_prompts import (
@@ -39,7 +40,8 @@ class Normalizer:
     async def normalize(
         self,
         parsed_contents: List[ParsedContent],
-        context: dict = None
+        context: dict = None,
+        document_ids: List[str] = None
     ) -> List[NormalizedRequirement]:
         """
         Normalize multiple parsed contents into a unified list of requirements.
@@ -47,6 +49,7 @@ class Normalizer:
         Args:
             parsed_contents: List of parsed content from Layer 1
             context: Optional additional context
+            document_ids: List of document IDs corresponding to parsed_contents
 
         Returns:
             List of normalized requirements
@@ -58,9 +61,14 @@ class Normalizer:
         all_requirements = []
         requirement_counter = 1
 
+        # Generate document IDs if not provided
+        if document_ids is None:
+            document_ids = [f"doc-{i}" for i in range(len(parsed_contents))]
+
         for idx, parsed_content in enumerate(parsed_contents, 1):
             filename = parsed_content.metadata.filename or "unknown"
-            logger.info(f"[Normalizer] [{idx}/{len(parsed_contents)}] 문서 처리 시작: {filename}")
+            doc_id = document_ids[idx - 1] if idx <= len(document_ids) else f"doc-{idx}"
+            logger.info(f"[Normalizer] [{idx}/{len(parsed_contents)}] 문서 처리 시작: {filename} (ID: {doc_id})")
 
             # Step 1: Extract requirement candidates using Claude
             logger.info(f"[Normalizer] [{idx}] Step 1: 요구사항 후보 추출 중...")
@@ -74,7 +82,8 @@ class Normalizer:
                 requirement = await self._normalize_candidate(
                     candidate,
                     requirement_counter,
-                    filename
+                    filename,
+                    doc_id
                 )
 
                 if requirement:
@@ -123,10 +132,12 @@ class Normalizer:
   {{
     "title": "짧은 제목",
     "description": "상세 설명",
-    "original_text": "원본 텍스트",
+    "original_text": "원본 텍스트 (최대 200자)",
     "type_hint": "FR/NFR/CONSTRAINT 중 추정",
     "priority_hint": "HIGH/MEDIUM/LOW 중 추정",
-    "context": "발견된 맥락"
+    "section_name": "발견된 섹션명 (예: '기능 요구사항', '보안', '배경' 등)",
+    "line_number": 추정 라인 번호 (숫자, 모르면 null),
+    "context": "발견된 맥락 설명"
   }}
 ]
 
@@ -163,7 +174,8 @@ class Normalizer:
         self,
         candidate: dict,
         counter: int,
-        source_file: str
+        source_file: str,
+        document_id: str = None
     ) -> Optional[NormalizedRequirement]:
         """Normalize a single requirement candidate."""
         title = candidate.get("title", f"요구사항 {counter}")[:30]
@@ -206,6 +218,31 @@ class Normalizer:
             )
             logger.info(f"[normalize] REQ-{counter:03d} 신뢰도: {confidence_result['score']:.2f}")
 
+            # Build structured source reference
+            source_info = None
+            if document_id:
+                original_text = candidate.get("original_text", "")
+                excerpt = original_text[:200] if original_text else None
+                line_num = candidate.get("line_number")
+
+                source_info = SourceReference(
+                    document_id=document_id,
+                    filename=source_file,
+                    section=candidate.get("section_name"),
+                    line_start=line_num if isinstance(line_num, int) else None,
+                    line_end=None,
+                    excerpt=excerpt
+                )
+
+            # Legacy source_reference for backward compatibility
+            context = candidate.get("context", "")
+            section_name = candidate.get("section_name", "")
+            legacy_source = f"{source_file}"
+            if section_name:
+                legacy_source += f" [{section_name}]"
+            if context:
+                legacy_source += f": {context}"
+
             return NormalizedRequirement(
                 id=f"REQ-{counter:03d}",
                 type=req_type,
@@ -216,7 +253,8 @@ class Normalizer:
                 priority=priority,
                 confidence_score=confidence_result["score"],
                 confidence_reason=confidence_result["reason"],
-                source_reference=f"{source_file}: {candidate.get('context', '')}",
+                source_reference=legacy_source,
+                source_info=source_info,
                 assumptions=confidence_result.get("assumptions", []),
                 missing_info=confidence_result.get("missing_info", []),
             )

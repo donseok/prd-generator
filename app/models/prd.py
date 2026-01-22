@@ -118,9 +118,16 @@ class PRDDocument(BaseModel):
             lines.append("")
             for req in self.functional_requirements:
                 lines.append(f"### {req.id}: {req.title}")
+                # Build source display string
+                source_display = ""
+                if req.source_info:
+                    source_display = req.source_info.to_display_string()
+                elif req.source_reference:
+                    source_display = req.source_reference
+
                 lines.append(f"**우선순위**: {req.priority.value} | **신뢰도**: {req.confidence_score:.0%}")
-                if req.source_reference:
-                    lines.append(f" | **출처**: {req.source_reference}")
+                if source_display:
+                    lines.append(f"**출처**: {source_display}")
                 lines.append("")
                 lines.append(req.description)
                 lines.append("")
@@ -132,6 +139,10 @@ class PRDDocument(BaseModel):
                     for ac in req.acceptance_criteria:
                         lines.append(f"- [ ] {ac}")
                     lines.append("")
+                # Show excerpt if available
+                if req.source_info and req.source_info.excerpt:
+                    lines.append(f"> 원문: \"{req.source_info.excerpt}\"")
+                    lines.append("")
 
         # Non-Functional Requirements
         if self.non_functional_requirements:
@@ -139,12 +150,23 @@ class PRDDocument(BaseModel):
             lines.append("")
             for req in self.non_functional_requirements:
                 lines.append(f"### {req.id}: {req.title}")
+                # Build source display string
+                source_display = ""
+                if req.source_info:
+                    source_display = req.source_info.to_display_string()
+                elif req.source_reference:
+                    source_display = req.source_reference
+
                 lines.append(f"**우선순위**: {req.priority.value} | **신뢰도**: {req.confidence_score:.0%}")
-                if req.source_reference:
-                    lines.append(f" | **출처**: {req.source_reference}")
+                if source_display:
+                    lines.append(f"**출처**: {source_display}")
                 lines.append("")
                 lines.append(req.description)
                 lines.append("")
+                # Show excerpt if available
+                if req.source_info and req.source_info.excerpt:
+                    lines.append(f"> 원문: \"{req.source_info.excerpt}\"")
+                    lines.append("")
 
         # Constraints
         if self.constraints:
@@ -152,10 +174,21 @@ class PRDDocument(BaseModel):
             lines.append("")
             for req in self.constraints:
                 lines.append(f"### {req.id}: {req.title}")
-                if req.source_reference:
-                    lines.append(f"**출처**: {req.source_reference}")
+                # Build source display string
+                source_display = ""
+                if req.source_info:
+                    source_display = req.source_info.to_display_string()
+                elif req.source_reference:
+                    source_display = req.source_reference
+
+                if source_display:
+                    lines.append(f"**출처**: {source_display}")
                 lines.append(req.description)
                 lines.append("")
+                # Show excerpt if available
+                if req.source_info and req.source_info.excerpt:
+                    lines.append(f"> 원문: \"{req.source_info.excerpt}\"")
+                    lines.append("")
 
         # Milestones
         if self.milestones:

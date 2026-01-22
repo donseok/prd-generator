@@ -5,6 +5,29 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 
+class SourceReference(BaseModel):
+    """Structured source reference for traceability."""
+
+    document_id: str = Field(..., description="Unique document identifier")
+    filename: str = Field(..., description="Original filename")
+    section: Optional[str] = Field(default=None, description="Section name where found")
+    line_start: Optional[int] = Field(default=None, description="Starting line number")
+    line_end: Optional[int] = Field(default=None, description="Ending line number")
+    excerpt: Optional[str] = Field(default=None, description="Original text excerpt (max 200 chars)")
+
+    def to_display_string(self) -> str:
+        """Convert to human-readable display string."""
+        parts = [self.filename]
+        if self.section:
+            parts.append(f"[{self.section}]")
+        if self.line_start:
+            if self.line_end and self.line_end != self.line_start:
+                parts.append(f"(L{self.line_start}-{self.line_end})")
+            else:
+                parts.append(f"(L{self.line_start})")
+        return " ".join(parts)
+
+
 class RequirementType(str, Enum):
     """Requirement classification types."""
 
@@ -43,7 +66,10 @@ class NormalizedRequirement(BaseModel):
         default="", description="Reason for the confidence score"
     )
     source_reference: str = Field(
-        default="", description="Reference to original source location"
+        default="", description="Reference to original source location (legacy)"
+    )
+    source_info: Optional[SourceReference] = Field(
+        default=None, description="Structured source reference for detailed traceability"
     )
     assumptions: list[str] = Field(
         default_factory=list, description="Assumptions made during extraction"

@@ -76,7 +76,11 @@ class PipelineOrchestrator:
             await self.storage.update_job(job)
             await self._emit_event(on_progress, job, "layer_start", "normalizing", "정규화 시작")
 
-            requirements = await self._execute_normalization(job, parsed_contents)
+            # Pass document IDs for source tracking
+            document_ids = [doc.id for doc in documents]
+            requirements = await self._execute_normalization(
+                job, parsed_contents, document_ids=document_ids
+            )
 
             await self._emit_event(
                 on_progress, job, "layer_complete", "normalizing",
@@ -176,7 +180,10 @@ class PipelineOrchestrator:
 
         # Re-run parsing and normalization
         parsed_contents = await self._execute_parsing(job, documents)
-        requirements = await self._execute_normalization(job, parsed_contents)
+        document_ids = [doc.id for doc in documents]
+        requirements = await self._execute_normalization(
+            job, parsed_contents, document_ids=document_ids
+        )
 
         # Apply review decisions
         final_requirements = self._apply_review_decisions(requirements, job.review_items)
@@ -239,12 +246,16 @@ class PipelineOrchestrator:
     async def _execute_normalization(
         self,
         job: ProcessingJob,
-        parsed_contents: List[ParsedContent]
+        parsed_contents: List[ParsedContent],
+        document_ids: List[str] = None
     ) -> List[NormalizedRequirement]:
         """Execute Layer 2: Normalization."""
         layer_start = datetime.now()
 
-        requirements = await self.normalizer.normalize(parsed_contents)
+        requirements = await self.normalizer.normalize(
+            parsed_contents,
+            document_ids=document_ids
+        )
 
         # Record layer result
         layer_result = LayerResult(
