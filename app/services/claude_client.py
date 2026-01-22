@@ -1,21 +1,22 @@
-"""Claude API client service for PRD generation."""
+"""Claude Code CLI client service for PRD generation."""
 
 import json
+import subprocess
+import tempfile
+import os
 import asyncio
-import base64
-from typing import Optional, Any
-from anthropic import AsyncAnthropic, APIError, RateLimitError
+from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
-from app.config import get_settings
+
+# Thread pool for running sync subprocess in async context
+_executor = ThreadPoolExecutor(max_workers=4)
 
 
 class ClaudeClient:
-    """Wrapper for Anthropic Claude API with Korean language optimization."""
+    """Wrapper for Claude Code CLI with Korean language optimization."""
 
     def __init__(self):
-        settings = get_settings()
-        self.client = AsyncAnthropic(api_key=settings.anthropic_api_key)
-        self.model = settings.claude_model
         self._max_retries = 3
         self._retry_delay = 2  # seconds
 
@@ -27,23 +28,24 @@ class ClaudeClient:
         temperature: float = 0.3,
     ) -> str:
         """
-        Send a completion request to Claude.
+        Send a completion request to Claude via CLI.
 
         Args:
             system_prompt: System-level instructions
             user_prompt: User message content
-            max_tokens: Maximum tokens in response
-            temperature: Sampling temperature (0.0-1.0)
+            max_tokens: Maximum tokens in response (not used in CLI mode)
+            temperature: Sampling temperature (not used in CLI mode)
 
         Returns:
             Claude's response text
         """
-        return await self._complete_with_retry(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        full_prompt = f"""[시스템 지시사항]
+{system_prompt}
+
+[사용자 요청]
+{user_prompt}"""
+
+        return await self._execute_claude_cli(full_prompt)
 
     async def complete_json(
         self,
@@ -64,18 +66,17 @@ class ClaudeClient:
         Returns:
             Parsed JSON response as dict
         """
-        # Enhance system prompt for JSON output
         json_system_prompt = f"""{system_prompt}
 
 중요: 반드시 유효한 JSON 형식으로만 응답하세요. 다른 텍스트나 설명 없이 JSON만 반환합니다."""
 
-        response = await self._complete_with_retry(
-            system_prompt=json_system_prompt,
-            user_prompt=user_prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-        )
+        full_prompt = f"""[시스템 지시사항]
+{json_system_prompt}
 
+[사용자 요청]
+{user_prompt}"""
+
+        response = await self._execute_claude_cli(full_prompt)
         return self._parse_json_response(response)
 
     async def analyze_image(
@@ -99,74 +100,111 @@ class ClaudeClient:
         Returns:
             Analysis result text
         """
-        base64_image = base64.standard_b64encode(image_data).decode("utf-8")
+        # Save image to temporary file
+        extension = media_type.split("/")[-1]
+        if extension == "jpeg":
+            extension = "jpg"
 
-        content = [
-            {
-                "type": "image",
-                "source": {
-                    "type": "base64",
-                    "media_type": media_type,
-                    "data": base64_image,
-                },
-            }
-        ]
+        with tempfile.NamedTemporaryFile(
+            suffix=f".{extension}", delete=False
+        ) as tmp_file:
+            tmp_file.write(image_data)
+            tmp_path = tmp_file.name
 
-        if additional_context:
-            content.append({
-                "type": "text",
-                "text": additional_context,
-            })
+        try:
+            full_prompt = f"""[시스템 지시사항]
+{system_prompt}
 
-        return await self._complete_with_retry(
-            system_prompt=system_prompt,
-            content=content,
-            max_tokens=max_tokens,
-            temperature=0.3,
+[추가 컨텍스트]
+{additional_context if additional_context else "없음"}
+
+이미지 파일을 분석해주세요: {tmp_path}"""
+
+            # Use claude CLI with image file
+            result = await self._execute_claude_cli_with_files(full_prompt, [tmp_path])
+            return result
+        finally:
+            # Clean up temporary file
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    def _run_claude_sync(self, prompt: str) -> str:
+        """Run Claude CLI synchronously."""
+        result = subprocess.run(
+            ["claude", "-p", prompt, "--output-format", "text"],
+            capture_output=True,
+            text=True,
+            timeout=300,  # 5 minute timeout
         )
 
-    async def _complete_with_retry(
-        self,
-        system_prompt: str,
-        user_prompt: str = None,
-        content: list = None,
-        max_tokens: int = 4096,
-        temperature: float = 0.3,
-    ) -> str:
-        """Execute completion with retry logic for transient failures."""
-        messages = []
+        if result.returncode != 0:
+            error_msg = result.stderr or "Unknown error"
+            raise RuntimeError(f"Claude CLI error: {error_msg}")
 
-        if content:
-            messages = [{"role": "user", "content": content}]
-        elif user_prompt:
-            messages = [{"role": "user", "content": user_prompt}]
-        else:
-            raise ValueError("Either user_prompt or content must be provided")
+        return result.stdout.strip()
 
+    def _run_claude_sync_with_files(self, prompt: str, file_paths: list[str]) -> str:
+        """Run Claude CLI synchronously with file attachments."""
+        cmd = ["claude", "-p", prompt, "--output-format", "text"]
+        for file_path in file_paths:
+            cmd.extend(["--file", file_path])
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=300,
+        )
+
+        if result.returncode != 0:
+            error_msg = result.stderr or "Unknown error"
+            raise RuntimeError(f"Claude CLI error: {error_msg}")
+
+        return result.stdout.strip()
+
+    async def _execute_claude_cli(self, prompt: str) -> str:
+        """Execute Claude Code CLI with the given prompt."""
+        import functools
         last_error = None
+        loop = asyncio.get_event_loop()
+
         for attempt in range(self._max_retries):
             try:
-                response = await self.client.messages.create(
-                    model=self.model,
-                    max_tokens=max_tokens,
-                    system=system_prompt,
-                    messages=messages,
-                    temperature=temperature,
-                )
-                return response.content[0].text
+                # Run sync subprocess in thread pool using functools.partial
+                func = functools.partial(self._run_claude_sync, prompt)
+                result = await loop.run_in_executor(_executor, func)
+                return result
 
-            except RateLimitError as e:
+            except Exception as e:
                 last_error = e
-                wait_time = self._retry_delay * (2 ** attempt)  # Exponential backoff
-                await asyncio.sleep(wait_time)
+                print(f"Claude CLI attempt {attempt + 1} failed: {e}")
+                if attempt < self._max_retries - 1:
+                    await asyncio.sleep(self._retry_delay * (2 ** attempt))
+                continue
 
-            except APIError as e:
+        raise last_error
+
+    async def _execute_claude_cli_with_files(
+        self, prompt: str, file_paths: list[str]
+    ) -> str:
+        """Execute Claude Code CLI with file attachments."""
+        import functools
+        last_error = None
+        loop = asyncio.get_event_loop()
+
+        for attempt in range(self._max_retries):
+            try:
+                # Run sync subprocess in thread pool using functools.partial
+                func = functools.partial(self._run_claude_sync_with_files, prompt, file_paths)
+                result = await loop.run_in_executor(_executor, func)
+                return result
+
+            except Exception as e:
                 last_error = e
-                if e.status_code >= 500:  # Server error, retry
-                    wait_time = self._retry_delay * (2 ** attempt)
-                    await asyncio.sleep(wait_time)
-                else:
-                    raise  # Client error, don't retry
+                print(f"Claude CLI with files attempt {attempt + 1} failed: {e}")
+                if attempt < self._max_retries - 1:
+                    await asyncio.sleep(self._retry_delay * (2 ** attempt))
+                continue
 
         raise last_error
 

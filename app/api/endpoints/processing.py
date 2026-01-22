@@ -53,12 +53,9 @@ async def start_processing(
     # Save job
     await storage.save_job(job)
 
-    # Start background processing
-    # Note: Orchestrator will be implemented in Phase 6
-    background_tasks.add_task(
-        run_pipeline,
-        job.job_id,
-    )
+    # Start background processing using asyncio.create_task
+    import asyncio
+    asyncio.create_task(run_pipeline(job.job_id))
 
     return {
         "job_id": job.job_id,

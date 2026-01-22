@@ -5,10 +5,6 @@ from functools import lru_cache
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
-    # Anthropic API
-    anthropic_api_key: str = ""
-    claude_model: str = "claude-sonnet-4-20250514"
-
     # Validation
     auto_approve_threshold: float = 0.8
 

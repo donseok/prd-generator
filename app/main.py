@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
     # Startup: Initialize services
     settings = get_settings()
     print(f"PRD Generator starting on {settings.host}:{settings.port}")
-    print(f"Using Claude model: {settings.claude_model}")
+    print("Using Claude Code CLI for AI processing")
 
     yield
 
