@@ -2,6 +2,8 @@
 
 from typing import List, Optional
 import uuid
+import logging
+from datetime import datetime
 
 from app.models import (
     ParsedContent,
@@ -15,6 +17,8 @@ from .prompts.normalization_prompts import (
     USER_STORY_CONVERSION_PROMPT,
     CONFIDENCE_SCORING_PROMPT,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class Normalizer:
@@ -47,39 +51,64 @@ class Normalizer:
         Returns:
             List of normalized requirements
         """
+        logger.info(f"[Normalizer] ===== 정규화 시작 =====")
+        logger.info(f"[Normalizer] 처리할 문서 수: {len(parsed_contents)}")
+        start_time = datetime.now()
+
         all_requirements = []
         requirement_counter = 1
 
-        for parsed_content in parsed_contents:
-            # Step 1: Extract requirement candidates using Claude
-            candidates = await self._extract_candidates(parsed_content)
+        for idx, parsed_content in enumerate(parsed_contents, 1):
+            filename = parsed_content.metadata.filename or "unknown"
+            logger.info(f"[Normalizer] [{idx}/{len(parsed_contents)}] 문서 처리 시작: {filename}")
 
-            for candidate in candidates:
+            # Step 1: Extract requirement candidates using Claude
+            logger.info(f"[Normalizer] [{idx}] Step 1: 요구사항 후보 추출 중...")
+            candidates = await self._extract_candidates(parsed_content)
+            logger.info(f"[Normalizer] [{idx}] Step 1 완료: {len(candidates)}개 후보 추출됨")
+
+            for c_idx, candidate in enumerate(candidates, 1):
+                logger.info(f"[Normalizer] [{idx}] 후보 {c_idx}/{len(candidates)} 정규화 중: {candidate.get('title', 'N/A')[:30]}...")
+
                 # Step 2: Classify and normalize
                 requirement = await self._normalize_candidate(
                     candidate,
                     requirement_counter,
-                    parsed_content.metadata.filename or "unknown"
+                    filename
                 )
 
                 if requirement:
                     all_requirements.append(requirement)
+                    logger.info(f"[Normalizer] [{idx}] 후보 {c_idx} 완료: {requirement.id}")
                     requirement_counter += 1
+                else:
+                    logger.warning(f"[Normalizer] [{idx}] 후보 {c_idx} 정규화 실패")
 
         # Step 3: Identify relationships between requirements
         if len(all_requirements) > 1:
+            logger.info(f"[Normalizer] Step 3: 요구사항 간 관계 분석 중...")
             await self._identify_relationships(all_requirements)
+            logger.info(f"[Normalizer] Step 3 완료")
+
+        elapsed = (datetime.now() - start_time).total_seconds()
+        logger.info(f"[Normalizer] ===== 정규화 완료 =====")
+        logger.info(f"[Normalizer] 총 요구사항: {len(all_requirements)}개, 소요시간: {elapsed:.1f}초")
 
         return all_requirements
 
     async def _extract_candidates(self, parsed_content: ParsedContent) -> List[dict]:
         """Extract requirement candidates from parsed content using Claude."""
+        filename = parsed_content.metadata.filename or "unknown"
+        logger.info(f"[extract] 후보 추출 시작: {filename}")
+
         # Build context from parsed content
         content_text = parsed_content.raw_text
         sections_text = "\n".join([
             f"### {s.get('title', 'Section')}\n{s.get('content', '')}"
             for s in parsed_content.sections
         ])
+
+        logger.debug(f"[extract] 원본 텍스트 길이: {len(content_text)}, 섹션 텍스트 길이: {len(sections_text)}")
 
         prompt = f"""다음 내용에서 요구사항 후보를 추출해주세요.
 
@@ -103,21 +132,31 @@ class Normalizer:
 
 요구사항이 없으면 빈 배열 []을 반환하세요."""
 
+        logger.info(f"[extract] 프롬프트 길이: {len(prompt)} chars")
+
         try:
+            start = datetime.now()
             result = await self.claude_client.complete_json(
                 system_prompt=REQUIREMENT_EXTRACTION_PROMPT,
                 user_prompt=prompt,
                 temperature=0.2,
             )
+            elapsed = (datetime.now() - start).total_seconds()
+            logger.info(f"[extract] Claude 응답 수신: {elapsed:.1f}초 소요")
 
             if isinstance(result, list):
+                logger.info(f"[extract] 결과: {len(result)}개 후보 (배열)")
                 return result
             elif isinstance(result, dict) and "requirements" in result:
+                logger.info(f"[extract] 결과: {len(result['requirements'])}개 후보 (dict)")
                 return result["requirements"]
+            logger.warning(f"[extract] 예상치 못한 결과 타입: {type(result)}")
             return []
 
         except Exception as e:
-            print(f"Requirement extraction failed: {e}")
+            logger.error(f"[extract] 후보 추출 실패: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             return []
 
     async def _normalize_candidate(
@@ -127,6 +166,9 @@ class Normalizer:
         source_file: str
     ) -> Optional[NormalizedRequirement]:
         """Normalize a single requirement candidate."""
+        title = candidate.get("title", f"요구사항 {counter}")[:30]
+        logger.info(f"[normalize] REQ-{counter:03d} 정규화 시작: {title}...")
+
         try:
             # Determine requirement type
             type_hint = candidate.get("type_hint", "FR").upper()
@@ -137,6 +179,8 @@ class Normalizer:
             else:
                 req_type = RequirementType.FUNCTIONAL
 
+            logger.debug(f"[normalize] REQ-{counter:03d} 타입: {req_type.value}")
+
             # Determine priority
             priority_hint = candidate.get("priority_hint", "MEDIUM").upper()
             if "HIGH" in priority_hint:
@@ -146,15 +190,21 @@ class Normalizer:
             else:
                 priority = Priority.MEDIUM
 
+            logger.debug(f"[normalize] REQ-{counter:03d} 우선순위: {priority.value}")
+
             # Generate user story and acceptance criteria
+            logger.info(f"[normalize] REQ-{counter:03d} User Story 생성 중...")
             user_story, acceptance_criteria = await self._generate_user_story(
                 candidate, req_type
             )
+            logger.info(f"[normalize] REQ-{counter:03d} User Story 완료, AC {len(acceptance_criteria)}개")
 
             # Calculate confidence score
+            logger.info(f"[normalize] REQ-{counter:03d} 신뢰도 계산 중...")
             confidence_result = await self._calculate_confidence(
                 candidate, user_story, acceptance_criteria
             )
+            logger.info(f"[normalize] REQ-{counter:03d} 신뢰도: {confidence_result['score']:.2f}")
 
             return NormalizedRequirement(
                 id=f"REQ-{counter:03d}",
@@ -172,7 +222,9 @@ class Normalizer:
             )
 
         except Exception as e:
-            print(f"Normalization failed for candidate: {e}")
+            logger.error(f"[normalize] REQ-{counter:03d} 정규화 실패: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     async def _generate_user_story(
@@ -183,6 +235,7 @@ class Normalizer:
         """Generate user story and acceptance criteria."""
         if req_type == RequirementType.CONSTRAINT:
             # Constraints don't need user stories
+            logger.debug("[user_story] CONSTRAINT 타입은 User Story 생략")
             return None, []
 
         prompt = f"""다음 요구사항을 User Story와 Acceptance Criteria로 변환해주세요.
@@ -199,11 +252,14 @@ JSON 형식으로 응답:
 }}"""
 
         try:
+            start = datetime.now()
             result = await self.claude_client.complete_json(
                 system_prompt=USER_STORY_CONVERSION_PROMPT,
                 user_prompt=prompt,
                 temperature=0.3,
             )
+            elapsed = (datetime.now() - start).total_seconds()
+            logger.debug(f"[user_story] Claude 응답: {elapsed:.1f}초 소요")
 
             user_story = result.get("user_story")
             acceptance_criteria = result.get("acceptance_criteria", [])
@@ -211,7 +267,9 @@ JSON 형식으로 응답:
             return user_story, acceptance_criteria
 
         except Exception as e:
-            print(f"User story generation failed: {e}")
+            logger.error(f"[user_story] 생성 실패: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             return None, []
 
     async def _calculate_confidence(
@@ -246,11 +304,14 @@ JSON 형식으로 응답:
 - 추적가능성: 출처가 명확한가?"""
 
         try:
+            start = datetime.now()
             result = await self.claude_client.complete_json(
                 system_prompt=CONFIDENCE_SCORING_PROMPT,
                 user_prompt=prompt,
                 temperature=0.1,
             )
+            elapsed = (datetime.now() - start).total_seconds()
+            logger.debug(f"[confidence] Claude 응답: {elapsed:.1f}초 소요")
 
             score = result.get("score", 0.5)
             # Ensure score is in valid range
@@ -264,7 +325,9 @@ JSON 형식으로 응답:
             }
 
         except Exception as e:
-            print(f"Confidence scoring failed: {e}")
+            logger.error(f"[confidence] 계산 실패: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             return {
                 "score": 0.5,
                 "reason": "신뢰도 계산 실패",
@@ -278,7 +341,10 @@ JSON 형식으로 응답:
     ) -> None:
         """Identify relationships between requirements."""
         if len(requirements) < 2:
+            logger.debug("[relationships] 요구사항이 2개 미만이므로 관계 분석 생략")
             return
+
+        logger.info(f"[relationships] {len(requirements)}개 요구사항 간 관계 분석 시작")
 
         # Build summary of all requirements
         req_summaries = "\n".join([
@@ -304,13 +370,17 @@ JSON 형식으로 관계를 반환:
 - conflicts_with: A와 B가 충돌"""
 
         try:
+            start = datetime.now()
             result = await self.claude_client.complete_json(
                 system_prompt="당신은 요구사항 간의 관계를 분석하는 전문가입니다.",
                 user_prompt=prompt,
                 temperature=0.2,
             )
+            elapsed = (datetime.now() - start).total_seconds()
+            logger.info(f"[relationships] Claude 응답: {elapsed:.1f}초 소요")
 
             relationships = result.get("relationships", [])
+            logger.info(f"[relationships] {len(relationships)}개 관계 발견")
 
             # Apply relationships to requirements
             for rel in relationships:
@@ -323,4 +393,6 @@ JSON 형식으로 관계를 반환:
                             req.related_requirements.append(to_id)
 
         except Exception as e:
-            print(f"Relationship identification failed: {e}")
+            logger.error(f"[relationships] 관계 분석 실패: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()

@@ -67,12 +67,16 @@ async def start_processing(
 
 async def run_pipeline(job_id: str):
     """Background task to run the processing pipeline."""
+    import traceback
     from app.services import get_orchestrator
+
+    print(f"[Pipeline] Starting pipeline for job: {job_id}")
 
     storage = get_file_storage()
     job = await storage.get_job(job_id)
 
     if not job:
+        print(f"[Pipeline] Job not found: {job_id}")
         return
 
     try:
@@ -86,14 +90,20 @@ async def run_pipeline(job_id: str):
         if not documents:
             raise ValueError("입력 문서를 찾을 수 없습니다")
 
+        print(f"[Pipeline] Processing {len(documents)} documents")
+
         # Run pipeline through orchestrator
         orchestrator = get_orchestrator()
         prd = await orchestrator.process(job, documents)
+
+        print(f"[Pipeline] Pipeline completed. PRD: {prd.id if prd else 'None (PM review required)'}")
 
         # If prd is None, it means PM review is required
         # The orchestrator already updated the job status
 
     except Exception as e:
+        print(f"[Pipeline] ERROR: {e}")
+        traceback.print_exc()
         job.update_status(ProcessingStatus.FAILED)
         job.error_message = str(e)
         await storage.update_job(job)

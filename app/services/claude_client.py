@@ -5,12 +5,16 @@ import subprocess
 import tempfile
 import os
 import asyncio
+import logging
 from typing import Optional
-from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 
-
-# Thread pool for running sync subprocess in async context
-_executor = ThreadPoolExecutor(max_workers=4)
+# 상세 로깅 설정
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 class ClaudeClient:
@@ -39,10 +43,14 @@ class ClaudeClient:
         Returns:
             Claude's response text
         """
-        full_prompt = f"""[시스템 지시사항]
+        # Claude Code CLI에 맞는 자연스러운 프롬프트 형식
+        full_prompt = f"""당신은 PRD(제품 요구사항 문서) 생성을 돕는 요구사항 분석 전문가입니다.
+
+다음 지침을 따라 작업해 주세요:
 {system_prompt}
 
-[사용자 요청]
+---
+
 {user_prompt}"""
 
         return await self._execute_claude_cli(full_prompt)
@@ -66,15 +74,19 @@ class ClaudeClient:
         Returns:
             Parsed JSON response as dict
         """
-        json_system_prompt = f"""{system_prompt}
+        # Claude Code CLI에 맞는 자연스러운 프롬프트 형식
+        full_prompt = f"""당신은 PRD(제품 요구사항 문서) 생성을 돕는 요구사항 분석 전문가입니다.
 
-중요: 반드시 유효한 JSON 형식으로만 응답하세요. 다른 텍스트나 설명 없이 JSON만 반환합니다."""
+다음 지침을 따라 작업해 주세요:
+{system_prompt}
 
-        full_prompt = f"""[시스템 지시사항]
-{json_system_prompt}
+---
 
-[사용자 요청]
-{user_prompt}"""
+{user_prompt}
+
+---
+
+응답 형식: 반드시 유효한 JSON만 출력하세요. 설명이나 마크다운 코드 블록 없이 순수 JSON만 반환합니다."""
 
         response = await self._execute_claude_cli(full_prompt)
         return self._parse_json_response(response)
@@ -112,13 +124,14 @@ class ClaudeClient:
             tmp_path = tmp_file.name
 
         try:
-            full_prompt = f"""[시스템 지시사항]
+            full_prompt = f"""당신은 PRD 생성을 돕는 요구사항 분석 전문가입니다.
+
+다음 지침을 따라 이미지를 분석해 주세요:
 {system_prompt}
 
-[추가 컨텍스트]
-{additional_context if additional_context else "없음"}
+추가 컨텍스트: {additional_context if additional_context else "없음"}
 
-이미지 파일을 분석해주세요: {tmp_path}"""
+첨부된 이미지 파일을 분석해주세요."""
 
             # Use claude CLI with image file
             result = await self._execute_claude_cli_with_files(full_prompt, [tmp_path])
@@ -130,21 +143,62 @@ class ClaudeClient:
 
     def _run_claude_sync(self, prompt: str) -> str:
         """Run Claude CLI synchronously."""
-        result = subprocess.run(
-            ["claude", "-p", prompt, "--output-format", "text"],
-            capture_output=True,
-            text=True,
-            timeout=300,  # 5 minute timeout
-        )
+        # Get current environment and ensure PATH includes common locations
+        env = os.environ.copy()
+        extra_paths = [
+            os.path.expanduser("~/.npm-global/bin"),
+            "/usr/local/bin",
+            "/opt/homebrew/bin",
+        ]
+        env["PATH"] = ":".join(extra_paths) + ":" + env.get("PATH", "")
 
-        if result.returncode != 0:
-            error_msg = result.stderr or "Unknown error"
-            raise RuntimeError(f"Claude CLI error: {error_msg}")
+        prompt_preview = prompt[:200] + "..." if len(prompt) > 200 else prompt
+        logger.info(f"[CLI] 프롬프트 길이: {len(prompt)} chars")
+        logger.debug(f"[CLI] 프롬프트 미리보기: {prompt_preview}")
 
-        return result.stdout.strip()
+        start_time = datetime.now()
+        logger.info(f"[CLI] subprocess 시작: {start_time.strftime('%H:%M:%S')}")
+
+        try:
+            result = subprocess.run(
+                ["claude", "-p", prompt, "--output-format", "text"],
+                capture_output=True,
+                text=True,
+                timeout=300,  # 5 minute timeout
+                env=env,
+            )
+
+            elapsed = (datetime.now() - start_time).total_seconds()
+            logger.info(f"[CLI] subprocess 완료: {elapsed:.1f}초 소요, returncode={result.returncode}")
+
+            if result.returncode != 0:
+                error_msg = result.stderr or "Unknown error"
+                logger.error(f"[CLI] 에러 발생: {error_msg}")
+                logger.error(f"[CLI] stdout: {result.stdout[:500] if result.stdout else 'empty'}")
+                raise RuntimeError(f"Claude CLI error: {error_msg}")
+
+            response_preview = result.stdout[:300] if result.stdout else "empty"
+            logger.info(f"[CLI] 응답 길이: {len(result.stdout)} chars")
+            logger.debug(f"[CLI] 응답 미리보기: {response_preview}...")
+
+            return result.stdout.strip()
+
+        except subprocess.TimeoutExpired as e:
+            elapsed = (datetime.now() - start_time).total_seconds()
+            logger.error(f"[CLI] 타임아웃! {elapsed:.1f}초 후 타임아웃")
+            raise
 
     def _run_claude_sync_with_files(self, prompt: str, file_paths: list[str]) -> str:
         """Run Claude CLI synchronously with file attachments."""
+        # Get current environment and ensure PATH includes common locations
+        env = os.environ.copy()
+        extra_paths = [
+            os.path.expanduser("~/.npm-global/bin"),
+            "/usr/local/bin",
+            "/opt/homebrew/bin",
+        ]
+        env["PATH"] = ":".join(extra_paths) + ":" + env.get("PATH", "")
+
         cmd = ["claude", "-p", prompt, "--output-format", "text"]
         for file_path in file_paths:
             cmd.extend(["--file", file_path])
@@ -154,6 +208,7 @@ class ClaudeClient:
             capture_output=True,
             text=True,
             timeout=300,
+            env=env,
         )
 
         if result.returncode != 0:
@@ -164,44 +219,49 @@ class ClaudeClient:
 
     async def _execute_claude_cli(self, prompt: str) -> str:
         """Execute Claude Code CLI with the given prompt."""
-        import functools
         last_error = None
-        loop = asyncio.get_event_loop()
 
         for attempt in range(self._max_retries):
             try:
-                # Run sync subprocess in thread pool using functools.partial
-                func = functools.partial(self._run_claude_sync, prompt)
-                result = await loop.run_in_executor(_executor, func)
+                logger.info(f"[execute] 시도 {attempt + 1}/{self._max_retries} 시작")
+                result = await asyncio.to_thread(self._run_claude_sync, prompt)
+                logger.info(f"[execute] 시도 {attempt + 1} 성공!")
                 return result
 
             except Exception as e:
                 last_error = e
-                print(f"Claude CLI attempt {attempt + 1} failed: {e}")
+                logger.error(f"[execute] 시도 {attempt + 1} 실패: {type(e).__name__}: {e}")
+                import traceback
+                traceback.print_exc()
                 if attempt < self._max_retries - 1:
-                    await asyncio.sleep(self._retry_delay * (2 ** attempt))
+                    wait_time = self._retry_delay * (2 ** attempt)
+                    logger.info(f"[execute] {wait_time}초 후 재시도...")
+                    await asyncio.sleep(wait_time)
                 continue
 
+        logger.error(f"[execute] 모든 시도 실패! 마지막 에러: {last_error}")
         raise last_error
 
     async def _execute_claude_cli_with_files(
         self, prompt: str, file_paths: list[str]
     ) -> str:
         """Execute Claude Code CLI with file attachments."""
-        import functools
         last_error = None
-        loop = asyncio.get_event_loop()
 
         for attempt in range(self._max_retries):
             try:
-                # Run sync subprocess in thread pool using functools.partial
-                func = functools.partial(self._run_claude_sync_with_files, prompt, file_paths)
-                result = await loop.run_in_executor(_executor, func)
+                print(f"[ClaudeClient] Executing CLI with files (attempt {attempt + 1})...")
+                result = await asyncio.to_thread(
+                    self._run_claude_sync_with_files, prompt, file_paths
+                )
+                print(f"[ClaudeClient] CLI with files completed successfully")
                 return result
 
             except Exception as e:
                 last_error = e
-                print(f"Claude CLI with files attempt {attempt + 1} failed: {e}")
+                print(f"[ClaudeClient] CLI with files attempt {attempt + 1} failed: {e}")
+                import traceback
+                traceback.print_exc()
                 if attempt < self._max_retries - 1:
                     await asyncio.sleep(self._retry_delay * (2 ** attempt))
                 continue
@@ -210,25 +270,36 @@ class ClaudeClient:
 
     def _parse_json_response(self, response: str) -> dict:
         """Parse JSON from Claude's response, handling common formatting issues."""
+        logger.info(f"[JSON] 파싱 시작, 응답 길이: {len(response)} chars")
+
         # Remove markdown code blocks if present
         cleaned = response.strip()
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
+            logger.debug("[JSON] ```json 제거")
         elif cleaned.startswith("```"):
             cleaned = cleaned[3:]
+            logger.debug("[JSON] ``` 제거")
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3]
+            logger.debug("[JSON] 끝 ``` 제거")
         cleaned = cleaned.strip()
 
         try:
-            return json.loads(cleaned)
+            result = json.loads(cleaned)
+            logger.info(f"[JSON] 직접 파싱 성공! 타입: {type(result).__name__}")
+            return result
         except json.JSONDecodeError as e:
+            logger.warning(f"[JSON] 직접 파싱 실패: {e}")
+            logger.debug(f"[JSON] 정리된 응답 미리보기: {cleaned[:300]}...")
+
             # Try to find JSON object/array in the response
             start_idx = cleaned.find("{")
             if start_idx == -1:
                 start_idx = cleaned.find("[")
 
             if start_idx != -1:
+                logger.info(f"[JSON] JSON 시작 위치 발견: {start_idx}")
                 # Find matching closing bracket
                 bracket = "{" if cleaned[start_idx] == "{" else "["
                 closing = "}" if bracket == "{" else "]"
@@ -245,10 +316,14 @@ class ClaudeClient:
                             break
 
                 try:
-                    return json.loads(cleaned[start_idx:end_idx])
-                except json.JSONDecodeError:
-                    pass
+                    result = json.loads(cleaned[start_idx:end_idx])
+                    logger.info(f"[JSON] 추출 파싱 성공! 타입: {type(result).__name__}")
+                    return result
+                except json.JSONDecodeError as e2:
+                    logger.error(f"[JSON] 추출 파싱도 실패: {e2}")
+                    logger.error(f"[JSON] 추출된 부분: {cleaned[start_idx:end_idx][:200]}...")
 
+            logger.error(f"[JSON] 최종 파싱 실패! 원본 응답: {response[:500]}...")
             raise ValueError(f"Failed to parse JSON response: {e}")
 
 
