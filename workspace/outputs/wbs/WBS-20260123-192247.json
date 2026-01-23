@@ -1,0 +1,449 @@
+{
+  "id": "WBS-20260123-a91d",
+  "title": "**차량 계량 관리 시스템** - 작업분해구조 (WBS)",
+  "phases": [
+    {
+      "id": "PH-001",
+      "name": "프로젝트 준비",
+      "description": "",
+      "order": 1,
+      "work_packages": [
+        {
+          "id": "PH-001-WP-001",
+          "name": "프로젝트 준비 작업",
+          "description": "프로젝트 준비 단계의 주요 작업",
+          "tasks": [
+            {
+              "id": "PH-001-WP-001-T-001",
+              "name": "프로젝트 준비 작업 수행",
+              "description": "작업 패키지 주요 작업 수행",
+              "estimated_hours": 16.0,
+              "status": "NOT_STARTED",
+              "resources": [
+                {
+                  "resource_type": "개발자",
+                  "allocation_percentage": 100.0,
+                  "person_count": 1
+                }
+              ],
+              "dependencies": [],
+              "start_date": "2026-01-23",
+              "end_date": "2026-01-24",
+              "related_requirement_ids": [],
+              "deliverables": [],
+              "notes": ""
+            }
+          ],
+          "start_date": "2026-01-23",
+          "end_date": "2026-01-24"
+        }
+      ],
+      "start_date": "2026-01-23",
+      "end_date": "2026-01-24",
+      "milestone": "킥오프",
+      "deliverables": [
+        "프로젝트 계획서"
+      ]
+    },
+    {
+      "id": "PH-002",
+      "name": "Sprint 1: 핵심 기능",
+      "description": "",
+      "order": 2,
+      "work_packages": [
+        {
+          "id": "PH-002-WP-001",
+          "name": "Sprint 1: 핵심 기능 작업",
+          "description": "Sprint 1: 핵심 기능 단계의 주요 작업",
+          "tasks": [
+            {
+              "id": "PH-002-WP-001-T-001",
+              "name": "Sprint 1: 핵심 기능 작업 수행",
+              "description": "작업 패키지 주요 작업 수행",
+              "estimated_hours": 16.0,
+              "status": "NOT_STARTED",
+              "resources": [
+                {
+                  "resource_type": "개발자",
+                  "allocation_percentage": 100.0,
+                  "person_count": 1
+                }
+              ],
+              "dependencies": [
+                {
+                  "predecessor_id": "PH-001-WP-001-T-001",
+                  "dependency_type": "FS",
+                  "lag_days": 0
+                }
+              ],
+              "start_date": "2026-01-25",
+              "end_date": "2026-01-26",
+              "related_requirement_ids": [
+                "REQ-001",
+                "REQ-004",
+                "REQ-007",
+                "REQ-014",
+                "REQ-017",
+                "REQ-020",
+                "REQ-023",
+                "REQ-026",
+                "REQ-029",
+                "REQ-032",
+                "REQ-035",
+                "REQ-038",
+                "REQ-041",
+                "REQ-056",
+                "REQ-067",
+                "REQ-072",
+                "REQ-079",
+                "REQ-082",
+                "REQ-085",
+                "REQ-088",
+                "REQ-091",
+                "REQ-094",
+                "REQ-097",
+                "REQ-100",
+                "REQ-103",
+                "REQ-107",
+                "REQ-113",
+                "REQ-116",
+                "REQ-119",
+                "REQ-125",
+                "REQ-128",
+                "REQ-131",
+                "REQ-134",
+                "REQ-137",
+                "REQ-140",
+                "REQ-150",
+                "REQ-153",
+                "REQ-156",
+                "REQ-161",
+                "REQ-164",
+                "REQ-167",
+                "REQ-170",
+                "REQ-175",
+                "REQ-178",
+                "REQ-181",
+                "REQ-190",
+                "REQ-193",
+                "REQ-196",
+                "REQ-199",
+                "REQ-202",
+                "REQ-212",
+                "REQ-215",
+                "REQ-218",
+                "REQ-221",
+                "REQ-231",
+                "REQ-239"
+              ],
+              "deliverables": [],
+              "notes": ""
+            }
+          ],
+          "start_date": "2026-01-25",
+          "end_date": "2026-01-26"
+        }
+      ],
+      "start_date": "2026-01-25",
+      "end_date": "2026-01-26",
+      "milestone": "MVP",
+      "deliverables": [
+        "핵심 기능 구현"
+      ]
+    },
+    {
+      "id": "PH-003",
+      "name": "Sprint 2-3: 추가 기능",
+      "description": "",
+      "order": 3,
+      "work_packages": [
+        {
+          "id": "PH-003-WP-001",
+          "name": "Sprint 2-3: 추가 기능 작업",
+          "description": "Sprint 2-3: 추가 기능 단계의 주요 작업",
+          "tasks": [
+            {
+              "id": "PH-003-WP-001-T-001",
+              "name": "Sprint 2-3: 추가 기능 작업 수행",
+              "description": "작업 패키지 주요 작업 수행",
+              "estimated_hours": 16.0,
+              "status": "NOT_STARTED",
+              "resources": [
+                {
+                  "resource_type": "개발자",
+                  "allocation_percentage": 100.0,
+                  "person_count": 1
+                }
+              ],
+              "dependencies": [
+                {
+                  "predecessor_id": "PH-002-WP-001-T-001",
+                  "dependency_type": "FS",
+                  "lag_days": 0
+                }
+              ],
+              "start_date": "2026-01-27",
+              "end_date": "2026-01-28",
+              "related_requirement_ids": [
+                "REQ-002",
+                "REQ-005",
+                "REQ-008",
+                "REQ-015",
+                "REQ-018",
+                "REQ-021",
+                "REQ-024",
+                "REQ-027",
+                "REQ-030",
+                "REQ-033",
+                "REQ-036",
+                "REQ-039",
+                "REQ-051",
+                "REQ-058",
+                "REQ-068",
+                "REQ-077",
+                "REQ-080",
+                "REQ-083",
+                "REQ-086",
+                "REQ-089",
+                "REQ-092",
+                "REQ-095",
+                "REQ-098",
+                "REQ-101",
+                "REQ-105",
+                "REQ-108",
+                "REQ-114",
+                "REQ-117",
+                "REQ-120",
+                "REQ-126",
+                "REQ-129",
+                "REQ-132",
+                "REQ-135",
+                "REQ-138",
+                "REQ-148",
+                "REQ-151",
+                "REQ-154",
+                "REQ-157",
+                "REQ-162",
+                "REQ-165",
+                "REQ-168",
+                "REQ-173",
+                "REQ-176",
+                "REQ-179",
+                "REQ-182",
+                "REQ-191",
+                "REQ-194",
+                "REQ-197",
+                "REQ-200",
+                "REQ-210",
+                "REQ-213",
+                "REQ-216",
+                "REQ-219",
+                "REQ-229",
+                "REQ-232",
+                "REQ-240"
+              ],
+              "deliverables": [],
+              "notes": ""
+            }
+          ],
+          "start_date": "2026-01-27",
+          "end_date": "2026-01-28"
+        }
+      ],
+      "start_date": "2026-01-27",
+      "end_date": "2026-01-28",
+      "milestone": "베타 버전",
+      "deliverables": [
+        "추가 기능 구현"
+      ]
+    },
+    {
+      "id": "PH-004",
+      "name": "Sprint 4: 안정화",
+      "description": "",
+      "order": 4,
+      "work_packages": [
+        {
+          "id": "PH-004-WP-001",
+          "name": "Sprint 4: 안정화 작업",
+          "description": "Sprint 4: 안정화 단계의 주요 작업",
+          "tasks": [
+            {
+              "id": "PH-004-WP-001-T-001",
+              "name": "Sprint 4: 안정화 작업 수행",
+              "description": "작업 패키지 주요 작업 수행",
+              "estimated_hours": 16.0,
+              "status": "NOT_STARTED",
+              "resources": [
+                {
+                  "resource_type": "개발자",
+                  "allocation_percentage": 100.0,
+                  "person_count": 1
+                }
+              ],
+              "dependencies": [
+                {
+                  "predecessor_id": "PH-003-WP-001-T-001",
+                  "dependency_type": "FS",
+                  "lag_days": 0
+                }
+              ],
+              "start_date": "2026-01-29",
+              "end_date": "2026-01-30",
+              "related_requirement_ids": [
+                "REQ-003",
+                "REQ-006",
+                "REQ-013",
+                "REQ-016",
+                "REQ-019",
+                "REQ-022",
+                "REQ-025",
+                "REQ-028",
+                "REQ-031",
+                "REQ-034",
+                "REQ-037",
+                "REQ-040",
+                "REQ-055",
+                "REQ-059",
+                "REQ-071",
+                "REQ-078",
+                "REQ-081",
+                "REQ-084",
+                "REQ-087",
+                "REQ-090",
+                "REQ-093",
+                "REQ-096",
+                "REQ-099",
+                "REQ-102",
+                "REQ-106",
+                "REQ-109",
+                "REQ-115",
+                "REQ-118",
+                "REQ-124",
+                "REQ-127",
+                "REQ-130",
+                "REQ-133",
+                "REQ-136",
+                "REQ-139",
+                "REQ-149",
+                "REQ-152",
+                "REQ-155",
+                "REQ-160",
+                "REQ-163",
+                "REQ-166",
+                "REQ-169",
+                "REQ-174",
+                "REQ-177",
+                "REQ-180",
+                "REQ-186",
+                "REQ-192",
+                "REQ-195",
+                "REQ-198",
+                "REQ-201",
+                "REQ-211",
+                "REQ-214",
+                "REQ-217",
+                "REQ-220",
+                "REQ-230",
+                "REQ-233",
+                "REQ-242"
+              ],
+              "deliverables": [],
+              "notes": ""
+            }
+          ],
+          "start_date": "2026-01-29",
+          "end_date": "2026-01-30"
+        }
+      ],
+      "start_date": "2026-01-29",
+      "end_date": "2026-01-30",
+      "milestone": "릴리즈 준비",
+      "deliverables": [
+        "버그 수정",
+        "문서화"
+      ]
+    },
+    {
+      "id": "PH-005",
+      "name": "릴리즈",
+      "description": "",
+      "order": 5,
+      "work_packages": [
+        {
+          "id": "PH-005-WP-001",
+          "name": "릴리즈 작업",
+          "description": "릴리즈 단계의 주요 작업",
+          "tasks": [
+            {
+              "id": "PH-005-WP-001-T-001",
+              "name": "릴리즈 작업 수행",
+              "description": "작업 패키지 주요 작업 수행",
+              "estimated_hours": 16.0,
+              "status": "NOT_STARTED",
+              "resources": [
+                {
+                  "resource_type": "개발자",
+                  "allocation_percentage": 100.0,
+                  "person_count": 1
+                }
+              ],
+              "dependencies": [
+                {
+                  "predecessor_id": "PH-004-WP-001-T-001",
+                  "dependency_type": "FS",
+                  "lag_days": 0
+                }
+              ],
+              "start_date": "2026-01-31",
+              "end_date": "2026-02-01",
+              "related_requirement_ids": [],
+              "deliverables": [],
+              "notes": ""
+            }
+          ],
+          "start_date": "2026-01-31",
+          "end_date": "2026-02-01"
+        }
+      ],
+      "start_date": "2026-01-31",
+      "end_date": "2026-02-01",
+      "milestone": "서비스 오픈",
+      "deliverables": [
+        "운영 환경 배포"
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 5,
+    "total_work_packages": 5,
+    "total_tasks": 5,
+    "total_hours": 96.0,
+    "total_man_days": 12.0,
+    "total_man_months": 0.5454545454545454,
+    "estimated_duration_days": 3,
+    "critical_path": [
+      "PH-001-WP-001-T-001",
+      "PH-002-WP-001-T-001",
+      "PH-003-WP-001-T-001",
+      "PH-004-WP-001-T-001",
+      "PH-005-WP-001-T-001"
+    ],
+    "resource_summary": [
+      {
+        "resource_type": "개발자",
+        "total_hours": 80.0,
+        "total_days": 10.0,
+        "peak_allocation": 0
+      }
+    ]
+  },
+  "metadata": {
+    "version": "1.0",
+    "status": "DRAFT",
+    "created_at": "2026-01-23T19:22:47.185048",
+    "updated_at": null,
+    "source_prd_id": "PRD-20260123-ea69",
+    "source_prd_title": "**차량 계량 관리 시스템**"
+  }
+}
