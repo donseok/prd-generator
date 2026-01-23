@@ -1,4 +1,4 @@
-# Git Commander
+# Git Push
 
 현재 프로젝트의 변경사항을 commit하고 GitHub에 push합니다.
 
