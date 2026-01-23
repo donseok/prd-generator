@@ -43,11 +43,38 @@ python test_proposal.py
 python test_trd_wbs.py
 ```
 
-### Custom Commands (Slash Commands)
+## CLI Scripts
+
+### 전체 문서 생성 (@auto-doc)
+```bash
+# PRD + TRD + WBS 생성
+python -m app.scripts.auto_doc
+
+# 제안서 포함
+python -m app.scripts.auto_doc --proposal --client "ABC Corporation"
+```
+
+### 개별 문서 생성
+```bash
+python -m app.scripts.prd_maker    # PRD 생성
+python -m app.scripts.trd_maker    # TRD 생성
+python -m app.scripts.wbs_maker    # WBS 생성
+python -m app.scripts.pro_maker    # 제안서 생성
+python -m app.scripts.pro_maker --client "고객사명"
+```
+
+### Custom Slash Commands
 ```bash
 /prd:prd_maker    # PRD 생성 (입력: workspace/inputs/projects/)
 /trd:trd_maker    # TRD 생성 (입력: 최신 PRD JSON)
 /wbs:wbs_maker    # WBS 생성 (입력: 최신 PRD JSON)
+/pro:pro-maker    # 제안서 생성 (입력: 최신 PRD JSON)
+```
+
+### Custom Agents
+```bash
+@auto-doc                    # PRD + TRD + WBS 생성
+@auto-doc --proposal         # PRD + TRD + WBS + 제안서 생성
 ```
 
 ## Architecture
@@ -66,35 +93,43 @@ Documents → [Layer 1: Parsing] → [Layer 2: Normalization] → [Layer 3: Vali
                                                                                                                     WBS
 ```
 
-**Layer 1 (Parsing):** `app/layers/layer1_parsing/` - ParserFactory auto-selects parser based on input type. Outputs ParsedContent.
+**Layer 1 (Parsing):** `app/layers/layer1_parsing/` - ParserFactory auto-selects parser based on input type.
 
-**Layer 2 (Normalization):** `app/layers/layer2_normalization/` - Uses Claude CLI to extract requirements, classify (FR/NFR/Constraint), generate user stories, calculate confidence scores.
+**Layer 2 (Normalization):** `app/layers/layer2_normalization/` - Extracts requirements, classifies (FR/NFR/Constraint), generates user stories.
 
 **Layer 3 (Validation):** `app/layers/layer3_validation/` - Completeness/consistency checks. Routes low-confidence items to PM review.
 
-**Layer 4 (Generation):** `app/layers/layer4_generation/` - Produces final PRDDocument with categorized requirements and milestones.
+**Layer 4 (Generation):** `app/layers/layer4_generation/` - Inherits from BaseGenerator. Produces PRDDocument.
 
-**Layer 5 (Proposal):** `app/layers/layer5_proposal/` - Converts PRDDocument to customer proposal (ProposalDocument). Generates executive summary, solution approach, timeline, resource plan, risks, and expected benefits using Claude.
+**Layer 5 (Proposal):** `app/layers/layer5_proposal/` - Inherits from BaseGenerator. Converts PRD to ProposalDocument.
 
-**Layer 6 (TRD):** `app/layers/layer6_trd/` - Converts PRDDocument to Technical Requirements Document (TRDDocument). Generates technology stack recommendations, system architecture, database design, API specifications, security/performance requirements, infrastructure requirements, and technical risks.
+**Layer 6 (TRD):** `app/layers/layer6_trd/` - Inherits from BaseGenerator. Converts PRD to TRDDocument.
 
-**Layer 7 (WBS):** `app/layers/layer7_wbs/` - Converts PRDDocument to Work Breakdown Structure (WBSDocument). Generates project phases, work packages, tasks with estimates, resource allocation, dependencies, critical path analysis, and project schedule.
+**Layer 7 (WBS):** `app/layers/layer7_wbs/` - Inherits from BaseGenerator. Converts PRD to WBSDocument.
 
 ### Key Services
 
-- `app/services/claude_client.py` - Claude Code CLI wrapper (`claude -p <prompt> --output-format text`)
-- `app/services/orchestrator.py` - Pipeline orchestration, status management
+- `app/services/claude_client.py` - Claude Code CLI wrapper
+- `app/services/orchestrator.py` - Layer 1-4 pipeline orchestration
+- `app/services/document_orchestrator.py` - Full document pipeline (PRD→TRD→WBS→Proposal)
 - `app/services/file_storage.py` - JSON file-based storage in `/data/`
+
+### Scripts
+
+- `app/scripts/auto_doc.py` - CLI for full document generation
+- `app/scripts/prd_maker.py` - PRD generation
+- `app/scripts/trd_maker.py` - TRD generation
+- `app/scripts/wbs_maker.py` - WBS generation
+- `app/scripts/pro_maker.py` - Proposal generation
 
 ### Data Flow
 
 **Workspace Structure:**
-- `/workspace/inputs/samples/` - Sample input files for testing
-- `/workspace/inputs/projects/` - Real project input files
+- `/workspace/inputs/projects/` - Input files (txt, md, json, csv, xlsx, pptx, docx, png, jpg)
 - `/workspace/outputs/prd/` - Generated PRD documents (MD + JSON)
-- `/workspace/outputs/proposals/` - Generated customer proposals
 - `/workspace/outputs/trd/` - Generated TRD documents (MD + JSON)
 - `/workspace/outputs/wbs/` - Generated WBS documents (MD + JSON)
+- `/workspace/outputs/proposals/` - Generated customer proposals (MD + JSON)
 
 **Runtime Data:**
 - `/data/jobs/{job_id}.json` - Processing job state
@@ -120,25 +155,25 @@ Base URL: `/api/v1`
 | `GET /prd/{prd_id}/export?format=markdown\|json` | Export PRD |
 | `POST /review/decision` | Submit PM review |
 | `POST /review/complete/{job_id}` | Resume after review |
-| `POST /proposals/generate` | Generate proposal from PRD (TODO) |
-| `GET /proposals/{proposal_id}` | Get proposal (TODO) |
 
 Swagger UI: `http://localhost:8000/docs`
 
 ## Key Models
 
-- `ParsedContent` - Layer 1 output with raw_text, sections, metadata
-- `NormalizedRequirement` - Layer 2 output with user_story, acceptance_criteria, confidence_score
 - `PRDDocument` - Layer 4 output with functional_requirements, non_functional_requirements, milestones
-- `ProposalDocument` - Layer 5 output with executive_summary, scope_of_work, timeline, resource_plan, risks
+- `PRDContext` - Layer 4 input context (title, source_documents)
+- `ProposalDocument` - Layer 5 output with executive_summary, scope_of_work, timeline, resource_plan
 - `ProposalContext` - Layer 5 input context (client_name, project_name, duration)
-- `TRDDocument` - Layer 6 output with technology_stack, system_architecture, database_design, api_specification, security/performance/infrastructure_requirements, technical_risks
-- `TRDContext` - Layer 6 input context (target_environment, preferred_stack, scalability_requirement, security_level)
+- `TRDDocument` - Layer 6 output with technology_stack, system_architecture, database_design, api_specification
+- `TRDContext` - Layer 6 input context (target_environment, preferred_stack, scalability_requirement)
 - `WBSDocument` - Layer 7 output with phases, work_packages, tasks, summary (total_hours, man_months, critical_path)
-- `WBSContext` - Layer 7 input context (start_date, team_size, methodology, sprint_duration, buffer_percentage)
+- `WBSContext` - Layer 7 input context (start_date, team_size, methodology, sprint_duration)
 
 ## Git Workflow
 
 Remote: `https://github.com/donseok/prd-generator.git`
 
-Use `/git:git-commander` skill for automated commit and push workflow.
+```bash
+/git:git-push    # 변경사항 커밋 및 푸시
+/git:git-pull    # 최신 코드 가져오기
+```

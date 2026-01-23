@@ -4,7 +4,7 @@ from typing import Dict, Type, Optional
 from pathlib import Path
 
 from app.models import InputType
-from app.services import ClaudeClient, get_claude_client
+from app.services.claude_client import ClaudeClient, get_claude_client
 from .base_parser import BaseParser
 
 

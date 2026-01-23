@@ -1,5 +1,5 @@
 """Layer 4: Generation - PRD document generation."""
 
-from .generator import PRDGenerator
+from .generator import PRDGenerator, PRDContext
 
-__all__ = ["PRDGenerator"]
+__all__ = ["PRDGenerator", "PRDContext"]

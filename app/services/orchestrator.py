@@ -25,11 +25,9 @@ from app.models import (
     LayerResult,
     ProcessingEvent,
 )
-from app.services import get_claude_client, get_file_storage
-from app.layers.layer1_parsing import ParserFactory
-from app.layers.layer2_normalization import Normalizer
-from app.layers.layer3_validation import Validator
-from app.layers.layer4_generation import PRDGenerator
+from app.services.claude_client import get_claude_client
+from app.services.file_storage import get_file_storage
+# Layer imports are lazy to avoid circular imports
 
 
 class PipelineOrchestrator:
@@ -46,6 +44,12 @@ class PipelineOrchestrator:
     def __init__(self):
         self.claude_client = get_claude_client()
         self.storage = get_file_storage()
+
+        # 순환 임포트 방지를 위해 지연 임포트
+        from app.layers.layer1_parsing import ParserFactory
+        from app.layers.layer2_normalization import Normalizer
+        from app.layers.layer3_validation import Validator
+        from app.layers.layer4_generation import PRDGenerator
 
         # Initialize layers
         self.parser_factory = ParserFactory(self.claude_client)
