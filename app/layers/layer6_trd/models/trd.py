@@ -5,6 +5,8 @@ from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
 
+from app.models.common import RiskLevel, BaseDocumentMetadata
+
 
 class TRDContext(BaseModel):
     """TRD 생성 컨텍스트."""
@@ -129,13 +131,6 @@ class InfrastructureRequirement(BaseModel):
     quantity: Optional[str] = Field(None, description="수량")
     purpose: str = Field("", description="용도")
     estimated_cost: Optional[str] = Field(None, description="예상 비용")
-
-
-class RiskLevel(str, Enum):
-    """리스크 수준."""
-    HIGH = "HIGH"
-    MEDIUM = "MEDIUM"
-    LOW = "LOW"
 
 
 class TechnicalRisk(BaseModel):

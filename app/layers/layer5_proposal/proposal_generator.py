@@ -1,12 +1,29 @@
-"""Proposal generator - converts PRD to customer proposal."""
+"""Proposal generator - converts PRD to customer proposal.
+
+Layer 5: 제안서 생성기
+PRDDocument를 기반으로 고객 제안서(ProposalDocument)를 생성합니다.
+
+처리 순서:
+1. 프로젝트 개요 추출 (PRD에서 직접 추출)
+2. 작업 범위 추출 (PRD에서 직접 추출)
+3. 솔루션 접근법 생성 (Claude 호출)
+4. 일정 계획 변환 (마일스톤 기반)
+5. 산출물 목록 생성 (기본 템플릿)
+6. 투입 인력 계획 생성 (규모 기반 자동 산정)
+7. 리스크 평가 (신뢰도/미해결 항목 기반)
+8. 전제 조건 추출 (PRD 가정사항 기반)
+9. 기대 효과 생성 (Claude 호출)
+10. 경영진 요약 생성 (Claude 호출, 마지막에 생성)
+11. 후속 절차 생성 (기본 템플릿)
+"""
 
 import logging
-import uuid
 from datetime import datetime
 from typing import Optional
 
 from app.models import PRDDocument, RequirementType
 from app.services import ClaudeClient, get_claude_client
+from app.layers.base_generator import BaseGenerator
 
 from .models import (
     ProposalDocument,
@@ -33,19 +50,34 @@ from .prompts import (
 logger = logging.getLogger(__name__)
 
 
-class ProposalGenerator:
-    """PRD를 기반으로 고객 제안서 생성."""
+class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalContext]):
+    """
+    PRD를 기반으로 고객 제안서 생성.
 
-    def __init__(self, claude_client: Optional[ClaudeClient] = None):
-        self.claude_client = claude_client or get_claude_client()
+    BaseGenerator를 상속하여 일관된 생성 흐름과
+    공통 유틸리티 메서드를 활용합니다.
+    """
 
-    async def generate(
+    _id_prefix = "PROP"
+    _generator_name = "ProposalGenerator"
+
+    async def _do_generate(
         self,
         prd: PRDDocument,
         context: ProposalContext,
     ) -> ProposalDocument:
         """
-        PRD를 기반으로 제안서 생성.
+        실제 제안서 생성 로직 (병렬 처리 최적화).
+
+        병렬화 전략:
+        - Phase 1: 로컬 처리 (동기)
+          - 프로젝트 개요, 작업 범위, 일정, 산출물, 리스크, 전제조건, 후속절차
+        - Phase 2: Claude 호출 병렬 처리
+          - 솔루션 접근법, 투입 인력, 기대 효과 (독립적이므로 병렬 가능)
+        - Phase 3: 경영진 요약 (순차)
+          - 기대 효과 결과가 필요하므로 마지막에 실행
+
+        예상 효과: 50-67% 시간 단축
 
         Args:
             prd: 원본 PRD 문서
@@ -54,16 +86,16 @@ class ProposalGenerator:
         Returns:
             ProposalDocument: 생성된 제안서
         """
-        logger.info(f"[ProposalGenerator] 제안서 생성 시작: {prd.title}")
-        start_time = datetime.now()
+        import asyncio
 
-        # 제안서 ID 생성
-        proposal_id = f"PROP-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:6]}"
+        # 제안서 ID 생성 (베이스 클래스 메서드 사용)
+        proposal_id = self._generate_id()
 
         # 제목 설정
         project_name = context.project_name or prd.title
         title = f"{context.client_name} {project_name} 제안서"
 
+        # ========== Phase 1: 로컬 처리 (동기) ==========
         # 1. 프로젝트 개요 추출
         project_overview = self._extract_project_overview(prd)
         logger.info("[ProposalGenerator] 프로젝트 개요 추출 완료")
@@ -71,10 +103,6 @@ class ProposalGenerator:
         # 2. 작업 범위 추출
         scope_of_work = self._extract_scope_of_work(prd)
         logger.info("[ProposalGenerator] 작업 범위 추출 완료")
-
-        # 3. 솔루션 접근법 생성 (Claude)
-        solution_approach = await self._generate_solution_approach(prd)
-        logger.info("[ProposalGenerator] 솔루션 접근법 생성 완료")
 
         # 4. 일정 계획 변환
         timeline = self._convert_milestones_to_timeline(prd, context)
@@ -84,10 +112,6 @@ class ProposalGenerator:
         deliverables = self._generate_deliverables(prd)
         logger.info("[ProposalGenerator] 산출물 목록 생성 완료")
 
-        # 6. 투입 인력 계획 생성 (Claude)
-        resource_plan = await self._generate_resource_plan(prd, context)
-        logger.info("[ProposalGenerator] 투입 인력 계획 생성 완료")
-
         # 7. 리스크 평가
         risks = self._assess_risks(prd)
         logger.info("[ProposalGenerator] 리스크 평가 완료")
@@ -96,18 +120,33 @@ class ProposalGenerator:
         assumptions = self._extract_assumptions(prd)
         logger.info("[ProposalGenerator] 전제 조건 추출 완료")
 
-        # 9. 기대 효과 생성 (Claude)
-        expected_benefits = await self._generate_expected_benefits(prd)
+        # 11. 후속 절차
+        next_steps = self._generate_next_steps()
+
+        # ========== Phase 2: Claude 호출 병렬 처리 ==========
+        logger.info("[ProposalGenerator] Claude 병렬 호출 시작 (solution, resource, benefits)")
+
+        # 독립적인 Claude 호출 3개를 병렬 실행
+        solution_task = self._generate_solution_approach(prd)
+        resource_task = self._generate_resource_plan(prd, context)
+        benefits_task = self._generate_expected_benefits(prd)
+
+        solution_approach, resource_plan, expected_benefits = await asyncio.gather(
+            solution_task,
+            resource_task,
+            benefits_task
+        )
+
+        logger.info("[ProposalGenerator] 솔루션 접근법 생성 완료")
+        logger.info("[ProposalGenerator] 투입 인력 계획 생성 완료")
         logger.info("[ProposalGenerator] 기대 효과 생성 완료")
 
-        # 10. 경영진 요약 생성 (Claude) - 마지막에 생성
+        # ========== Phase 3: 경영진 요약 (순차) ==========
+        # 기대 효과 결과가 필요하므로 마지막에 실행
         executive_summary = await self._generate_executive_summary(
             prd, context, project_overview, expected_benefits
         )
         logger.info("[ProposalGenerator] 경영진 요약 생성 완료")
-
-        # 11. 후속 절차
-        next_steps = self._generate_next_steps()
 
         # 메타데이터
         metadata = ProposalMetadata(
@@ -115,9 +154,6 @@ class ProposalGenerator:
             source_prd_title=prd.title,
             overall_confidence=prd.metadata.overall_confidence,
         )
-
-        elapsed = (datetime.now() - start_time).total_seconds()
-        logger.info(f"[ProposalGenerator] 제안서 생성 완료: {elapsed:.1f}초")
 
         return ProposalDocument(
             id=proposal_id,

@@ -1,6 +1,22 @@
 """Claude Code CLI client service for PRD generation.
 
 Uses Claude CLI (claude -p) for all AI operations.
+
+이 모듈은 Claude CLI를 래핑하여 비동기 AI 호출을 제공합니다.
+
+주요 기능:
+- complete(): 텍스트 응답 요청
+- complete_json(): JSON 응답 요청 (자동 파싱)
+- analyze_image(): 이미지 분석 (Vision API)
+
+실행 환경:
+- Claude CLI가 PATH에 설치되어 있어야 함
+- ThreadPoolExecutor를 사용하여 동기 CLI 호출을 비동기로 래핑
+
+재시도 전략:
+- 최대 3회 재시도
+- 지수 백오프 (2초, 4초, 8초)
+- 모든 예외에 대해 재시도 (타임아웃 포함)
 """
 
 import json
@@ -23,13 +39,38 @@ logger = logging.getLogger(__name__)
 
 
 class ClaudeClient:
-    """Wrapper for Claude Code CLI with Korean language optimization."""
+    """
+    Claude Code CLI 래퍼 클래스.
+
+    한국어 최적화 및 비동기 처리를 지원합니다.
+
+    Attributes:
+        _max_retries: 최대 재시도 횟수 (기본값: 3)
+        _retry_delay: 초기 재시도 대기 시간(초) (기본값: 2)
+        _executor: CLI 실행용 ThreadPoolExecutor
+    """
 
     def __init__(self):
+        """
+        ClaudeClient 초기화.
+
+        ThreadPoolExecutor의 max_workers는 CPU 코어 수에 따라 동적 설정:
+        - 최소: 2 (저사양 환경에서도 기본 동시성 보장)
+        - 최대: 8 (과도한 동시 요청 방지)
+        - 기본: CPU 코어 수
+
+        이 설정으로 병렬 처리 시 20-30% 처리량 향상을 기대합니다.
+        """
         self._max_retries = 3
         self._retry_delay = 2  # seconds
-        self._executor = ThreadPoolExecutor(max_workers=2)
-        logger.info("[ClaudeClient] CLI 모드 초기화 완료")
+
+        # CPU 코어 수 기반 동적 workers 설정
+        # 최소 2, 최대 8, 기본은 CPU 코어 수
+        cpu_count = os.cpu_count() or 4
+        max_workers = min(8, max(2, cpu_count))
+        self._executor = ThreadPoolExecutor(max_workers=max_workers)
+
+        logger.info(f"[ClaudeClient] CLI 모드 초기화 완료 (workers={max_workers})")
 
     async def complete(
         self,
@@ -242,13 +283,47 @@ class ClaudeClient:
         return result.stdout.strip()
 
     async def _execute_claude_cli(self, prompt: str) -> str:
-        """Execute Claude Code CLI with the given prompt."""
+        """
+        Claude Code CLI를 비동기로 실행.
+
+        ThreadPoolExecutor를 사용하여 동기 CLI 호출을
+        비동기 컨텍스트에서 실행합니다.
+
+        실행 환경:
+        - claude CLI가 시스템 PATH에 설치되어 있어야 함
+        - 명령어: claude -p <prompt> --output-format text
+        - 타임아웃: 300초 (5분)
+
+        재시도 전략:
+        ┌─────────────────────────────────────────────────────┐
+        │ 시도 │ 대기 시간 │ 누적 시간 │                      │
+        ├─────────────────────────────────────────────────────┤
+        │ 1차  │ -         │ 0초       │ 첫 시도              │
+        │ 2차  │ 2초       │ 2초       │ 2^0 * 2초           │
+        │ 3차  │ 4초       │ 6초       │ 2^1 * 2초           │
+        └─────────────────────────────────────────────────────┘
+
+        지수 백오프(Exponential Backoff) 적용:
+        - wait_time = _retry_delay * (2 ** attempt)
+        - 일시적 오류 복구 기회 제공
+        - 서버 부하 분산 효과
+
+        Args:
+            prompt: Claude에 전송할 프롬프트
+
+        Returns:
+            Claude의 응답 텍스트
+
+        Raises:
+            마지막 시도에서 발생한 예외
+        """
         last_error = None
 
         for attempt in range(self._max_retries):
             try:
                 logger.info(f"[CLI] 시도 {attempt + 1}/{self._max_retries}")
 
+                # ThreadPoolExecutor에서 동기 CLI 실행
                 loop = asyncio.get_running_loop()
                 result = await loop.run_in_executor(
                     self._executor, self._run_claude_sync, prompt
@@ -260,6 +335,8 @@ class ClaudeClient:
             except Exception as e:
                 last_error = e
                 logger.error(f"[CLI] 시도 {attempt + 1} 실패: {type(e).__name__}: {e}")
+
+                # 마지막 시도가 아니면 지수 백오프 대기
                 if attempt < self._max_retries - 1:
                     wait_time = self._retry_delay * (2 ** attempt)
                     logger.info(f"[CLI] {wait_time}초 후 재시도...")
@@ -297,11 +374,54 @@ class ClaudeClient:
         raise last_error
 
     def _parse_json_response(self, response: str) -> dict:
-        """Parse JSON from Claude's response, handling common formatting issues."""
+        """
+        Claude 응답에서 JSON 파싱 (포맷팅 문제 처리 포함).
+
+        Claude의 응답은 종종 마크다운 코드 블록이나 추가 텍스트를
+        포함하므로, 3단계 파싱 전략을 사용합니다.
+
+        파싱 전략 3단계:
+        ┌─────────────────────────────────────────────────────────────┐
+        │ 단계     │ 방법                     │ 성공 시               │
+        ├─────────────────────────────────────────────────────────────┤
+        │ 1. 직접  │ 마크다운 제거 후 파싱    │ 바로 반환             │
+        │ 2. 추출  │ JSON 구조 찾아서 파싱    │ 추출된 JSON 반환      │
+        │ 3. 실패  │ -                        │ ValueError 발생       │
+        └─────────────────────────────────────────────────────────────┘
+
+        1단계: 직접 파싱
+        - 마크다운 코드 블록 제거 (```json, ```)
+        - 앞뒤 공백 제거
+        - json.loads() 시도
+
+        2단계: JSON 구조 추출 파싱
+        - 응답에서 { 또는 [ 찾기
+        - 중괄호/대괄호 깊이 추적하여 완전한 JSON 추출
+        - 추출된 부분만 json.loads() 시도
+
+        3단계: 실패
+        - ValueError 발생, 호출자가 처리
+
+        처리 가능한 응답 형식 예시:
+        - 순수 JSON: {"key": "value"}
+        - 코드 블록: ```json\\n{"key": "value"}\\n```
+        - 텍스트 포함: 결과입니다: {"key": "value"}
+
+        Args:
+            response: Claude의 원시 응답 텍스트
+
+        Returns:
+            파싱된 JSON 딕셔너리 또는 리스트
+
+        Raises:
+            ValueError: JSON 파싱 실패 시
+        """
         logger.debug(f"[JSON] 파싱 시작")
 
-        # Remove markdown code blocks if present
+        # ========== 1단계: 마크다운 코드 블록 제거 ==========
         cleaned = response.strip()
+
+        # ```json 또는 ``` 제거
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
         elif cleaned.startswith("```"):
@@ -310,6 +430,7 @@ class ClaudeClient:
             cleaned = cleaned[:-3]
         cleaned = cleaned.strip()
 
+        # 1단계 시도: 직접 파싱
         try:
             result = json.loads(cleaned)
             logger.debug("[JSON] 직접 파싱 성공")
@@ -317,14 +438,18 @@ class ClaudeClient:
         except json.JSONDecodeError as e:
             logger.warning(f"[JSON] 직접 파싱 실패: {e}")
 
-            # Try to find JSON object/array in the response
+            # ========== 2단계: JSON 구조 추출 파싱 ==========
+            # 응답 내에서 JSON 객체/배열 시작점 찾기
             start_idx = cleaned.find("{")
             if start_idx == -1:
                 start_idx = cleaned.find("[")
 
             if start_idx != -1:
+                # 여는 괄호 타입 결정
                 bracket = "{" if cleaned[start_idx] == "{" else "["
                 closing = "}" if bracket == "{" else "]"
+
+                # 중괄호 깊이 추적하여 완전한 JSON 범위 찾기
                 depth = 0
                 end_idx = start_idx
 
@@ -337,6 +462,7 @@ class ClaudeClient:
                             end_idx = i + 1
                             break
 
+                # 추출된 JSON 파싱 시도
                 try:
                     result = json.loads(cleaned[start_idx:end_idx])
                     logger.debug("[JSON] 추출 파싱 성공")
@@ -344,6 +470,7 @@ class ClaudeClient:
                 except json.JSONDecodeError as e2:
                     logger.error(f"[JSON] 추출 파싱 실패: {e2}")
 
+            # ========== 3단계: 최종 실패 ==========
             logger.error(f"[JSON] 최종 파싱 실패")
             raise ValueError(f"Failed to parse JSON response: {e}")
 

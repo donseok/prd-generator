@@ -1,21 +1,44 @@
-"""Base parser interface for all input type parsers."""
+"""Base parser interface for all input type parsers.
+
+모든 입력 타입 파서가 상속하는 추상 베이스 클래스와
+공통 기능을 제공하는 Mixin들을 정의합니다.
+
+Mixin 사용:
+- ClaudeAnalysisMixin: Claude 기반 문서 분석
+- MetadataExtractionMixin: 파일 메타데이터 추출
+- StructureDetectionMixin: 문서 구조 감지
+"""
 
 from abc import ABC, abstractmethod
 from typing import Optional, BinaryIO
 from pathlib import Path
 
 from app.models import InputType, ParsedContent, InputMetadata
+from .mixins import ClaudeAnalysisMixin, MetadataExtractionMixin, StructureDetectionMixin
 
 
-class BaseParser(ABC):
-    """Abstract base class for all input parsers."""
+class BaseParser(ABC, ClaudeAnalysisMixin, MetadataExtractionMixin, StructureDetectionMixin):
+    """
+    모든 입력 파서의 추상 베이스 클래스.
+
+    Mixin 클래스들을 상속하여 다음 기능을 제공:
+    - Claude를 사용한 문서 분석 (ClaudeAnalysisMixin)
+    - 파일 메타데이터 추출 (MetadataExtractionMixin)
+    - 문서 구조 감지 (StructureDetectionMixin)
+
+    서브클래스에서 구현해야 하는 메서드:
+    - supported_types: 지원하는 입력 타입 목록
+    - supported_extensions: 지원하는 파일 확장자 목록
+    - parse: 파일 파싱 로직
+    """
 
     def __init__(self, claude_client=None):
         """
-        Initialize parser with optional Claude client.
+        파서 초기화.
 
         Args:
-            claude_client: ClaudeClient instance for AI-powered parsing
+            claude_client: Claude API 호출용 클라이언트.
+                          AI 기반 파싱/분석에 사용됩니다.
         """
         self.claude_client = claude_client
 

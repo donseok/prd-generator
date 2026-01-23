@@ -1,13 +1,32 @@
-"""WBS generator - converts PRD to Work Breakdown Structure."""
+"""WBS generator - converts PRD to Work Breakdown Structure.
+
+Layer 7: 작업분해구조 생성기
+PRDDocument를 기반으로 WBS(Work Breakdown Structure)를 생성합니다.
+
+처리 순서:
+1. 프로젝트 단계 생성 (Claude 호출) - 방법론에 따른 단계 정의
+2. 작업 패키지 생성 (Claude 병렬 호출) - 단계별 작업 패키지 정의
+3. 세부 작업 생성 (Claude 병렬 호출) - 패키지별 세부 작업 정의
+4. 요구사항 매핑 (로컬 처리) - FR을 작업에 할당
+5. 의존성 설정 (로컬 처리) - 작업 간 FS 의존성 설정
+6. 리소스 배분 (로컬 처리) - 작업명 기반 리소스 유형 추론
+7. 일정 계산 (로컬 처리) - 시작일 기준 순차 계산
+8. 크리티컬 패스 계산 (로컬 처리) - 위상 정렬 기반 최장 경로
+9. 요약 생성 (로컬 처리) - 시간/M/M/기간 산정
+
+병렬화 적용:
+- 2번: 모든 단계에 대해 병렬로 작업 패키지 생성
+- 3번: 모든 작업 패키지에 대해 병렬로 세부 작업 생성
+"""
 
 import asyncio
 import logging
-import uuid
 from datetime import datetime, date, timedelta
 from typing import Optional
 
 from app.models import PRDDocument
 from app.services import ClaudeClient, get_claude_client
+from app.layers.base_generator import BaseGenerator
 
 from .models import (
     WBSDocument,
@@ -34,19 +53,24 @@ from .prompts import (
 logger = logging.getLogger(__name__)
 
 
-class WBSGenerator:
-    """PRD를 기반으로 WBS(Work Breakdown Structure) 생성."""
+class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
+    """
+    PRD를 기반으로 WBS(Work Breakdown Structure) 생성.
 
-    def __init__(self, claude_client: Optional[ClaudeClient] = None):
-        self.claude_client = claude_client or get_claude_client()
+    BaseGenerator를 상속하여 일관된 생성 흐름과
+    공통 유틸리티 메서드를 활용합니다.
+    """
 
-    async def generate(
+    _id_prefix = "WBS"
+    _generator_name = "WBSGenerator"
+
+    async def _do_generate(
         self,
         prd: PRDDocument,
         context: WBSContext,
     ) -> WBSDocument:
         """
-        PRD를 기반으로 WBS 생성.
+        실제 WBS 생성 로직.
 
         Args:
             prd: 원본 PRD 문서
@@ -55,11 +79,8 @@ class WBSGenerator:
         Returns:
             WBSDocument: 생성된 WBS
         """
-        logger.info(f"[WBSGenerator] WBS 생성 시작: {prd.title}")
-        start_time = datetime.now()
-
-        # WBS ID 생성
-        wbs_id = f"WBS-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4]}"
+        # WBS ID 생성 (베이스 클래스 메서드 사용)
+        wbs_id = self._generate_id()
 
         # 제목 설정
         title = f"{prd.title} - 작업분해구조 (WBS)"
@@ -78,16 +99,19 @@ class WBSGenerator:
             phase.work_packages = work_packages
             logger.info(f"[WBSGenerator] {phase.name} 작업 패키지 생성 완료: {len(work_packages)}개")
 
-        # 3. 세부 작업 생성 (병렬 처리)
+        # 3. 세부 작업 생성 (Semaphore로 동시 호출 제한)
         all_wps = [(phase, wp) for phase in phases for wp in phase.work_packages]
-        task_coroutines = [
-            self._generate_tasks(prd, wp, context)
-            for _, wp in all_wps
-        ]
+        semaphore = asyncio.Semaphore(5)  # 최대 5개 동시 호출
+
+        async def generate_with_semaphore(wp: WorkPackage) -> list[WBSTask]:
+            async with semaphore:
+                return await self._generate_tasks(prd, wp, context)
+
+        task_coroutines = [generate_with_semaphore(wp) for _, wp in all_wps]
         task_results = await asyncio.gather(*task_coroutines)
         for (_, wp), tasks in zip(all_wps, task_results):
             wp.tasks = tasks
-        logger.info("[WBSGenerator] 세부 작업 생성 완료")
+        logger.info(f"[WBSGenerator] 세부 작업 생성 완료: {sum(len(t) for t in task_results)}개 작업")
 
         # 4. 요구사항 매핑
         self._map_requirements_to_tasks(prd, phases)
@@ -118,9 +142,6 @@ class WBSGenerator:
             source_prd_id=prd.id,
             source_prd_title=prd.title,
         )
-
-        elapsed = (datetime.now() - start_time).total_seconds()
-        logger.info(f"[WBSGenerator] WBS 생성 완료: {elapsed:.1f}초")
 
         return WBSDocument(
             id=wbs_id,
@@ -422,7 +443,20 @@ class WBSGenerator:
             phase.end_date = wp_end_date if phase.work_packages else current_date
 
     def _calculate_critical_path(self, phases: list[WBSPhase]) -> list[str]:
-        """크리티컬 패스 계산 (위상 정렬 기반 최적화 버전)."""
+        """
+        크리티컬 패스 계산 (동적 프로그래밍 기반).
+
+        크리티컬 패스는 프로젝트에서 가장 긴 경로로,
+        이 경로의 작업이 지연되면 전체 프로젝트가 지연됩니다.
+
+        알고리즘:
+        1. 모든 작업을 수집하고 ID 매핑 생성
+        2. 각 작업까지의 최장 거리를 동적 프로그래밍으로 계산
+        3. 가장 긴 경로의 끝점에서 역추적하여 경로 구성
+
+        Returns:
+            크리티컬 패스를 구성하는 작업 ID 목록
+        """
         # 모든 작업 수집
         all_tasks = []
         for phase in phases:
@@ -439,33 +473,31 @@ class WBSGenerator:
         dist: dict[str, float] = {t.id: 0.0 for t in all_tasks}
         prev: dict[str, str | None] = {t.id: None for t in all_tasks}
 
-        # 후속 작업 매핑 (역방향 그래프)
-        successors: dict[str, list[str]] = {t.id: [] for t in all_tasks}
+        # 위상 정렬 순서로 처리 (단계/작업패키지 순서 사용)
         for task in all_tasks:
-            for dep in task.dependencies:
-                if dep.predecessor_id in successors:
-                    successors[dep.predecessor_id].append(task.id)
-
-        # 위상 정렬 순서로 처리 (단순히 단계/작업패키지 순서 사용)
-        for task in all_tasks:
-            task_hours = task.estimated_hours
             for dep in task.dependencies:
                 pred_id = dep.predecessor_id
-                if pred_id in dist:
+                if pred_id in dist and pred_id in task_dict:
                     new_dist = dist[pred_id] + task_dict[pred_id].estimated_hours
                     if new_dist > dist[task.id]:
                         dist[task.id] = new_dist
                         prev[task.id] = pred_id
 
         # 가장 긴 경로의 끝점 찾기
+        if not dist:
+            return []
         end_task_id = max(dist.keys(), key=lambda x: dist[x] + task_dict[x].estimated_hours)
 
-        # 경로 역추적
+        # 경로 역추적 (최대 100개로 제한하여 무한 루프 방지)
         critical_path = []
-        current = end_task_id
-        while current is not None:
+        current: str | None = end_task_id
+        max_iterations = min(len(all_tasks), 100)
+
+        for _ in range(max_iterations):
+            if current is None:
+                break
             critical_path.append(current)
-            current = prev[current]
+            current = prev.get(current)
 
         critical_path.reverse()
         return critical_path
@@ -479,8 +511,8 @@ class WBSGenerator:
         total_tasks = sum(p.total_tasks for p in phases)
         total_hours = sum(p.total_hours for p in phases)
 
-        # 버퍼 적용
-        total_hours_with_buffer = total_hours * (1 + context.buffer_percentage)
+        # 버퍼 적용 (normalized_buffer 사용: 0.15 또는 15 둘 다 0.15로 변환)
+        total_hours_with_buffer = total_hours * (1 + context.normalized_buffer)
 
         # M/D, M/M 계산
         total_man_days = total_hours_with_buffer / context.working_hours_per_day

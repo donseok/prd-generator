@@ -1,16 +1,10 @@
 """Proposal document models for customer proposals."""
 
 from datetime import datetime
-from enum import Enum
 from typing import Optional
 from pydantic import BaseModel, Field
 
-
-class RiskLevel(str, Enum):
-    """리스크 수준."""
-    HIGH = "HIGH"
-    MEDIUM = "MEDIUM"
-    LOW = "LOW"
+from app.models.common import RiskLevel, BaseDocumentMetadata
 
 
 class ProposalContext(BaseModel):

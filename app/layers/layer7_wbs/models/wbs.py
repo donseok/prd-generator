@@ -7,17 +7,34 @@ from pydantic import BaseModel, Field
 
 
 class WBSContext(BaseModel):
-    """WBS 생성 컨텍스트."""
+    """WBS 생성 컨텍스트.
+
+    버퍼 비율 사용 예시:
+    - buffer_percentage=0.15 또는 buffer_percentage=15 → 15% 버퍼
+    - 1보다 크면 자동으로 100으로 나눔
+
+    스프린트 기간:
+    - sprint_duration: 일 단위 (기본값 14일 = 2주)
+    - sprint_duration_weeks: 주 단위 (legacy, sprint_duration 우선)
+    """
     start_date: Optional[date] = Field(None, description="프로젝트 시작일")
     team_size: int = Field(5, description="팀 규모")
     methodology: str = Field("agile", description="개발 방법론 (agile, waterfall, hybrid)")
-    sprint_duration_weeks: int = Field(2, description="스프린트 주기 (주)")
+    sprint_duration: int = Field(14, description="스프린트 기간 (일)")
+    sprint_duration_weeks: int = Field(2, description="스프린트 주기 (주) - legacy")
     working_hours_per_day: int = Field(8, description="일일 작업 시간")
-    buffer_percentage: float = Field(0.2, description="버퍼 비율 (0.0~1.0)")
+    buffer_percentage: float = Field(0.15, description="버퍼 비율 (0.15 또는 15 둘 다 15%로 처리)")
     resource_types: list[str] = Field(
         default_factory=lambda: ["PM", "개발자", "디자이너", "QA"],
         description="리소스 유형"
     )
+
+    @property
+    def normalized_buffer(self) -> float:
+        """정규화된 버퍼 비율 (0.0~1.0)."""
+        if self.buffer_percentage > 1.0:
+            return self.buffer_percentage / 100.0
+        return self.buffer_percentage
 
 
 class WBSMetadata(BaseModel):

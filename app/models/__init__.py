@@ -1,5 +1,6 @@
 """Data models for PRD generation system."""
 
+from .common import RiskLevel, BaseDocumentMetadata, BaseRisk
 from .input import InputDocument, InputType, ParsedContent, InputMetadata
 from .requirement import (
     RequirementType,
@@ -25,6 +26,10 @@ from .processing import (
 )
 
 __all__ = [
+    # Common models
+    "RiskLevel",
+    "BaseDocumentMetadata",
+    "BaseRisk",
     # Input models
     "InputDocument",
     "InputType",

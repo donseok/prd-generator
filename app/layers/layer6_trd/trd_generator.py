@@ -1,12 +1,33 @@
-"""TRD generator - converts PRD to Technical Requirements Document."""
+"""TRD generator - converts PRD to Technical Requirements Document.
+
+Layer 6: 기술 요구사항 문서 생성기
+PRDDocument를 기반으로 TRD(Technical Requirements Document)를 생성합니다.
+
+처리 순서:
+1. 기술 스택 추천 (Claude 호출) - 요구사항 기반 기술 선정
+2. 시스템 아키텍처 설계 (Claude 호출) - 레이어별 컴포넌트 정의
+3. 데이터베이스 설계 (Claude 호출) - 엔티티 및 관계 정의
+4. API 명세 생성 (Claude 호출) - 엔드포인트 및 스키마 정의
+5. 보안 요구사항 추출 (NFR 기반 + 기본 요구사항)
+6. 성능 요구사항 추출 (NFR 기반 + 기본 요구사항)
+7. 인프라 요구사항 생성 (환경별 기본 템플릿)
+8. 기술 리스크 평가 (연동/기술/성능/보안 기반)
+9. 기술 요약 생성 (Claude 호출, 마지막에 생성)
+
+병렬화 가능 섹션:
+- 1, 2, 3, 4번은 의존성이 없어 병렬 실행 가능
+- 5, 6, 7, 8번은 로컬 처리로 빠름
+- 9번은 1, 2번 결과가 필요하여 마지막 순차 실행
+"""
 
 import logging
-import uuid
 from datetime import datetime
 from typing import Optional
 
 from app.models import PRDDocument, RequirementType
+from app.models.common import RiskLevel
 from app.services import ClaudeClient, get_claude_client
+from app.layers.base_generator import BaseGenerator
 
 from .models import (
     TRDDocument,
@@ -24,7 +45,6 @@ from .models import (
     SecurityRequirement,
     PerformanceRequirement,
     InfrastructureRequirement,
-    RiskLevel,
     TechnicalRisk,
 )
 from .prompts import (
@@ -40,19 +60,32 @@ from .prompts import (
 logger = logging.getLogger(__name__)
 
 
-class TRDGenerator:
-    """PRD를 기반으로 TRD(Technical Requirements Document) 생성."""
+class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
+    """
+    PRD를 기반으로 TRD(Technical Requirements Document) 생성.
 
-    def __init__(self, claude_client: Optional[ClaudeClient] = None):
-        self.claude_client = claude_client or get_claude_client()
+    BaseGenerator를 상속하여 일관된 생성 흐름과
+    공통 유틸리티 메서드를 활용합니다.
+    """
 
-    async def generate(
+    _id_prefix = "TRD"
+    _generator_name = "TRDGenerator"
+
+    async def _do_generate(
         self,
         prd: PRDDocument,
         context: TRDContext,
     ) -> TRDDocument:
         """
-        PRD를 기반으로 TRD 생성.
+        실제 TRD 생성 로직 (병렬 처리 최적화).
+
+        병렬화 전략:
+        - Phase 1: 독립 Claude 호출 병렬 (tech_stack, database, api_spec)
+        - Phase 2: 의존성 있는 Claude 호출 병렬 (architecture, security)
+        - Phase 3: 로컬 처리 (performance, infrastructure, risks)
+        - Phase 4: 최종 요약 (순차, 이전 결과 의존)
+
+        예상 효과: 50-60% 시간 단축
 
         Args:
             prd: 원본 PRD 문서
@@ -61,48 +94,63 @@ class TRDGenerator:
         Returns:
             TRDDocument: 생성된 TRD
         """
-        logger.info(f"[TRDGenerator] TRD 생성 시작: {prd.title}")
-        start_time = datetime.now()
+        import asyncio
 
-        # TRD ID 생성
-        trd_id = f"TRD-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4]}"
+        # TRD ID 생성 (베이스 클래스 메서드 사용)
+        trd_id = self._generate_id()
 
         # 제목 설정
         title = f"{prd.title} - 기술 요구사항 문서 (TRD)"
 
-        # 1. 기술 스택 추천
-        technology_stack = await self._generate_technology_stack(prd, context)
+        # ========== Phase 1: 독립 Claude 호출 병렬 ==========
+        # tech_stack, database_design, api_specification은 서로 독립적
+        logger.info("[TRDGenerator] Phase 1: 독립 Claude 호출 병렬 시작")
+
+        tech_task = self._generate_technology_stack(prd, context)
+        db_task = self._generate_database_design(prd)
+        api_task = self._generate_api_specification(prd)
+
+        technology_stack, database_design, api_specification = await asyncio.gather(
+            tech_task,
+            db_task,
+            api_task
+        )
+
         logger.info("[TRDGenerator] 기술 스택 추천 완료")
-
-        # 2. 시스템 아키텍처 설계
-        system_architecture = await self._generate_system_architecture(prd, technology_stack)
-        logger.info("[TRDGenerator] 시스템 아키텍처 설계 완료")
-
-        # 3. 데이터베이스 설계
-        database_design = await self._generate_database_design(prd)
         logger.info("[TRDGenerator] 데이터베이스 설계 완료")
-
-        # 4. API 명세 생성
-        api_specification = await self._generate_api_specification(prd)
         logger.info("[TRDGenerator] API 명세 생성 완료")
 
-        # 5. 보안 요구사항 추출
-        security_requirements = await self._extract_security_requirements(prd, context)
+        # ========== Phase 2: 의존성 있는 Claude 호출 병렬 ==========
+        # system_architecture는 technology_stack 필요
+        # security_requirements는 context만 필요
+        logger.info("[TRDGenerator] Phase 2: 의존 Claude 호출 병렬 시작")
+
+        arch_task = self._generate_system_architecture(prd, technology_stack)
+        security_task = self._extract_security_requirements(prd, context)
+
+        system_architecture, security_requirements = await asyncio.gather(
+            arch_task,
+            security_task
+        )
+
+        logger.info("[TRDGenerator] 시스템 아키텍처 설계 완료")
         logger.info("[TRDGenerator] 보안 요구사항 추출 완료")
 
+        # ========== Phase 3: 로컬 처리 ==========
         # 6. 성능 요구사항 추출
         performance_requirements = self._extract_performance_requirements(prd)
         logger.info("[TRDGenerator] 성능 요구사항 추출 완료")
 
-        # 7. 인프라 요구사항 생성
+        # 7. 인프라 요구사항 생성 (technology_stack 필요하지만 로컬 처리)
         infrastructure_requirements = await self._generate_infrastructure(prd, technology_stack, context)
         logger.info("[TRDGenerator] 인프라 요구사항 생성 완료")
 
-        # 8. 기술 리스크 평가
+        # 8. 기술 리스크 평가 (technology_stack 필요)
         technical_risks = self._assess_technical_risks(prd, technology_stack)
         logger.info("[TRDGenerator] 기술 리스크 평가 완료")
 
-        # 9. 기술 요약 생성 (마지막에 생성)
+        # ========== Phase 4: 최종 요약 (순차) ==========
+        # technology_stack과 system_architecture 결과가 필요
         executive_summary = await self._generate_executive_summary(
             prd, technology_stack, system_architecture
         )
@@ -113,9 +161,6 @@ class TRDGenerator:
             source_prd_id=prd.id,
             source_prd_title=prd.title,
         )
-
-        elapsed = (datetime.now() - start_time).total_seconds()
-        logger.info(f"[TRDGenerator] TRD 생성 완료: {elapsed:.1f}초")
 
         return TRDDocument(
             id=trd_id,

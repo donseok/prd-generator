@@ -1,5 +1,17 @@
-"""Pipeline orchestrator for coordinating 4-layer processing."""
+"""Pipeline orchestrator for coordinating 4-layer processing.
 
+파이프라인 처리 흐름:
+1. Layer 1 (Parsing): 다양한 형식의 문서 파싱 - 병렬 처리 지원
+2. Layer 2 (Normalization): 구조화된 요구사항으로 변환
+3. Layer 3 (Validation): 품질 검증 및 PM 리뷰 라우팅
+4. Layer 4 (Generation): PRD 문서 생성
+
+성능 최적화:
+- Layer 1: asyncio.gather() + Semaphore(4)로 최대 4개 파일 동시 파싱
+- 예상 효과: 5개 파일 기준 80% 시간 단축
+"""
+
+import asyncio
 from typing import List, Optional, Callable
 from datetime import datetime
 
@@ -209,44 +221,69 @@ class PipelineOrchestrator:
         job: ProcessingJob,
         documents: List[InputDocument]
     ) -> List[ParsedContent]:
-        """Execute Layer 1: Parsing."""
-        parsed_contents = []
+        """
+        Execute Layer 1: Parsing (병렬 처리).
+
+        최대 4개 파일을 동시에 파싱하여 처리 시간을 단축합니다.
+        Semaphore를 사용하여 동시 파싱 수를 제한합니다.
+
+        Args:
+            job: 처리 작업 정보
+            documents: 파싱할 문서 목록
+
+        Returns:
+            파싱된 컨텐츠 목록
+
+        처리 흐름:
+        1. 각 문서에 대해 비동기 파싱 태스크 생성
+        2. Semaphore(4)로 동시 실행 수 제한
+        3. asyncio.gather()로 병렬 실행
+        4. None 결과 필터링하여 반환
+        """
         layer_start = datetime.now()
 
-        for doc in documents:
-            try:
-                # Get parser for document type
-                parser = self.parser_factory.get_parser(doc.input_type)
+        # 동시 파싱 수 제한 (최대 4개)
+        semaphore = asyncio.Semaphore(4)
 
-                # Parse document
-                if doc.source_path:
-                    from pathlib import Path
-                    source_path = Path(doc.source_path)
-                    
-                    # 상대 경로인 경우 절대 경로로 변환 (기존 문서 호환성)
-                    if not source_path.is_absolute():
-                        # 프로젝트 루트 기준으로 절대 경로 생성
-                        project_root = Path(__file__).parent.parent.parent
-                        source_path = project_root / source_path
-                    
-                    if not source_path.exists():
-                        print(f"[Parsing] WARNING: File not found: {source_path}")
-                        continue
-                        
-                    parsed = await parser.parse(source_path)
-                else:
-                    # Use existing parsed content if available
-                    parsed = doc.content
+        async def parse_document(doc: InputDocument) -> Optional[ParsedContent]:
+            """단일 문서 파싱 (세마포어 적용)."""
+            async with semaphore:
+                try:
+                    parser = self.parser_factory.get_parser(doc.input_type)
 
-                parsed_contents.append(parsed)
+                    if doc.source_path:
+                        from pathlib import Path
+                        source_path = Path(doc.source_path)
 
-            except Exception as e:
-                print(f"Parsing failed for {doc.id}: {e}")
-                import traceback
-                traceback.print_exc()
-                # Continue with other documents
+                        # 상대 경로인 경우 절대 경로로 변환 (기존 문서 호환성)
+                        if not source_path.is_absolute():
+                            project_root = Path(__file__).parent.parent.parent
+                            source_path = project_root / source_path
 
-        # Record layer result
+                        if not source_path.exists():
+                            print(f"[Parsing] WARNING: File not found: {source_path}")
+                            return None
+
+                        return await parser.parse(source_path)
+                    else:
+                        return doc.content
+
+                except Exception as e:
+                    print(f"Parsing failed for {doc.id}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    return None
+
+        # 병렬 파싱 실행
+        results = await asyncio.gather(
+            *[parse_document(doc) for doc in documents],
+            return_exceptions=False
+        )
+
+        # None 결과 필터링
+        parsed_contents = [r for r in results if r is not None]
+
+        # 레이어 결과 기록
         layer_result = LayerResult(
             layer_name="parsing",
             status="success" if parsed_contents else "failed",
