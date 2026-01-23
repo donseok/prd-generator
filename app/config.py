@@ -7,6 +7,8 @@ class Settings(BaseSettings):
 
     # Validation
     auto_approve_threshold: float = 0.8
+    enable_pm_review: bool = False  # PM 검토 워크플로우 활성화 여부
+    enable_conflict_detection: bool = False  # 요구사항 충돌 감지 활성화
 
     # Server
     host: str = "0.0.0.0"

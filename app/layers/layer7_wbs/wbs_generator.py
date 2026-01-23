@@ -1,5 +1,6 @@
 """WBS generator - converts PRD to Work Breakdown Structure."""
 
+import asyncio
 import logging
 import uuid
 from datetime import datetime, date, timedelta
@@ -67,17 +68,25 @@ class WBSGenerator:
         phases = await self._generate_phases(prd, context)
         logger.info(f"[WBSGenerator] 프로젝트 단계 생성 완료: {len(phases)}개")
 
-        # 2. 작업 패키지 생성
-        for phase in phases:
-            work_packages = await self._generate_work_packages(prd, phase, context)
+        # 2. 작업 패키지 생성 (병렬 처리)
+        wp_tasks = [
+            self._generate_work_packages(prd, phase, context)
+            for phase in phases
+        ]
+        wp_results = await asyncio.gather(*wp_tasks)
+        for phase, work_packages in zip(phases, wp_results):
             phase.work_packages = work_packages
             logger.info(f"[WBSGenerator] {phase.name} 작업 패키지 생성 완료: {len(work_packages)}개")
 
-        # 3. 세부 작업 생성
-        for phase in phases:
-            for wp in phase.work_packages:
-                tasks = await self._generate_tasks(prd, wp, context)
-                wp.tasks = tasks
+        # 3. 세부 작업 생성 (병렬 처리)
+        all_wps = [(phase, wp) for phase in phases for wp in phase.work_packages]
+        task_coroutines = [
+            self._generate_tasks(prd, wp, context)
+            for _, wp in all_wps
+        ]
+        task_results = await asyncio.gather(*task_coroutines)
+        for (_, wp), tasks in zip(all_wps, task_results):
+            wp.tasks = tasks
         logger.info("[WBSGenerator] 세부 작업 생성 완료")
 
         # 4. 요구사항 매핑
@@ -413,7 +422,7 @@ class WBSGenerator:
             phase.end_date = wp_end_date if phase.work_packages else current_date
 
     def _calculate_critical_path(self, phases: list[WBSPhase]) -> list[str]:
-        """크리티컬 패스 계산 (간소화 버전)."""
+        """크리티컬 패스 계산 (위상 정렬 기반 최적화 버전)."""
         # 모든 작업 수집
         all_tasks = []
         for phase in phases:
@@ -423,38 +432,42 @@ class WBSGenerator:
         if not all_tasks:
             return []
 
-        # 가장 긴 경로를 크리티컬 패스로 간주 (간소화)
+        # 작업 ID → 작업 매핑
         task_dict = {t.id: t for t in all_tasks}
+
+        # 동적 프로그래밍: 각 작업까지의 최장 경로 거리와 이전 작업 기록
+        dist: dict[str, float] = {t.id: 0.0 for t in all_tasks}
+        prev: dict[str, str | None] = {t.id: None for t in all_tasks}
+
+        # 후속 작업 매핑 (역방향 그래프)
+        successors: dict[str, list[str]] = {t.id: [] for t in all_tasks}
+        for task in all_tasks:
+            for dep in task.dependencies:
+                if dep.predecessor_id in successors:
+                    successors[dep.predecessor_id].append(task.id)
+
+        # 위상 정렬 순서로 처리 (단순히 단계/작업패키지 순서 사용)
+        for task in all_tasks:
+            task_hours = task.estimated_hours
+            for dep in task.dependencies:
+                pred_id = dep.predecessor_id
+                if pred_id in dist:
+                    new_dist = dist[pred_id] + task_dict[pred_id].estimated_hours
+                    if new_dist > dist[task.id]:
+                        dist[task.id] = new_dist
+                        prev[task.id] = pred_id
+
+        # 가장 긴 경로의 끝점 찾기
+        end_task_id = max(dist.keys(), key=lambda x: dist[x] + task_dict[x].estimated_hours)
+
+        # 경로 역추적
         critical_path = []
+        current = end_task_id
+        while current is not None:
+            critical_path.append(current)
+            current = prev[current]
 
-        # 시작 작업 찾기 (의존성 없는 작업)
-        start_tasks = [t for t in all_tasks if not t.dependencies]
-        if not start_tasks:
-            start_tasks = [all_tasks[0]]
-
-        def find_longest_path(task: WBSTask, current_path: list[str]) -> list[str]:
-            current_path = current_path + [task.id]
-            # 후속 작업 찾기
-            successors = [
-                t for t in all_tasks
-                if any(d.predecessor_id == task.id for d in t.dependencies)
-            ]
-            if not successors:
-                return current_path
-
-            longest = current_path
-            for succ in successors:
-                path = find_longest_path(succ, current_path)
-                if len(path) > len(longest):
-                    longest = path
-            return longest
-
-        # 각 시작점에서 최장 경로 찾기
-        for start_task in start_tasks:
-            path = find_longest_path(start_task, [])
-            if len(path) > len(critical_path):
-                critical_path = path
-
+        critical_path.reverse()
         return critical_path
 
     def _generate_summary(

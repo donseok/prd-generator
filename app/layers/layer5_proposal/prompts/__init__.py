@@ -1,0 +1,15 @@
+"""Proposal generation prompts."""
+
+from .proposal_prompts import (
+    EXECUTIVE_SUMMARY_PROMPT,
+    SOLUTION_APPROACH_PROMPT,
+    EXPECTED_BENEFITS_PROMPT,
+    RESOURCE_PLAN_PROMPT,
+)
+
+__all__ = [
+    "EXECUTIVE_SUMMARY_PROMPT",
+    "SOLUTION_APPROACH_PROMPT",
+    "EXPECTED_BENEFITS_PROMPT",
+    "RESOURCE_PLAN_PROMPT",
+]

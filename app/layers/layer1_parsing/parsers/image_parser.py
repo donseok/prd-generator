@@ -50,7 +50,7 @@ class ImageParser(BaseParser):
 
         # Use Claude Vision for analysis
         if self.claude_client:
-            analysis = await self._analyze_with_vision(image_data, media_type)
+            analysis = await self._analyze_with_vision(image_data, media_type, file_path)
         else:
             analysis = {
                 "error": "Claude client not available for image analysis",
@@ -109,7 +109,7 @@ class ImageParser(BaseParser):
 
         return {"width": 0, "height": 0}
 
-    async def _analyze_with_vision(self, image_data: bytes, media_type: str) -> dict:
+    async def _analyze_with_vision(self, image_data: bytes, media_type: str, file_path: Path = None) -> dict:
         """Analyze image using Claude Vision API."""
         try:
             response = await self.claude_client.analyze_image(
@@ -117,6 +117,7 @@ class ImageParser(BaseParser):
                 image_data=image_data,
                 media_type=media_type,
                 additional_context="이 이미지에서 요구사항 관련 정보를 추출해주세요.",
+                image_path=str(file_path) if file_path else None,
             )
 
             # Try to parse as JSON
@@ -157,22 +158,38 @@ class ImageParser(BaseParser):
 
         if analysis.get("extracted_text"):
             parts.append("\n=== 추출된 텍스트 ===")
-            parts.append(analysis["extracted_text"])
+            text = analysis["extracted_text"]
+            if isinstance(text, list):
+                parts.append("\n".join(str(t) for t in text))
+            else:
+                parts.append(str(text))
 
         if analysis.get("ui_elements"):
             parts.append("\n=== UI 요소 ===")
             for elem in analysis["ui_elements"]:
-                parts.append(f"- {elem.get('type', 'unknown')}: {elem.get('text', '')}")
+                if isinstance(elem, dict):
+                    parts.append(f"- {elem.get('type', 'unknown')}: {elem.get('text', '')}")
+                else:
+                    parts.append(f"- {str(elem)}")
 
         if analysis.get("annotations"):
             parts.append("\n=== 주석/마킹 ===")
             for ann in analysis["annotations"]:
-                parts.append(f"- {ann.get('type', '')}: {ann.get('description', '')}")
+                if isinstance(ann, dict):
+                    parts.append(f"- {ann.get('type', '')}: {ann.get('description', '')}")
+                else:
+                    parts.append(f"- {str(ann)}")
 
         if analysis.get("inferred_requirements"):
             parts.append("\n=== 추론된 요구사항 ===")
             for req in analysis["inferred_requirements"]:
-                conf = req.get("confidence", 0)
-                parts.append(f"- [{conf:.0%}] {req.get('description', '')}")
+                if isinstance(req, dict):
+                    conf = req.get("confidence", 0)
+                    if isinstance(conf, (int, float)):
+                        parts.append(f"- [{conf:.0%}] {req.get('description', '')}")
+                    else:
+                        parts.append(f"- {req.get('description', '')}")
+                else:
+                    parts.append(f"- {str(req)}")
 
         return "\n".join(parts)

@@ -93,59 +93,38 @@ class Normalizer:
         filename = parsed_content.metadata.filename or "unknown"
         logger.info(f"[extract_all] 통합 추출 시작: {filename}")
 
-        # Build context from parsed content
-        content_text = parsed_content.raw_text[:8000]  # Limit content size
+        # Build context from parsed content (optimized size)
+        content_text = parsed_content.raw_text[:6000]  # Reduced for faster processing
+
+        def get_section_content(s):
+            """Safely extract section content as string."""
+            content = s.get('content', '')
+            if isinstance(content, list):
+                content = "\n".join(str(c) for c in content)
+            return str(content)[:300]
+
         sections_text = "\n".join([
-            f"### {s.get('title', 'Section')}\n{s.get('content', '')[:500]}"
-            for s in parsed_content.sections[:10]  # Limit sections
-        ])
+            f"[{s.get('title', 'Section')}] {get_section_content(s)}"
+            for s in parsed_content.sections[:8]
+        ]) if parsed_content.sections else ""
 
-        # Single comprehensive prompt
-        prompt = f"""다음 문서에서 소프트웨어 요구사항을 추출하고 완전한 형식으로 정규화해주세요.
+        # Optimized prompt - shorter and more focused
+        prompt = f"""문서에서 소프트웨어 요구사항을 추출하세요.
 
-=== 문서 내용 ===
+문서:
 {content_text}
 
-=== 구조화된 섹션 ===
-{sections_text}
+{f"섹션: {sections_text}" if sections_text else ""}
 
-각 요구사항에 대해 완전한 정보를 포함한 JSON 배열로 반환해주세요:
+JSON 배열로 반환:
+[{{"title":"제목","description":"설명","type":"FR|NFR|CONSTRAINT","priority":"HIGH|MEDIUM|LOW","user_story":"As a X, I want Y, so that Z","acceptance_criteria":["조건1"],"confidence_score":0.8,"confidence_reason":"이유","assumptions":[],"missing_info":[],"original_text":"원문","section_name":"섹션"}}]
 
-[
-  {{
-    "title": "짧고 명확한 제목 (15자 이내)",
-    "description": "요구사항 상세 설명",
-    "type": "FR|NFR|CONSTRAINT",
-    "priority": "HIGH|MEDIUM|LOW",
-    "user_story": "As a [사용자], I want [기능], so that [가치]",
-    "acceptance_criteria": ["검증 조건 1", "검증 조건 2"],
-    "confidence_score": 0.0~1.0,
-    "confidence_reason": "신뢰도 점수 부여 이유",
-    "assumptions": ["가정사항 1"],
-    "missing_info": ["누락 정보 1"],
-    "original_text": "원본 텍스트 발췌 (100자 이내)",
-    "section_name": "발견된 섹션명"
-  }}
-]
+- FR: 기능 요구사항
+- NFR: 비기능(성능/보안)
+- CONSTRAINT: 제약조건
+- confidence_score: 0.0~1.0 (명확할수록 높음)
 
-분류 기준:
-- FR (Functional): 시스템이 해야 하는 기능
-- NFR (Non-Functional): 성능, 보안, 가용성 등
-- CONSTRAINT: 기술적/법적/비즈니스 제약
-
-우선순위 기준:
-- HIGH: 필수, 핵심, 긴급
-- MEDIUM: 중요하지만 필수는 아님
-- LOW: 선택적, 향후 구현
-
-신뢰도 기준:
-- 0.9+: 명확하고 완전
-- 0.7-0.9: 양호
-- 0.5-0.7: 일부 불명확
-- 0.5 미만: 많이 불명확
-
-요구사항이 없으면 빈 배열 []을 반환하세요.
-JSON만 출력하세요."""
+요구사항 없으면 []반환. JSON만 출력."""
 
         try:
             start = datetime.now()

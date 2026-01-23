@@ -39,7 +39,8 @@
       "Bash(for:*)",
       "Bash(do echo \"=== $i ===\")",
       "Bash(dir /s /b \"C:\\Users\\USER\\prd-generator\\app\\*.py\")",
-      "Bash(cmd.exe /c \"taskkill /F /PID 23164\")"
+      "Bash(cmd.exe /c \"taskkill /F /PID 23164\")",
+      "Skill(prd:prd_maker)"
     ]
   }
 }

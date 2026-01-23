@@ -1,4 +1,7 @@
-"""Claude Code CLI client service for PRD generation."""
+"""Claude Code CLI client service for PRD generation.
+
+Uses Claude CLI (claude -p) for all AI operations.
+"""
 
 import json
 import subprocess
@@ -9,10 +12,11 @@ import asyncio
 import logging
 from typing import Optional
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
 
-# 상세 로깅 설정
+# 로깅 설정
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
@@ -24,6 +28,8 @@ class ClaudeClient:
     def __init__(self):
         self._max_retries = 3
         self._retry_delay = 2  # seconds
+        self._executor = ThreadPoolExecutor(max_workers=2)
+        logger.info("[ClaudeClient] CLI 모드 초기화 완료")
 
     async def complete(
         self,
@@ -44,7 +50,6 @@ class ClaudeClient:
         Returns:
             Claude's response text
         """
-        # Claude Code CLI에 맞는 자연스러운 프롬프트 형식
         full_prompt = f"""당신은 PRD(제품 요구사항 문서) 생성을 돕는 요구사항 분석 전문가입니다.
 
 다음 지침을 따라 작업해 주세요:
@@ -75,7 +80,6 @@ class ClaudeClient:
         Returns:
             Parsed JSON response as dict
         """
-        # Claude Code CLI에 맞는 자연스러운 프롬프트 형식
         full_prompt = f"""당신은 PRD(제품 요구사항 문서) 생성을 돕는 요구사항 분석 전문가입니다.
 
 다음 지침을 따라 작업해 주세요:
@@ -99,21 +103,36 @@ class ClaudeClient:
         media_type: str,
         additional_context: str = "",
         max_tokens: int = 4096,
+        image_path: str = None,
     ) -> str:
         """
         Analyze image content using Claude's vision capabilities.
 
         Args:
             system_prompt: System-level instructions for image analysis
-            image_data: Raw image bytes
+            image_data: Raw image bytes (not used if image_path provided)
             media_type: MIME type (image/png, image/jpeg, etc.)
             additional_context: Additional text context
             max_tokens: Maximum tokens in response
+            image_path: Direct path to image file (preferred method)
 
         Returns:
             Analysis result text
         """
-        # Save image to temporary file
+        # Use direct file path if provided (preferred method)
+        if image_path and os.path.exists(image_path):
+            full_prompt = f"""당신은 PRD 생성을 돕는 요구사항 분석 전문가입니다.
+
+다음 지침을 따라 이미지를 분석해 주세요:
+{system_prompt}
+
+추가 컨텍스트: {additional_context if additional_context else "없음"}
+
+분석할 이미지 파일: {image_path}"""
+
+            return await self._execute_claude_cli(full_prompt)
+
+        # Fallback: Save bytes to temp file and use path in prompt
         extension = media_type.split("/")[-1]
         if extension == "jpeg":
             extension = "jpg"
@@ -132,22 +151,18 @@ class ClaudeClient:
 
 추가 컨텍스트: {additional_context if additional_context else "없음"}
 
-첨부된 이미지 파일을 분석해주세요."""
+분석할 이미지 파일: {tmp_path}"""
 
-            # Use claude CLI with image file
-            result = await self._execute_claude_cli_with_files(full_prompt, [tmp_path])
+            result = await self._execute_claude_cli(full_prompt)
             return result
         finally:
-            # Clean up temporary file
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
 
-    def _run_claude_sync(self, prompt: str) -> str:
-        """Run Claude CLI synchronously."""
-        # Get current environment and ensure PATH includes common locations
+    def _get_env(self) -> dict:
+        """Get environment with proper PATH for Claude CLI."""
         env = os.environ.copy()
 
-        # Windows와 Unix 환경에 맞는 PATH 설정
         if sys.platform == "win32":
             extra_paths = [
                 os.path.expanduser("~\\AppData\\Roaming\\npm"),
@@ -162,16 +177,18 @@ class ClaudeClient:
             path_separator = ":"
 
         env["PATH"] = path_separator.join(extra_paths) + path_separator + env.get("PATH", "")
+        return env
 
-        prompt_preview = prompt[:200] + "..." if len(prompt) > 200 else prompt
-        logger.info(f"[CLI] 프롬프트 길이: {len(prompt)} chars")
-        logger.debug(f"[CLI] 프롬프트 미리보기: {prompt_preview}")
+    def _run_claude_sync(self, prompt: str) -> str:
+        """Run Claude CLI synchronously."""
+        env = self._get_env()
+
+        prompt_len = len(prompt)
+        logger.info(f"[CLI] 프롬프트 길이: {prompt_len} chars")
 
         start_time = datetime.now()
-        logger.info(f"[CLI] subprocess 시작: {start_time.strftime('%H:%M:%S')}")
 
         try:
-            # Windows에서는 shell=True 필요 (claude.cmd 실행)
             use_shell = sys.platform == "win32"
             result = subprocess.run(
                 ["claude", "-p", prompt, "--output-format", "text"],
@@ -180,49 +197,28 @@ class ClaudeClient:
                 timeout=300,  # 5 minute timeout
                 env=env,
                 shell=use_shell,
-                encoding='utf-8',  # Windows에서 UTF-8 출력 처리
+                encoding='utf-8',
             )
 
             elapsed = (datetime.now() - start_time).total_seconds()
-            logger.info(f"[CLI] subprocess 완료: {elapsed:.1f}초 소요, returncode={result.returncode}")
+            logger.info(f"[CLI] 완료: {elapsed:.1f}초, returncode={result.returncode}")
 
             if result.returncode != 0:
                 error_msg = result.stderr or "Unknown error"
-                logger.error(f"[CLI] 에러 발생: {error_msg}")
-                logger.error(f"[CLI] stdout: {result.stdout[:500] if result.stdout else 'empty'}")
+                logger.error(f"[CLI] 에러: {error_msg}")
                 raise RuntimeError(f"Claude CLI error: {error_msg}")
 
-            response_preview = result.stdout[:300] if result.stdout else "empty"
             logger.info(f"[CLI] 응답 길이: {len(result.stdout)} chars")
-            logger.debug(f"[CLI] 응답 미리보기: {response_preview}...")
-
             return result.stdout.strip()
 
-        except subprocess.TimeoutExpired as e:
+        except subprocess.TimeoutExpired:
             elapsed = (datetime.now() - start_time).total_seconds()
-            logger.error(f"[CLI] 타임아웃! {elapsed:.1f}초 후 타임아웃")
+            logger.error(f"[CLI] 타임아웃! {elapsed:.1f}초")
             raise
 
     def _run_claude_sync_with_files(self, prompt: str, file_paths: list[str]) -> str:
         """Run Claude CLI synchronously with file attachments."""
-        # Get current environment and ensure PATH includes common locations
-        env = os.environ.copy()
-
-        # Windows와 Unix 환경에 맞는 PATH 설정
-        if sys.platform == "win32":
-            extra_paths = [
-                os.path.expanduser("~\\AppData\\Roaming\\npm"),
-            ]
-            path_separator = ";"
-        else:
-            extra_paths = [
-                os.path.expanduser("~/.npm-global/bin"),
-                "/usr/local/bin",
-                "/opt/homebrew/bin",
-            ]
-            path_separator = ":"
-
-        env["PATH"] = path_separator.join(extra_paths) + path_separator + env.get("PATH", "")
+        env = self._get_env()
 
         cmd = ["claude", "-p", prompt, "--output-format", "text"]
         for file_path in file_paths:
@@ -247,109 +243,30 @@ class ClaudeClient:
 
     async def _execute_claude_cli(self, prompt: str) -> str:
         """Execute Claude Code CLI with the given prompt."""
-        from concurrent.futures import ThreadPoolExecutor
-
         last_error = None
 
         for attempt in range(self._max_retries):
             try:
-                logger.info(f"[execute] 시도 {attempt + 1}/{self._max_retries} 시작")
-                # ThreadPoolExecutor를 사용하여 동기 함수를 비동기로 실행
+                logger.info(f"[CLI] 시도 {attempt + 1}/{self._max_retries}")
+
                 loop = asyncio.get_running_loop()
-                with ThreadPoolExecutor() as executor:
-                    result = await loop.run_in_executor(
-                        executor, self._run_claude_sync, prompt
-                    )
-                logger.info(f"[execute] 시도 {attempt + 1} 성공!")
+                result = await loop.run_in_executor(
+                    self._executor, self._run_claude_sync, prompt
+                )
+
+                logger.info(f"[CLI] 시도 {attempt + 1} 성공")
                 return result
 
             except Exception as e:
                 last_error = e
-                logger.error(f"[execute] 시도 {attempt + 1} 실패: {type(e).__name__}: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"[CLI] 시도 {attempt + 1} 실패: {type(e).__name__}: {e}")
                 if attempt < self._max_retries - 1:
                     wait_time = self._retry_delay * (2 ** attempt)
-                    logger.info(f"[execute] {wait_time}초 후 재시도...")
+                    logger.info(f"[CLI] {wait_time}초 후 재시도...")
                     await asyncio.sleep(wait_time)
-                continue
 
-        logger.error(f"[execute] 모든 시도 실패! 마지막 에러: {last_error}")
+        logger.error(f"[CLI] 모든 시도 실패: {last_error}")
         raise last_error
-
-    async def _run_claude_async(self, prompt: str) -> str:
-        """Run Claude CLI asynchronously using asyncio subprocess."""
-        env = os.environ.copy()
-
-        # Windows와 Unix 환경에 맞는 PATH 설정
-        if sys.platform == "win32":
-            extra_paths = [
-                os.path.expanduser("~\\AppData\\Roaming\\npm"),
-            ]
-            path_separator = ";"
-        else:
-            extra_paths = [
-                os.path.expanduser("~/.npm-global/bin"),
-                "/usr/local/bin",
-                "/opt/homebrew/bin",
-            ]
-            path_separator = ":"
-
-        env["PATH"] = path_separator.join(extra_paths) + path_separator + env.get("PATH", "")
-
-        prompt_preview = prompt[:200] + "..." if len(prompt) > 200 else prompt
-        logger.info(f"[CLI-async] 프롬프트 길이: {len(prompt)} chars")
-        logger.debug(f"[CLI-async] 프롬프트 미리보기: {prompt_preview}")
-
-        start_time = datetime.now()
-        logger.info(f"[CLI-async] subprocess 시작: {start_time.strftime('%H:%M:%S')}")
-
-        try:
-            if sys.platform == "win32":
-                # Windows: cmd /c를 통해 claude 실행
-                process = await asyncio.create_subprocess_exec(
-                    "cmd", "/c", "claude", "-p", prompt, "--output-format", "text",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                )
-            else:
-                process = await asyncio.create_subprocess_exec(
-                    "claude", "-p", prompt, "--output-format", "text",
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE,
-                    env=env,
-                )
-
-            try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=300  # 5 minute timeout
-                )
-            except asyncio.TimeoutError:
-                process.kill()
-                await process.wait()
-                raise subprocess.TimeoutExpired(cmd="claude", timeout=300)
-
-            elapsed = (datetime.now() - start_time).total_seconds()
-            logger.info(f"[CLI-async] subprocess 완료: {elapsed:.1f}초 소요, returncode={process.returncode}")
-
-            if process.returncode != 0:
-                error_msg = stderr.decode('utf-8', errors='replace') if stderr else "Unknown error"
-                logger.error(f"[CLI-async] 에러 발생: {error_msg}")
-                raise RuntimeError(f"Claude CLI error: {error_msg}")
-
-            result = stdout.decode('utf-8', errors='replace').strip()
-            response_preview = result[:300] if result else "empty"
-            logger.info(f"[CLI-async] 응답 길이: {len(result)} chars")
-            logger.debug(f"[CLI-async] 응답 미리보기: {response_preview}...")
-
-            return result
-
-        except subprocess.TimeoutExpired:
-            elapsed = (datetime.now() - start_time).total_seconds()
-            logger.error(f"[CLI-async] 타임아웃! {elapsed:.1f}초 후 타임아웃")
-            raise
 
     async def _execute_claude_cli_with_files(
         self, prompt: str, file_paths: list[str]
@@ -359,50 +276,46 @@ class ClaudeClient:
 
         for attempt in range(self._max_retries):
             try:
-                print(f"[ClaudeClient] Executing CLI with files (attempt {attempt + 1})...")
-                # Windows에서 asyncio.to_thread 문제 회피를 위해 run_in_executor 사용
-                loop = asyncio.get_event_loop()
+                logger.info(f"[CLI] 파일 첨부 요청 (시도 {attempt + 1})")
+
+                loop = asyncio.get_running_loop()
                 result = await loop.run_in_executor(
-                    None, self._run_claude_sync_with_files, prompt, file_paths
+                    self._executor,
+                    self._run_claude_sync_with_files,
+                    prompt,
+                    file_paths
                 )
-                print(f"[ClaudeClient] CLI with files completed successfully")
+
                 return result
 
             except Exception as e:
                 last_error = e
-                print(f"[ClaudeClient] CLI with files attempt {attempt + 1} failed: {e}")
-                import traceback
-                traceback.print_exc()
+                logger.error(f"[CLI] 파일 첨부 요청 실패: {e}")
                 if attempt < self._max_retries - 1:
                     await asyncio.sleep(self._retry_delay * (2 ** attempt))
-                continue
 
         raise last_error
 
     def _parse_json_response(self, response: str) -> dict:
         """Parse JSON from Claude's response, handling common formatting issues."""
-        logger.info(f"[JSON] 파싱 시작, 응답 길이: {len(response)} chars")
+        logger.debug(f"[JSON] 파싱 시작")
 
         # Remove markdown code blocks if present
         cleaned = response.strip()
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
-            logger.debug("[JSON] ```json 제거")
         elif cleaned.startswith("```"):
             cleaned = cleaned[3:]
-            logger.debug("[JSON] ``` 제거")
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3]
-            logger.debug("[JSON] 끝 ``` 제거")
         cleaned = cleaned.strip()
 
         try:
             result = json.loads(cleaned)
-            logger.info(f"[JSON] 직접 파싱 성공! 타입: {type(result).__name__}")
+            logger.debug("[JSON] 직접 파싱 성공")
             return result
         except json.JSONDecodeError as e:
             logger.warning(f"[JSON] 직접 파싱 실패: {e}")
-            logger.debug(f"[JSON] 정리된 응답 미리보기: {cleaned[:300]}...")
 
             # Try to find JSON object/array in the response
             start_idx = cleaned.find("{")
@@ -410,8 +323,6 @@ class ClaudeClient:
                 start_idx = cleaned.find("[")
 
             if start_idx != -1:
-                logger.info(f"[JSON] JSON 시작 위치 발견: {start_idx}")
-                # Find matching closing bracket
                 bracket = "{" if cleaned[start_idx] == "{" else "["
                 closing = "}" if bracket == "{" else "]"
                 depth = 0
@@ -428,13 +339,12 @@ class ClaudeClient:
 
                 try:
                     result = json.loads(cleaned[start_idx:end_idx])
-                    logger.info(f"[JSON] 추출 파싱 성공! 타입: {type(result).__name__}")
+                    logger.debug("[JSON] 추출 파싱 성공")
                     return result
                 except json.JSONDecodeError as e2:
-                    logger.error(f"[JSON] 추출 파싱도 실패: {e2}")
-                    logger.error(f"[JSON] 추출된 부분: {cleaned[start_idx:end_idx][:200]}...")
+                    logger.error(f"[JSON] 추출 파싱 실패: {e2}")
 
-            logger.error(f"[JSON] 최종 파싱 실패! 원본 응답: {response[:500]}...")
+            logger.error(f"[JSON] 최종 파싱 실패")
             raise ValueError(f"Failed to parse JSON response: {e}")
 
 

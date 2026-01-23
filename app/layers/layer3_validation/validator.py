@@ -162,23 +162,22 @@ class Validator:
         validation: ValidationResult
     ) -> bool:
         """Determine if requirement needs PM review."""
-        # PM 검토 워크플로우 비활성화 - 모든 요구사항 자동 승인
-        # TODO: 나중에 PM 검토 기능 활성화 시 아래 코드 복원
-        return False
+        # PM 검토 워크플로우 설정으로 제어
+        if not self.settings.enable_pm_review:
+            return False
 
-        # # Auto-approve threshold from settings (default 0.8)
-        # threshold = self.settings.auto_approve_threshold
-        #
-        # if requirement.confidence_score < threshold:
-        #     return True
-        # if validation.completeness_score < 0.7:
-        #     return True
-        # if validation.consistency_issues:
-        #     return True
-        # if requirement.missing_info:
-        #     return True
-        #
-        # return False
+        threshold = self.settings.auto_approve_threshold
+
+        if requirement.confidence_score < threshold:
+            return True
+        if validation.completeness_score < 0.7:
+            return True
+        if validation.consistency_issues:
+            return True
+        if requirement.missing_info:
+            return True
+
+        return False
 
     def _compile_review_reasons(
         self,
@@ -240,8 +239,9 @@ class Validator:
         requirements: List[NormalizedRequirement]
     ) -> List[ReviewItem]:
         """Detect conflicting requirements using Claude."""
-        # PM 검토 워크플로우 비활성화 - 충돌 감지 건너뛰기
-        return []
+        # 충돌 감지 설정으로 제어
+        if not self.settings.enable_conflict_detection:
+            return []
 
         if len(requirements) < 2:
             return []
