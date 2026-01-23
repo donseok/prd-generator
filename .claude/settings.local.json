@@ -40,7 +40,22 @@
       "Bash(do echo \"=== $i ===\")",
       "Bash(dir /s /b \"C:\\Users\\USER\\prd-generator\\app\\*.py\")",
       "Bash(cmd.exe /c \"taskkill /F /PID 23164\")",
-      "Skill(prd:prd_maker)"
+      "Skill(prd:prd_maker)",
+      "Bash(python:*)",
+      "Bash(/c/Users/donseok/AppData/Local/Programs/Python/Python313/python.exe:*)",
+      "Bash(ls:*)",
+      "Bash(python3:*)",
+      "Bash(cmd.exe /c \"python run_wbs.py\")",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\donseok\\\\prd-generator''; python run_wbs.py\")",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\donseok\\\\prd-generator''; python run_wbs.py 2>&1\")",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\donseok\\\\prd-generator''; py -3 run_wbs.py\")",
+      "Bash(powershell.exe -Command \"cd ''C:\\\\Users\\\\donseok\\\\prd-generator''; & ''C:\\\\Users\\\\donseok\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe'' run_wbs.py\")",
+      "Bash(powershell.exe:*)",
+      "Bash(winget install:*)",
+      "Bash(\"/c/Users/donseok/AppData/Local/Programs/Python/Python312/python.exe\" --version)",
+      "Bash(\"/c/Users/donseok/AppData/Local/Programs/Python/Python312/python.exe\" -m pip install pydantic --quiet)",
+      "Bash(\"/c/Users/donseok/AppData/Local/Programs/Python/Python312/python.exe\" run_wbs.py)",
+      "Bash(\"/c/Users/donseok/AppData/Local/Programs/Python/Python312/python.exe\" -m pip install -r requirements.txt --quiet)"
     ]
   }
 }
