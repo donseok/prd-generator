@@ -5,6 +5,10 @@ from functools import lru_cache
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
 
+    # API Settings
+    anthropic_api_key: str = ""
+    claude_model: str = "claude-sonnet-4-20250514"
+
     # Validation
     auto_approve_threshold: float = 0.8
     enable_pm_review: bool = False  # PM 검토 워크플로우 활성화 여부

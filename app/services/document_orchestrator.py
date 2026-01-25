@@ -13,12 +13,33 @@ import asyncio
 import json
 import time
 import logging
+import sys
 from datetime import datetime, date
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Optional, List
 
 logger = logging.getLogger(__name__)
+
+
+def safe_print(text: str):
+    """Windows cp949 안전 출력."""
+    try:
+        print(text)
+    except UnicodeEncodeError:
+        # 이모지 및 특수 문자 대체
+        replacements = {
+            "📋": "[DOC]",
+            "✅": "[OK]",
+            "❌": "[X]",
+            "⚠️": "[!]",
+        }
+        for emoji, replacement in replacements.items():
+            text = text.replace(emoji, replacement)
+        try:
+            print(text)
+        except UnicodeEncodeError:
+            print(text.encode('ascii', 'replace').decode('ascii'))
 
 
 @dataclass
@@ -87,15 +108,15 @@ class DocumentOrchestrator:
         total_start = time.time()
         
         if verbose:
-            print("\n" + "=" * 70)
-            print("📋 전체 문서 생성 시작")
-            print(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-            print("=" * 70)
+            safe_print("\n" + "=" * 70)
+            safe_print("📋 전체 문서 생성 시작")
+            safe_print(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            safe_print("=" * 70)
         
         try:
             # Step 1: PRD 생성
             if verbose:
-                print("\n[1/4] PRD 생성 중...")
+                safe_print("\n[1/4] PRD 생성 중...")
             bundle.prd_path = await self._generate_prd(verbose)
             
             if not bundle.prd_path:
@@ -104,7 +125,7 @@ class DocumentOrchestrator:
             
             # Step 2: TRD 생성
             if verbose:
-                print("\n[2/4] TRD 생성 중...")
+                safe_print("\n[2/4] TRD 생성 중...")
             bundle.trd_path = await self._generate_trd(bundle.prd_path, verbose)
             
             if not bundle.trd_path:
@@ -112,7 +133,7 @@ class DocumentOrchestrator:
             
             # Step 3: WBS 생성
             if verbose:
-                print("\n[3/4] WBS 생성 중...")
+                safe_print("\n[3/4] WBS 생성 중...")
             bundle.wbs_path = await self._generate_wbs(bundle.prd_path, verbose)
             
             if not bundle.wbs_path:
@@ -121,7 +142,7 @@ class DocumentOrchestrator:
             # Step 4: 제안서 생성 (선택적)
             if include_proposal:
                 if verbose:
-                    print("\n[4/4] 제안서 생성 중...")
+                    safe_print("\n[4/4] 제안서 생성 중...")
                 bundle.proposal_path = await self._generate_proposal(
                     bundle.prd_path, client_name, verbose
                 )
@@ -159,7 +180,7 @@ class DocumentOrchestrator:
                 return None
             
             if verbose:
-                print(f"  - 입력 파일: {len(files)}개")
+                safe_print(f"  - 입력 파일: {len(files)}개")
             
             client = get_claude_client()
             factory = ParserFactory(client)
@@ -186,7 +207,7 @@ class DocumentOrchestrator:
             requirements = await normalizer.normalize(parsed_contents, document_ids=document_ids)
             
             if verbose:
-                print(f"  - 요구사항 추출: {len(requirements)}개")
+                safe_print(f"  - 요구사항 추출: {len(requirements)}개")
             
             # Layer 3: 검증
             validated, review_items = await validator.validate(requirements, job_id="auto-doc")
@@ -204,7 +225,7 @@ class DocumentOrchestrator:
             json_path.write_text(prd.to_json(), encoding="utf-8")
             
             if verbose:
-                print(f"  ✅ PRD 저장: {md_path.name}")
+                safe_print(f"  ✅ PRD 저장: {md_path.name}")
             
             return json_path
             
@@ -245,7 +266,7 @@ class DocumentOrchestrator:
             json_path.write_text(trd.to_json(), encoding="utf-8")
             
             if verbose:
-                print(f"  ✅ TRD 저장: {md_path.name}")
+                safe_print(f"  ✅ TRD 저장: {md_path.name}")
             
             return json_path
             
@@ -287,7 +308,7 @@ class DocumentOrchestrator:
             json_path.write_text(wbs.to_json(), encoding="utf-8")
             
             if verbose:
-                print(f"  ✅ WBS 저장: {md_path.name}")
+                safe_print(f"  ✅ WBS 저장: {md_path.name}")
             
             return json_path
             
@@ -330,7 +351,7 @@ class DocumentOrchestrator:
             json_path.write_text(proposal.to_json(), encoding="utf-8")
             
             if verbose:
-                print(f"  ✅ 제안서 저장: {md_path.name}")
+                safe_print(f"  ✅ 제안서 저장: {md_path.name}")
             
             return md_path
             
@@ -373,9 +394,9 @@ class DocumentOrchestrator:
     
     def _print_summary(self, bundle: DocumentBundle, include_proposal: bool):
         """결과 요약 출력."""
-        print("\n" + "=" * 70)
-        print("📋 문서 생성 완료")
-        print("=" * 70)
+        safe_print("\n" + "=" * 70)
+        safe_print("📋 문서 생성 완료")
+        safe_print("=" * 70)
         
         docs = [
             ("PRD", bundle.prd_path),
@@ -388,14 +409,14 @@ class DocumentOrchestrator:
         for name, path in docs:
             status = "✅" if path else "❌"
             filename = path.name if path else "생성 실패"
-            print(f"  {status} {name}: {filename}")
+            safe_print(f"  {status} {name}: {filename}")
         
-        print(f"\n  총 소요시간: {bundle.total_time_seconds:.1f}초 ({bundle.total_time_seconds/60:.1f}분)")
+        safe_print(f"\n  총 소요시간: {bundle.total_time_seconds:.1f}초 ({bundle.total_time_seconds/60:.1f}분)")
         
         if bundle.errors:
-            print(f"\n  ⚠️ 오류: {len(bundle.errors)}건")
+            safe_print(f"\n  ⚠️ 오류: {len(bundle.errors)}건")
             for err in bundle.errors:
-                print(f"    - {err}")
+                safe_print(f"    - {err}")
 
 
 # 싱글톤 인스턴스

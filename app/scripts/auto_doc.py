@@ -10,7 +10,14 @@ Usage:
 import asyncio
 import argparse
 import sys
+import os
 from pathlib import Path
+
+# Windows 콘솔 UTF-8 인코딩 설정
+if sys.platform == 'win32':
+    os.environ['PYTHONIOENCODING'] = 'utf-8'
+    # Windows 콘솔 코드 페이지를 UTF-8로 변경
+    os.system('chcp 65001 > nul 2>&1')
 
 # 프로젝트 루트 추가
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))

@@ -309,3 +309,7 @@ class ProposalDocument(BaseModel):
         lines.append(f"*PRD ID: {self.metadata.source_prd_id}*")
 
         return "\n".join(lines)
+
+    def to_json(self) -> str:
+        """JSON 형식으로 변환."""
+        return self.model_dump_json(indent=2)

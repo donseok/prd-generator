@@ -1,0 +1,43 @@
+{
+  "id": "PRD-20260124-f865",
+  "title": "안녕하세요! PRD 요구사항 분석 전문가로서 도움을 드릴 준비가 되었습니다.\n\n이 프로젝트는 다양한 입력 형식(텍스트, 이메일, Excel, PowerPoint, 이미지, 채팅 로그, 문서 등)을 7계층 AI 파이프라인을 통해 표준화된 PRD로 변환하고, 이를 기반으로 제안서, TRD, WBS를 생성하는 시스템입니다.\n\n어떤 도움이 필요하신가요?\n\n**사용 가능한 기능:**\n- PRD 생성 (`/prd:prd_maker`)\n- TRD 생성 (`/trd:trd_maker`)\n- WBS 생성 (`/wbs:wbs_maker`)\n- 제안서 생성 (`/pro:pro_maker`)\n- 전체 문서 자동 생성 (`@auto-doc`)\n\n입력 파일을 `workspace/inputs/projects/` 폴더에 넣고 명령을 실행하시면 됩니다.",
+  "overview": {
+    "background": "자동 생성 실패 - 수동 입력 필요",
+    "goals": [
+      "목표 정의 필요"
+    ],
+    "scope": "범위 정의 필요",
+    "out_of_scope": [],
+    "target_users": [],
+    "success_metrics": []
+  },
+  "functional_requirements": [],
+  "non_functional_requirements": [],
+  "constraints": [],
+  "milestones": [],
+  "unresolved_items": [],
+  "metadata": {
+    "version": "1.0",
+    "status": "draft",
+    "author": "PRD Generator",
+    "created_at": "2026-01-24T08:04:44.759193",
+    "updated_at": "2026-01-24T08:04:44.759196",
+    "source_documents": [
+      "계량_데이터_현황.xlsx",
+      "기능_명세서.json",
+      "기술_아키텍처_스펙.md",
+      "모바일_앱_와이어프레임.png",
+      "슬랙_대화기록.txt",
+      "요구사항_정의서.csv",
+      "운전기사_인터뷰.md",
+      "웹_대시보드_와이어프레임.png",
+      "이메일_스레드.txt",
+      "킥오프_회의록.txt",
+      "프로젝트_발표자료.pptx",
+      "프로젝트_제안서.docx"
+    ],
+    "overall_confidence": 0.0,
+    "requires_pm_review": true,
+    "pm_review_reasons": []
+  }
+}

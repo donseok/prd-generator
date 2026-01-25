@@ -1,31 +1,214 @@
-# PRD Maker
+# PRD 문서 생성
 
-`workspace/inputs/projects` 폴더의 파일을 분석하여 PRD 문서를 생성합니다.
+당신은 PRD(Product Requirements Document) 작성 전문가입니다.
+`workspace/inputs/projects/` 폴더의 모든 파일을 분석하여 표준 PRD 문서를 생성하세요.
 
-## 실행 방법
+---
 
-```bash
-python -m app.scripts.prd_maker
+## 1단계: 입력 파일 분석
+
+`workspace/inputs/projects/` 폴더의 모든 파일을 읽고 분석하세요:
+- 텍스트 파일 (txt, md, json)
+- 스프레드시트 (csv, xlsx) 
+- 프레젠테이션 (pptx)
+- 문서 (docx)
+- 이미지 (png, jpg) - 와이어프레임, 다이어그램 등
+
+각 파일에서 다음을 추출하세요:
+- 프로젝트 배경 및 목적
+- 기능 요구사항 (사용자가 원하는 기능)
+- 비기능 요구사항 (성능, 보안, 확장성 등)
+- 제약조건 (기술, 일정, 예산 등)
+- 대상 사용자 정보
+- 성공 지표
+
+---
+
+## 2단계: PRD 문서 작성
+
+다음 구조로 PRD 문서를 작성하세요:
+
+```markdown
+# [프로젝트명] PRD (Product Requirements Document)
+
+**버전**: 1.0
+**작성일**: [오늘 날짜]
+**상태**: Draft
+
+---
+
+## 1. 개요
+
+### 1.1 배경
+[프로젝트가 필요한 이유, 해결하려는 문제 설명 - 2~3문단]
+
+### 1.2 목표
+- [구체적이고 측정 가능한 목표 1]
+- [목표 2]
+- [목표 3]
+
+### 1.3 범위
+#### 포함 범위
+- [이번 버전에 포함되는 기능/영역]
+
+#### 범위 외
+- [명시적으로 제외되는 항목]
+
+### 1.4 대상 사용자
+| 사용자 유형 | 역할 및 주요 활동 |
+|------------|------------------|
+| [사용자 1] | [역할 설명] |
+| [사용자 2] | [역할 설명] |
+
+### 1.5 성공 지표
+- [KPI 1: 구체적 수치 목표]
+- [KPI 2]
+- [KPI 3]
+
+---
+
+## 2. 기능 요구사항 (Functional Requirements)
+
+### FR-001: [기능명]
+**우선순위**: HIGH | MEDIUM | LOW
+**설명**: [기능에 대한 상세 설명]
+
+**User Story**: [역할]로서, 나는 [기능]을 원한다, [목적/이유] 때문에.
+
+**Acceptance Criteria**:
+- [ ] [조건 1]
+- [ ] [조건 2]
+- [ ] [조건 3]
+
+[각 기능에 대해 위 형식 반복]
+
+---
+
+## 3. 비기능 요구사항 (Non-Functional Requirements)
+
+### NFR-001: 성능
+- [응답 시간, 처리량 등 구체적 수치]
+
+### NFR-002: 보안
+- [인증, 암호화, 접근 제어 등]
+
+### NFR-003: 확장성
+- [동시 사용자 수, 데이터 증가 대응 등]
+
+### NFR-004: 가용성
+- [SLA, 장애 복구 시간 등]
+
+### NFR-005: 사용성
+- [접근성, 반응형 디자인 등]
+
+---
+
+## 4. 제약조건
+
+### CON-001: 기술 제약
+- [사용해야 하는/사용할 수 없는 기술]
+
+### CON-002: 일정 제약
+- [마감일, 마일스톤 날짜]
+
+### CON-003: 예산 제약
+- [예산 한도, 리소스 제한]
+
+### CON-004: 외부 의존성
+- [외부 시스템, API, 서비스]
+
+---
+
+## 5. 마일스톤
+
+### M1: [마일스톤명] - [예상 기간]
+**목표**: [마일스톤 목표]
+**주요 산출물**:
+- [산출물 1]
+- [산출물 2]
+
+### M2: [마일스톤명] - [예상 기간]
+**목표**: [마일스톤 목표]
+**주요 산출물**:
+- [산출물 1]
+- [산출물 2]
+
+---
+
+## 6. 미해결 사항
+
+| ID | 유형 | 설명 | 담당자 | 우선순위 |
+|----|------|------|--------|---------|
+| UNR-001 | 질문 | [확인이 필요한 사항] | PM | HIGH |
+| UNR-002 | 결정 | [결정이 필요한 사항] | 이해관계자 | MEDIUM |
+
+---
+
+## 7. 부록
+
+### 7.1 용어 정의
+| 용어 | 정의 |
+|------|------|
+| [용어 1] | [정의] |
+
+### 7.2 참고 문서
+- [분석한 입력 파일 목록]
+
+---
+*이 문서는 PRD 자동 생성 시스템에 의해 작성되었습니다.*
 ```
 
-## 입력
+---
 
-- **경로**: `workspace/inputs/projects/`
-- **지원 포맷**: txt, md, json, csv, xlsx, pptx, docx, png, jpg
+## 3단계: 파일 저장
 
-## 출력
+생성한 PRD 문서를 다음 위치에 저장하세요:
 
-- **Markdown**: `workspace/outputs/prd/PRD-{timestamp}.md`
-- **JSON**: `workspace/outputs/prd/PRD-{timestamp}.json`
+1. **Markdown 파일**: `workspace/outputs/prd/PRD-[YYYYMMDD-HHMMSS].md`
+2. **JSON 파일**: `workspace/outputs/prd/PRD-[YYYYMMDD-HHMMSS].json`
 
-## 처리 파이프라인
+JSON 형식:
+```json
+{
+  "id": "PRD-[YYYYMMDD-HHMMSS]",
+  "title": "[프로젝트명]",
+  "version": "1.0",
+  "status": "draft",
+  "created_at": "[ISO 8601 형식]",
+  "overview": {
+    "background": "[배경]",
+    "goals": ["[목표1]", "[목표2]"],
+    "scope": "[범위]",
+    "out_of_scope": ["[범위 외 1]"],
+    "target_users": ["[사용자1]"],
+    "success_metrics": ["[지표1]"]
+  },
+  "functional_requirements": [
+    {
+      "id": "FR-001",
+      "title": "[제목]",
+      "description": "[설명]",
+      "priority": "HIGH",
+      "user_story": "[User Story]",
+      "acceptance_criteria": ["[조건1]", "[조건2]"]
+    }
+  ],
+  "non_functional_requirements": [...],
+  "constraints": [...],
+  "milestones": [...],
+  "unresolved_items": [...],
+  "source_documents": ["[분석한 파일 목록]"]
+}
+```
 
-1. **Layer 1** - 파싱: 각 파일 형식에 맞게 텍스트 추출
-2. **Layer 2** - 정규화: 요구사항 추출 및 분류 (FR/NFR/CONSTRAINT)
-3. **Layer 3** - 검증: 완전성/일관성 검증, 신뢰도 산정
-4. **Layer 4** - 생성: PRD 문서 생성
+---
 
-## 주의사항
+## 작성 지침
 
-- Claude API 키가 `.env`에 설정되어 있어야 합니다
-- 파일이 많을 경우 처리 시간이 길어질 수 있습니다
+1. **구체성**: 모호한 표현 대신 구체적인 수치와 조건 사용
+2. **완전성**: 각 요구사항에 ID, 우선순위, User Story, Acceptance Criteria 포함
+3. **추적성**: 요구사항의 출처 문서 명시
+4. **일관성**: 용어와 형식의 일관성 유지
+5. **실용성**: 개발팀이 바로 활용할 수 있는 수준의 상세도
+
+이제 `workspace/inputs/projects/` 폴더를 확인하고 PRD 문서를 생성하세요.
