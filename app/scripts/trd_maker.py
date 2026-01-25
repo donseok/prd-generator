@@ -29,7 +29,7 @@ async def main():
     json_files = list(prd_dir.glob('PRD-*.json'))
 
     if not json_files:
-        print('PRD JSON 파일을 찾을 수 없습니다. 먼저 /prd:prd_maker를 실행하세요.')
+        print('PRD JSON 파일을 찾을 수 없습니다. 먼저 /prd:prd-maker를 실행하세요.')
         return
 
     prd_path = max(json_files, key=lambda x: x.stat().st_mtime)

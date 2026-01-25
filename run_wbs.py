@@ -75,7 +75,7 @@ async def generate_wbs():
     prd_path = find_latest_json("workspace/outputs/prd", "PRD")
     if not prd_path:
         raise FileNotFoundError(
-            "PRD JSON 파일을 찾을 수 없습니다. 먼저 /prd:prd_maker를 실행하세요."
+            "PRD JSON 파일을 찾을 수 없습니다. 먼저 /prd:prd-maker를 실행하세요."
         )
     print(f"\n[입력] PRD: {prd_path}")
 
@@ -102,7 +102,7 @@ async def generate_wbs():
         print(f'  - 기술 리스크: {len(trd_context["technical_risks"])}개')
     else:
         print("\n[참고] TRD 파일이 없습니다. PRD만으로 WBS를 생성합니다.")
-        print("       더 정확한 공수 산정을 위해 /trd:trd_maker를 먼저 실행하세요.")
+        print("       더 정확한 공수 산정을 위해 /trd:trd-maker를 먼저 실행하세요.")
 
     # WBS 컨텍스트 설정 (TRD 기반 리소스 타입 조정)
     resource_types = ["PM", "기획자", "프론트엔드 개발자", "백엔드 개발자", "QA"]

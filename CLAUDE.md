@@ -65,10 +65,11 @@ python -m app.scripts.pro_maker --client "고객사명"
 
 ### Custom Slash Commands
 ```bash
-/prd:prd_maker    # PRD 생성 (입력: workspace/inputs/projects/)
-/trd:trd_maker    # TRD 생성 (입력: 최신 PRD JSON)
-/wbs:wbs_maker    # WBS 생성 (입력: 최신 PRD JSON)
+/prd:prd-maker    # PRD 생성 (입력: workspace/inputs/projects/)
+/trd:trd-maker    # TRD 생성 (입력: 최신 PRD JSON)
+/wbs:wbs-maker    # WBS 생성 (입력: 최신 PRD JSON)
 /pro:pro-maker    # 제안서 생성 (입력: 최신 PRD JSON)
+/del:del-doc      # 생성된 문서 삭제 (테스트 초기화)
 ```
 
 ### Custom Agents
