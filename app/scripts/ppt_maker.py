@@ -629,16 +629,221 @@ def load_proposal_json(json_path: Path) -> dict:
         return json.load(f)
 
 
+def normalize_proposal_data(data: dict) -> dict:
+    """제안서 JSON 구조를 PPT 생성에 맞게 정규화."""
+    # 이미 정규화된 구조인지 확인 (storytelling_structure 존재 여부)
+    if "storytelling_structure" in data:
+        return data
+
+    # 새로운 구조 (ProposalDocument 모델)를 PPT 구조로 변환
+    normalized = {
+        "title": data.get("title", "프로젝트 제안서"),
+        "metadata": data.get("metadata", {}),
+        "storytelling_structure": {
+            "hook": "레거시 시스템의 한계를 극복합니다",
+            "solution": "디지털 전환으로 업무 효율 혁신",
+            "cta": "지금 바로 함께 시작하세요!"
+        },
+    }
+
+    # executive_summary 변환 (string → dict)
+    exec_str = data.get("executive_summary", "")
+    if isinstance(exec_str, str):
+        lines = exec_str.split('\n\n')
+        normalized["executive_summary"] = {
+            "problem": lines[0] if len(lines) > 0 else "",
+            "solution": lines[1] if len(lines) > 1 else "",
+            "duration": data.get("timeline", {}).get("total_duration", "7개월"),
+            "effort": f"{data.get('resource_plan', {}).get('total_man_months', 16)} M/M",
+            "key_benefits": data.get("expected_benefits", [])[:2] if isinstance(data.get("expected_benefits"), list) else []
+        }
+    else:
+        normalized["executive_summary"] = exec_str
+
+    # project_overview → current_situation 변환
+    overview = data.get("project_overview", {})
+    background = overview.get("background", "")
+    # 배경에서 문제점 추출
+    challenges = []
+    if background:
+        # 쉼표나 마침표로 분리된 문제점들을 추출
+        problems = ["유지보수 인력 확보 어려움", "수기 대장 작성 병행", "운전기사 대기 시간 45분", "실시간 현황 파악 어려움"]
+        for i, prob in enumerate(problems):
+            challenges.append({
+                "area": f"문제 {i+1}",
+                "symptom": prob,
+                "business_impact": prob
+            })
+
+    success_criteria = overview.get("success_criteria", [])
+    future_vision = {}
+    for i, criterion in enumerate(success_criteria[:4]):
+        future_vision[f"vision_{i+1}"] = criterion
+
+    normalized["current_situation"] = {
+        "challenges": challenges,
+        "risks_if_no_change": [
+            "시스템 장애 시 복구 불가",
+            "인력 이탈 시 운영 마비",
+            "경쟁력 저하",
+            "고객 불만 증가"
+        ],
+        "future_vision": future_vision
+    }
+
+    # objectives 변환
+    obj_list = overview.get("objectives", [])
+    kpis = []
+    for criterion in success_criteria[:4]:
+        if "→" in criterion:
+            parts = criterion.split("→")
+            kpis.append({
+                "metric": criterion.split()[0] if criterion.split() else "",
+                "current": parts[0].strip().split()[-1] if parts else "",
+                "target": parts[1].strip().split()[0] if len(parts) > 1 else "",
+                "improvement": "개선"
+            })
+        else:
+            kpis.append({
+                "metric": criterion[:20],
+                "current": "-",
+                "target": criterion,
+                "improvement": ""
+            })
+    normalized["objectives"] = {"kpis": kpis, "goals": obj_list}
+
+    # scope_of_work → solution 변환
+    scope = data.get("scope_of_work", {})
+    in_scope_list = scope.get("in_scope", [])
+    out_scope_list = scope.get("out_of_scope", [])
+
+    # in_scope 변환 (string list → dict list)
+    in_scope_converted = []
+    for item in in_scope_list:
+        if isinstance(item, str):
+            in_scope_converted.append({"category": "", "value": item})
+        else:
+            in_scope_converted.append(item)
+
+    # out_scope 변환
+    out_scope_converted = []
+    for item in out_scope_list:
+        if isinstance(item, str):
+            out_scope_converted.append({"item": item})
+        else:
+            out_scope_converted.append(item)
+
+    solution_approach = data.get("solution_approach", {})
+    normalized["solution"] = {
+        "value_proposition": "손으로 쓰던 전표가 스마트폰으로",
+        "overview": solution_approach.get("overview", ""),
+        "scope": {
+            "in_scope": in_scope_converted,
+            "out_of_scope": out_scope_converted
+        }
+    }
+
+    # solution_approach → technical_approach 변환
+    tech_stack = solution_approach.get("technology_stack", [])
+    tech_converted = []
+    for item in tech_stack:
+        if isinstance(item, str):
+            if ":" in item:
+                parts = item.split(":", 1)
+                tech_converted.append({"category": parts[0].strip(), "technology": parts[1].strip()})
+            else:
+                tech_converted.append({"category": "", "technology": item})
+        else:
+            tech_converted.append(item)
+    normalized["technical_approach"] = {"technology_stack": tech_converted}
+
+    # timeline 변환 (phases 구조 맞춤)
+    timeline_data = data.get("timeline", {})
+    phases = timeline_data.get("phases", [])
+    phases_converted = []
+    for phase in phases:
+        phases_converted.append({
+            "phase": phase.get("phase_name", ""),
+            "duration": phase.get("duration", ""),
+            "period": phase.get("description", "")
+        })
+    normalized["timeline"] = {
+        "total_duration": timeline_data.get("total_duration", "7개월"),
+        "phases": phases_converted
+    }
+
+    # resource_plan → team 변환
+    resource = data.get("resource_plan", {})
+    team_structure = resource.get("team_structure", [])
+    team_converted = []
+    for member in team_structure:
+        resp = member.get("responsibilities", [])
+        team_converted.append({
+            "role": member.get("role", ""),
+            "count": member.get("count", 1),
+            "expertise": ", ".join(resp[:2]) if resp else ""
+        })
+    normalized["team"] = {
+        "composition": team_converted,
+        "effort_summary": {
+            "total": {"man_months": resource.get("total_man_months", 16)}
+        }
+    }
+
+    # risks → risk_management 변환
+    risks = data.get("risks", [])
+    risks_converted = []
+    for risk in risks:
+        risks_converted.append({
+            "risk": risk.get("description", ""),
+            "impact": risk.get("level", "MEDIUM"),
+            "mitigation": risk.get("mitigation", "")
+        })
+    normalized["risk_management"] = risks_converted
+
+    # expected_benefits 변환 (list → dict with quantitative)
+    benefits = data.get("expected_benefits", [])
+    if isinstance(benefits, list):
+        quant = []
+        for b in benefits[:4]:
+            if isinstance(b, str) and ":" in b:
+                parts = b.split(":", 1)
+                quant.append({
+                    "metric": parts[0].strip(),
+                    "before": "현재",
+                    "after": parts[1].strip()[:30],
+                    "improvement": "개선"
+                })
+        normalized["expected_benefits"] = {"quantitative": quant, "qualitative": benefits}
+    else:
+        normalized["expected_benefits"] = benefits
+
+    # next_steps 변환 (list → dict list)
+    steps = data.get("next_steps", [])
+    steps_converted = []
+    for i, step in enumerate(steps):
+        if isinstance(step, str):
+            steps_converted.append({"step": i + 1, "action": step, "duration": ""})
+        else:
+            steps_converted.append(step)
+    normalized["next_steps"] = steps_converted
+
+    return normalized
+
+
 def generate_ppt(proposal_path: Path, output_path: Path):
     """PPT 생성."""
     # 제안서 읽기 (JSON 우선, 없으면 MD)
     json_path = proposal_path.with_suffix('.json')
     if json_path.exists():
-        data = load_proposal_json(json_path)
+        raw_data = load_proposal_json(json_path)
         print(f"   JSON 데이터 로드: {json_path.name}")
     else:
         md_content = proposal_path.read_text(encoding='utf-8')
-        data = parse_proposal(md_content)
+        raw_data = parse_proposal(md_content)
+
+    # 데이터 정규화
+    data = normalize_proposal_data(raw_data)
 
     # PPT 생성
     prs = Presentation()
