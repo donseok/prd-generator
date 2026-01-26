@@ -55,7 +55,12 @@
       "Bash(\"/c/Users/donseok/AppData/Local/Programs/Python/Python312/python.exe\" --version)",
       "Bash(\"/c/Users/donseok/AppData/Local/Programs/Python/Python312/python.exe\" -m pip install pydantic --quiet)",
       "Bash(\"/c/Users/donseok/AppData/Local/Programs/Python/Python312/python.exe\" run_wbs.py)",
-      "Bash(\"/c/Users/donseok/AppData/Local/Programs/Python/Python312/python.exe\" -m pip install -r requirements.txt --quiet)"
+      "Bash(\"/c/Users/donseok/AppData/Local/Programs/Python/Python312/python.exe\" -m pip install -r requirements.txt --quiet)",
+      "Bash(C:/Users/donse/anaconda3/python.exe -m app.scripts.ppt_maker:*)",
+      "Bash(C:/Users/donse/anaconda3/python.exe -m pip install python-pptx --quiet)",
+      "Bash(C:/Users/donse/anaconda3/python.exe -m pip install:*)",
+      "Bash(C:/Users/donse/anaconda3/python.exe:*)",
+      "Bash(py -m app.scripts.ppt_maker:*)"
     ]
   }
 }
