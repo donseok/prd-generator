@@ -20,6 +20,7 @@ import {
 import Link from "next/link";
 import { api } from "@/lib/api";
 
+// 파일 종류별 아이콘 및 색상 설정
 const FILE_TYPE_CONFIG: Record<string, { icon: typeof FileText; label: string; color: string }> = {
   txt: { icon: FileText, label: "텍스트", color: "bg-gray-500" },
   md: { icon: FileText, label: "마크다운", color: "bg-gray-500" },
@@ -45,17 +46,23 @@ function getFileConfig(filename: string) {
 }
 
 export default function UploadPage() {
+  /**
+   * 파일 업로드 페이지 컴포넌트입니다.
+   * 사용자가 파일을 드래그 앤 드롭으로 업로드하고 PRD 생성을 시작할 수 있습니다.
+   */
   const router = useRouter();
   const [files, setFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 파일이 드롭되었을 때 호출되는 콜백
   const onDrop = useCallback((acceptedFiles: File[]) => {
     setFiles((prev) => [...prev, ...acceptedFiles]);
     setError(null);
   }, []);
 
+  // Dropzone 설정 (허용할 파일 형식 지정)
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
@@ -73,10 +80,12 @@ export default function UploadPage() {
     },
   });
 
+  // 선택된 파일 제거
   const removeFile = (index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
+  // 업로드 및 처리 시작 버튼 핸들러
   const handleUploadAndProcess = async () => {
     if (files.length === 0) return;
 
@@ -84,17 +93,17 @@ export default function UploadPage() {
       setUploading(true);
       setError(null);
 
-      // Upload files
+      // 1. 파일 업로드 API 호출
       const uploadResult = await api.uploadFiles(files);
       const documentIds = uploadResult.documents.map((d) => d.id);
 
       setUploading(false);
       setProcessing(true);
 
-      // Start processing
+      // 2. PRD 생성 파이프라인 시작 API 호출
       const processResult = await api.startProcessing(documentIds);
 
-      // Navigate to processing status page
+      // 3. 작업 진행 상황 페이지로 이동
       router.push(`/processing/${processResult.job_id}`);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "업로드 실패";
@@ -130,7 +139,7 @@ export default function UploadPage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-8">
-        {/* Dropzone */}
+        {/* 드롭존 영역 */}
         <div
           {...getRootProps()}
           className={`
@@ -151,7 +160,7 @@ export default function UploadPage() {
           </p>
         </div>
 
-        {/* File List */}
+        {/* 선택된 파일 목록 */}
         {files.length > 0 && (
           <div className="mt-6">
             <h3 className="text-sm font-medium text-slate-300 mb-3">
@@ -190,14 +199,14 @@ export default function UploadPage() {
           </div>
         )}
 
-        {/* Error */}
+        {/* 에러 메시지 표시 */}
         {error && (
           <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400">
             {error}
           </div>
         )}
 
-        {/* Action Button */}
+        {/* 처리 시작 버튼 */}
         <div className="mt-8 flex justify-end">
           <button
             onClick={handleUploadAndProcess}
@@ -229,7 +238,7 @@ export default function UploadPage() {
           </button>
         </div>
 
-        {/* Info */}
+        {/* 안내 문구 */}
         <div className="mt-12 grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="p-4 bg-slate-800/30 rounded-lg border border-slate-700">
             <h4 className="font-medium mb-2 text-blue-400">지원 입력 형식</h4>

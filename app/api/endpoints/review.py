@@ -1,4 +1,7 @@
-"""PM review endpoints."""
+"""
+PM(기획자) 검토 API입니다.
+AI가 100% 확신하지 못하는 요구사항들에 대해 사람이 직접 확인하고 결정(승인/수정/반려)하는 기능을 제공합니다.
+"""
 
 from typing import Optional
 from fastapi import APIRouter, HTTPException
@@ -11,29 +14,29 @@ router = APIRouter()
 
 
 class ReviewDecision(BaseModel):
-    """Review decision from PM."""
+    """검토 결정 데이터 모델"""
     job_id: str
     review_item_id: str
-    decision: str  # approve, reject, modify
+    decision: str  # approve(승인), reject(반려), modify(수정)
     notes: Optional[str] = None
     modified_content: Optional[dict] = None
 
 
 class BulkReviewDecision(BaseModel):
-    """Bulk review decisions."""
+    """일괄 검토 데이터 모델"""
     decisions: list[ReviewDecision]
 
 
 @router.get("/pending/{job_id}")
 async def get_pending_reviews(job_id: str) -> dict:
     """
-    Get all items pending PM review for a job.
-
-    Items are flagged for review when:
-    - Confidence score < 80%
-    - Missing critical information
-    - Conflicting requirements detected
-    - Ambiguous interpretations
+    검토 대기 중인 항목들을 조회합니다.
+    
+    검토 대상이 되는 경우:
+    - AI의 확신도가 80% 미만일 때
+    - 중요 정보가 빠져있을 때
+    - 서로 다른 요구사항이 충돌할 때
+    - 내용이 애매할 때
     """
     storage = get_file_storage()
     job = await storage.get_job(job_id)
@@ -41,6 +44,7 @@ async def get_pending_reviews(job_id: str) -> dict:
     if not job:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
 
+    # 아직 처리되지 않은 항목들
     pending_items = [
         {
             "id": item.id,
@@ -55,6 +59,7 @@ async def get_pending_reviews(job_id: str) -> dict:
         if not item.resolved
     ]
 
+    # 이미 처리된 항목들
     resolved_items = [
         {
             "id": item.id,
@@ -80,12 +85,12 @@ async def get_pending_reviews(job_id: str) -> dict:
 @router.post("/decision")
 async def submit_review_decision(decision: ReviewDecision) -> dict:
     """
-    Submit PM decision for a review item.
-
-    Decision options:
-    - approve: Accept the requirement as-is
-    - reject: Remove the requirement from PRD
-    - modify: Accept with modifications (provide modified_content)
+    개별 항목에 대한 검토 결정을 저장합니다.
+    
+    옵션:
+    - approve: 그대로 승인
+    - reject: 요구사항 삭제 (PRD에 포함 안 함)
+    - modify: 내용 수정 후 승인
     """
     storage = get_file_storage()
     job = await storage.get_job(decision.job_id)
@@ -99,7 +104,7 @@ async def submit_review_decision(decision: ReviewDecision) -> dict:
             detail="결정은 approve, reject, modify 중 하나여야 합니다"
         )
 
-    # Find the review item
+    # 해당 검토 항목 찾기
     review_item = None
     for item in job.review_items:
         if item.id == decision.review_item_id:
@@ -112,7 +117,7 @@ async def submit_review_decision(decision: ReviewDecision) -> dict:
     if review_item.resolved:
         raise HTTPException(status_code=400, detail="이미 처리된 항목입니다")
 
-    # Apply decision
+    # 결정 적용
     review_item.resolve(
         decision=decision.decision,
         notes=decision.notes,
@@ -130,7 +135,7 @@ async def submit_review_decision(decision: ReviewDecision) -> dict:
 
 @router.post("/bulk-decision")
 async def submit_bulk_decisions(request: BulkReviewDecision) -> dict:
-    """Submit multiple review decisions at once."""
+    """여러 항목을 한 번에 검토 처리합니다 (일괄 승인 등)."""
     results = []
 
     for decision in request.decisions:
@@ -155,9 +160,8 @@ async def submit_bulk_decisions(request: BulkReviewDecision) -> dict:
 @router.post("/complete/{job_id}")
 async def complete_review(job_id: str) -> dict:
     """
-    Mark review as complete and resume pipeline.
-
-    All pending items must be resolved before completing.
+    모든 검토가 끝났을 때 호출하여 파이프라인을 재개합니다.
+    남은 검토 항목이 없어야 합니다.
     """
     from app.services import get_orchestrator
 
@@ -173,7 +177,7 @@ async def complete_review(job_id: str) -> dict:
             detail=f"PM 검토 상태가 아닙니다: {job.status.value}"
         )
 
-    # Check all items are resolved
+    # 미해결 항목 확인
     pending_items = [item for item in job.review_items if not item.resolved]
     if pending_items:
         raise HTTPException(
@@ -181,7 +185,7 @@ async def complete_review(job_id: str) -> dict:
             detail=f"{len(pending_items)}개 항목이 아직 검토되지 않았습니다"
         )
 
-    # Resume pipeline through orchestrator
+    # 오케스트레이터를 통해 작업 재개 (PRD 생성 단계로 이동)
     try:
         orchestrator = get_orchestrator()
         prd = await orchestrator.resume_after_review(job)
@@ -202,14 +206,14 @@ async def complete_review(job_id: str) -> dict:
 
 @router.get("/stats/{job_id}")
 async def get_review_stats(job_id: str) -> dict:
-    """Get review statistics for a job."""
+    """검토 현황 통계를 조회합니다 (승인/반려 건수 등)."""
     storage = get_file_storage()
     job = await storage.get_job(job_id)
 
     if not job:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
 
-    # Count by issue type
+    # 이슈 유형별 카운트
     issue_type_counts = {}
     decision_counts = {"approve": 0, "reject": 0, "modify": 0}
 

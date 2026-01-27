@@ -1,4 +1,6 @@
-"""Text and markdown file parser."""
+"""
+텍스트 파일(.txt)과 마크다운 파일(.md) 파서입니다.
+"""
 
 from pathlib import Path
 from typing import Optional
@@ -8,7 +10,7 @@ from ..base_parser import BaseParser
 
 
 class TextParser(BaseParser):
-    """Parser for plain text and markdown files."""
+    """일반 텍스트 및 마크다운 문서를 처리하는 파서입니다."""
 
     @property
     def supported_types(self) -> list[InputType]:
@@ -23,22 +25,22 @@ class TextParser(BaseParser):
         file_path: Path,
         metadata: Optional[dict] = None
     ) -> ParsedContent:
-        """Parse text file and extract content."""
-        # Read file content
+        """텍스트 파일을 읽어서 내용을 추출합니다."""
+        # 파일 읽기 (UTF-8 인코딩)
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             raw_text = f.read()
 
-        # Extract metadata
+        # 메타데이터 추출
         file_metadata = await self.extract_metadata(file_path)
         if metadata:
             for key, value in metadata.items():
                 if hasattr(file_metadata, key):
                     setattr(file_metadata, key, value)
 
-        # Detect structure
+        # 문서 구조 감지 (헤더 등)
         structure = await self.detect_structure(raw_text)
 
-        # Build sections from structure
+        # 구조 정보를 바탕으로 섹션 나누기
         sections = []
         for sec in structure.get("sections", []):
             sections.append({
@@ -58,26 +60,30 @@ class TextParser(BaseParser):
         )
 
     async def detect_structure(self, content: str) -> dict:
-        """Detect text structure with markdown awareness."""
+        """
+        마크다운 문법을 고려하여 문서 구조를 파악합니다.
+        (예: # 헤더, 코드 블록 ``` 등)
+        """
         lines = content.split("\n")
         sections = []
         current_section = None
-        in_code_block = False
+        in_code_block = False # 코드 블록 안인지 여부 체크
 
         for i, line in enumerate(lines):
             stripped = line.strip()
 
-            # Track code blocks
+            # 코드 블록 감지 (```)
             if stripped.startswith("```"):
                 in_code_block = not in_code_block
                 continue
 
+            # 코드 블록 안 내용은 헤더로 인식하지 않음
             if in_code_block:
                 if current_section:
                     current_section["content"].append(line)
                 continue
 
-            # Detect markdown headers
+            # 마크다운 헤더 감지 (#, ##, ...)
             if stripped.startswith("#"):
                 level = len(stripped) - len(stripped.lstrip("#"))
                 title = stripped.lstrip("#").strip()
@@ -89,12 +95,12 @@ class TextParser(BaseParser):
                     "start_line": i,
                     "content": []
                 }
-            # Detect underline-style headers
+            # 밑줄 스타일 헤더 감지 (===, ---)
             elif i > 0 and stripped and set(stripped) in [{"="}, {"-"}]:
                 prev_line = lines[i-1].strip()
                 if prev_line and len(prev_line) < 100:
                     if current_section:
-                        # Remove the header from content
+                        # 이전 줄은 내용이 아니라 제목이었으므로 내용에서 제거
                         if current_section["content"]:
                             current_section["content"].pop()
                         sections.append(current_section)
@@ -107,7 +113,7 @@ class TextParser(BaseParser):
             elif current_section:
                 current_section["content"].append(line)
             elif stripped:
-                # Start implicit first section
+                # 첫 헤더가 나오기 전의 내용은 'Introduction' 섹션으로 간주
                 current_section = {
                     "title": "Introduction",
                     "level": 1,

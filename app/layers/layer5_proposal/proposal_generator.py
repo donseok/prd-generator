@@ -1,20 +1,12 @@
-"""Proposal generator - converts PRD to customer proposal.
+"""
+Layer 5: 제안서(Proposal) 생성기입니다.
+생성된 PRD 문서를 바탕으로 고객에게 보낼 제안서 문서를 자동으로 작성합니다.
 
-Layer 5: 제안서 생성기
-PRDDocument를 기반으로 고객 제안서(ProposalDocument)를 생성합니다.
-
-처리 순서:
-1. 프로젝트 개요 추출 (PRD에서 직접 추출)
-2. 작업 범위 추출 (PRD에서 직접 추출)
-3. 솔루션 접근법 생성 (Claude 호출)
-4. 일정 계획 변환 (마일스톤 기반)
-5. 산출물 목록 생성 (기본 템플릿)
-6. 투입 인력 계획 생성 (규모 기반 자동 산정)
-7. 리스크 평가 (신뢰도/미해결 항목 기반)
-8. 전제 조건 추출 (PRD 가정사항 기반)
-9. 기대 효과 생성 (Claude 호출)
-10. 경영진 요약 생성 (Claude 호출, 마지막에 생성)
-11. 후속 절차 생성 (기본 템플릿)
+주요 기능:
+- 프로젝트 개요 및 범위 정의
+- 솔루션 접근법 및 아키텍처 제안
+- 일정 및 인력 계획 수립
+- 기대 효과 및 리스크 분석
 """
 
 import logging
@@ -52,10 +44,8 @@ logger = logging.getLogger(__name__)
 
 class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalContext]):
     """
-    PRD를 기반으로 고객 제안서 생성.
-
-    BaseGenerator를 상속하여 일관된 생성 흐름과
-    공통 유틸리티 메서드를 활용합니다.
+    제안서 생성기 클래스입니다.
+    여러 작업을 병렬로 처리하여 빠르게 제안서를 만듭니다.
     """
 
     _id_prefix = "PROP"
@@ -67,94 +57,78 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         context: ProposalContext,
     ) -> ProposalDocument:
         """
-        실제 제안서 생성 로직 (병렬 처리 최적화).
-
-        병렬화 전략:
-        - Phase 1: 로컬 처리 (동기)
-          - 프로젝트 개요, 작업 범위, 일정, 산출물, 리스크, 전제조건, 후속절차
-        - Phase 2: Claude 호출 병렬 처리
-          - 솔루션 접근법, 투입 인력, 기대 효과 (독립적이므로 병렬 가능)
-        - Phase 3: 경영진 요약 (순차)
-          - 기대 효과 결과가 필요하므로 마지막에 실행
-
-        예상 효과: 50-67% 시간 단축
-
-        Args:
-            prd: 원본 PRD 문서
-            context: 제안서 컨텍스트 (고객사명 등)
-
-        Returns:
-            ProposalDocument: 생성된 제안서
+        제안서 생성 메인 로직입니다.
+        
+        효율을 위해 다음 3단계로 진행됩니다:
+        1. 로컬 처리 (PRD 내용 그대로 가져오기) - 빠름
+        2. AI 병렬 처리 (솔루션, 인력, 기대효과 등 창작이 필요한 부분) - 동시에 진행
+        3. 마무리 처리 (요약문 작성)
         """
         import asyncio
 
-        # 제안서 ID 생성 (베이스 클래스 메서드 사용)
+        # 문서 ID 생성
         proposal_id = self._generate_id()
 
         # 제목 설정
         project_name = context.project_name or prd.title
         title = f"{context.client_name} {project_name} 제안서"
 
-        # ========== Phase 1: 로컬 처리 (동기) ==========
-        # 1. 프로젝트 개요 추출
+        # ========== 1단계: 로컬 처리 (빠른 작업) ==========
+        # PRD 내용을 그대로 옮겨오거나 간단한 규칙으로 변환하는 작업들입니다.
+        
         project_overview = self._extract_project_overview(prd)
         logger.info("[ProposalGenerator] 프로젝트 개요 추출 완료")
 
-        # 2. 작업 범위 추출
         scope_of_work = self._extract_scope_of_work(prd)
         logger.info("[ProposalGenerator] 작업 범위 추출 완료")
 
-        # 4. 일정 계획 변환
         timeline = self._convert_milestones_to_timeline(prd, context)
         logger.info("[ProposalGenerator] 일정 계획 변환 완료")
 
-        # 5. 산출물 목록 생성
         deliverables = self._generate_deliverables(prd)
         logger.info("[ProposalGenerator] 산출물 목록 생성 완료")
 
-        # 7. 리스크 평가
         risks = self._assess_risks(prd)
         logger.info("[ProposalGenerator] 리스크 평가 완료")
 
-        # 8. 전제 조건 추출
         assumptions = self._extract_assumptions(prd)
         logger.info("[ProposalGenerator] 전제 조건 추출 완료")
 
-        # 11. 후속 절차
         next_steps = self._generate_next_steps()
 
-        # ========== Phase 2: Claude 호출 병렬 처리 ==========
-        logger.info("[ProposalGenerator] Claude 병렬 호출 시작 (solution, resource, benefits)")
+        # ========== 2단계: AI 병렬 처리 (창작 작업) ==========
+        # AI의 도움이 필요한 부분들을 동시에 요청하여 시간을 절약합니다.
+        logger.info("[ProposalGenerator] AI 병렬 처리 시작")
 
-        # 독립적인 Claude 호출 3개를 병렬 실행
+        # 세 가지 작업을 동시에 실행 (비동기)
         solution_task = self._generate_solution_approach(prd)
         resource_task = self._generate_resource_plan(prd, context)
         benefits_task = self._generate_expected_benefits(prd)
 
+        # 결과가 다 나올 때까지 기다림
         solution_approach, resource_plan, expected_benefits = await asyncio.gather(
             solution_task,
             resource_task,
             benefits_task
         )
 
-        logger.info("[ProposalGenerator] 솔루션 접근법 생성 완료")
-        logger.info("[ProposalGenerator] 투입 인력 계획 생성 완료")
-        logger.info("[ProposalGenerator] 기대 효과 생성 완료")
+        logger.info("[ProposalGenerator] AI 병렬 처리 완료")
 
-        # ========== Phase 3: 경영진 요약 (순차) ==========
-        # 기대 효과 결과가 필요하므로 마지막에 실행
+        # ========== 3단계: 마무리 처리 ==========
+        # 앞선 결과물들을 종합하여 경영진용 요약문을 작성합니다.
         executive_summary = await self._generate_executive_summary(
             prd, context, project_overview, expected_benefits
         )
         logger.info("[ProposalGenerator] 경영진 요약 생성 완료")
 
-        # 메타데이터
+        # 메타데이터 생성
         metadata = ProposalMetadata(
             source_prd_id=prd.id,
             source_prd_title=prd.title,
             overall_confidence=prd.metadata.overall_confidence,
         )
 
+        # 최종 제안서 객체 반환
         return ProposalDocument(
             id=proposal_id,
             title=title,
@@ -174,7 +148,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         )
 
     def _extract_project_overview(self, prd: PRDDocument) -> ProjectOverview:
-        """PRD에서 프로젝트 개요 추출."""
+        """PRD의 내용을 바탕으로 프로젝트 개요를 작성합니다."""
         return ProjectOverview(
             background=prd.overview.background,
             objectives=prd.overview.goals,
@@ -182,16 +156,15 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         )
 
     def _extract_scope_of_work(self, prd: PRDDocument) -> ScopeOfWork:
-        """PRD에서 작업 범위 추출."""
-        # 포함 범위: scope + 주요 기능 카테고리
+        """할 일(범위)과 안 할 일(범위 제외)을 정리합니다."""
         in_scope = []
         if prd.overview.scope:
             in_scope.append(prd.overview.scope)
 
-        # 기능 요구사항을 카테고리별로 그룹화
+        # 주요 기능들을 카테고리별로 묶어서 보여줍니다.
         key_features = []
 
-        # FR 그룹화
+        # 기능 요구사항 (FR)
         fr_titles = [r.title for r in prd.functional_requirements[:10]]
         if fr_titles:
             key_features.append({
@@ -201,7 +174,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
             })
             in_scope.extend(fr_titles[:5])
 
-        # NFR 그룹화
+        # 비기능 요구사항 (NFR)
         if prd.non_functional_requirements:
             key_features.append({
                 "name": "비기능 요구사항",
@@ -224,14 +197,14 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         )
 
     async def _generate_solution_approach(self, prd: PRDDocument) -> SolutionApproach:
-        """솔루션 접근법 생성 (Claude)."""
-        # 제약조건에서 기술 스택 추출
+        """AI를 사용하여 어떻게 개발할지(솔루션 접근법)를 작성합니다."""
+        # 기술 제약조건이 있으면 기술 스택 힌트로 사용
         tech_stack = []
         for constraint in prd.constraints:
             if any(kw in constraint.title.lower() for kw in ["기술", "스택", "프레임워크", "언어"]):
                 tech_stack.append(constraint.title)
 
-        # 요구사항 요약 생성
+        # 요구사항 요약
         fr_summary = "\n".join([f"- {r.title}" for r in prd.functional_requirements[:10]])
         nfr_summary = "\n".join([f"- {r.title}" for r in prd.non_functional_requirements[:5]])
 
@@ -272,12 +245,14 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
             )
 
     def _convert_milestones_to_timeline(
-        self, prd: PRDDocument, context: ProposalContext
+        self,
+        prd: PRDDocument,
+        context: ProposalContext,
     ) -> Timeline:
-        """마일스톤을 일정 계획으로 변환."""
+        """PRD의 마일스톤을 일정표(Timeline)로 변환합니다."""
         phases = []
 
-        # 기본 단계 정의
+        # 마일스톤이 없으면 기본 일정 템플릿 사용
         default_phases = [
             ("요구사항 분석", "1개월"),
             ("설계", "1개월"),
@@ -299,7 +274,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
                 phases.append(TimelinePhase(
                     phase_name=name,
                     duration=duration,
-                    deliverables=[],
+                    deliverables=[]
                 ))
 
         total_duration = f"{context.project_duration_months or 6}개월"
@@ -310,7 +285,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         )
 
     def _generate_deliverables(self, prd: PRDDocument) -> list[Deliverable]:
-        """산출물 목록 생성."""
+        """프로젝트 단계별로 제공할 산출물 목록을 정의합니다."""
         deliverables = [
             Deliverable(name="요구사항 정의서", description="상세 요구사항 문서", phase="분석"),
             Deliverable(name="시스템 설계서", description="아키텍처 및 상세 설계", phase="설계"),
@@ -324,9 +299,11 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         return deliverables
 
     async def _generate_resource_plan(
-        self, prd: PRDDocument, context: ProposalContext
+        self,
+        prd: PRDDocument,
+        context: ProposalContext,
     ) -> ResourcePlan:
-        """투입 인력 계획 생성."""
+        """프로젝트 규모에 맞춰 필요한 인력 구성을 계획합니다."""
         # 기본 팀 구성
         team_structure = [
             TeamMember(role="PM", count=1, responsibilities=["프로젝트 관리", "일정 관리", "이해관계자 커뮤니케이션"]),
@@ -337,7 +314,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
             TeamMember(role="QA", count=1, responsibilities=["테스트 수행", "품질 관리"]),
         ]
 
-        # 규모에 따라 인원 조정
+        # 요구사항이 많으면 개발자를 더 추가합니다.
         total_reqs = (
             len(prd.functional_requirements)
             + len(prd.non_functional_requirements)
@@ -348,10 +325,10 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
             team_structure[3].count = 3  # 프론트엔드 +1
             team_structure[4].count = 3  # 백엔드 +1
 
-        # M/M 계산 (대략적)
+        # 총 투입 공수(M/M) 계산 (대략적인 추정)
         duration_months = context.project_duration_months or 6
         total_members = sum(m.count for m in team_structure)
-        total_mm = total_members * duration_months * 0.8  # 80% 효율
+        total_mm = total_members * duration_months * 0.8  # 휴가 등 고려하여 80% 효율 가정
 
         return ResourcePlan(
             team_structure=team_structure,
@@ -359,10 +336,10 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         )
 
     def _assess_risks(self, prd: PRDDocument) -> list[Risk]:
-        """리스크 평가."""
+        """프로젝트의 잠재적 위험 요소를 분석합니다."""
         risks = []
 
-        # 1. 낮은 신뢰도 요구사항 → 리스크
+        # 1. 요구사항이 불명확한 경우
         low_confidence_reqs = [
             r for r in prd.functional_requirements + prd.non_functional_requirements
             if r.confidence_score < 0.7
@@ -377,7 +354,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
                 source_requirement_id=low_confidence_reqs[0].id if low_confidence_reqs else None,
             ))
 
-        # 2. 미해결 사항 → 리스크
+        # 2. 미확정 사항이 있는 경우
         if prd.unresolved_items:
             high_priority_unresolved = [
                 u for u in prd.unresolved_items if u.priority == "HIGH"
@@ -390,7 +367,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
                     mitigation="착수 전 주요 사항 의사결정 완료",
                 ))
 
-        # 3. 기술적 복잡성 (연동 요구사항)
+        # 3. 외부 연동이 필요한 경우 (기술적 난이도)
         integration_reqs = [
             r for r in prd.functional_requirements + prd.constraints
             if any(kw in r.title.lower() for kw in ["연동", "통합", "인터페이스", "api"])
@@ -403,7 +380,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
                 mitigation="사전 인터페이스 정의 및 테스트 환경 확보",
             ))
 
-        # 4. 일정 리스크
+        # 4. 일정이 복잡한 경우
         if prd.milestones and len(prd.milestones) > 3:
             risks.append(Risk(
                 description="다단계 프로젝트 일정 관리",
@@ -412,7 +389,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
                 mitigation="주간 진척 관리 및 버퍼 일정 확보",
             ))
 
-        # 기본 리스크 추가
+        # 리스크가 없으면 일반적인 리스크 추가
         if not risks:
             risks.append(Risk(
                 description="일반적인 프로젝트 리스크",
@@ -424,10 +401,10 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         return risks
 
     def _extract_assumptions(self, prd: PRDDocument) -> list[str]:
-        """전제 조건 추출."""
+        """프로젝트 수행을 위한 전제 조건들을 정리합니다."""
         assumptions = []
 
-        # 요구사항에서 가정사항 수집
+        # 요구사항에 명시된 가정사항들 수집
         for req in prd.functional_requirements + prd.non_functional_requirements:
             if req.assumptions:
                 assumptions.extend(req.assumptions[:2])
@@ -442,12 +419,12 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
 
         assumptions.extend(default_assumptions)
 
-        # 중복 제거 및 제한
+        # 중복 제거 및 10개로 제한
         return list(dict.fromkeys(assumptions))[:10]
 
     async def _generate_expected_benefits(self, prd: PRDDocument) -> list[str]:
-        """기대 효과 생성 (Claude)."""
-        # 먼저 NFR에서 정량적 효과 추출
+        """프로젝트 완료 시 기대되는 효과를 작성합니다."""
+        # 1. 비기능 요구사항에서 힌트 찾기 (성능 향상, 비용 절감 등)
         benefits = []
         for nfr in prd.non_functional_requirements:
             if any(kw in nfr.title for kw in ["감소", "단축", "향상", "개선", "%"]):
@@ -456,7 +433,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         if len(benefits) >= 5:
             return benefits[:8]
 
-        # Claude로 추가 생성
+        # 2. 부족하면 AI에게 추가 작성을 요청
         fr_summary = "\n".join([f"- {r.title}" for r in prd.functional_requirements[:10]])
 
         prompt = f"""{EXPECTED_BENEFITS_PROMPT}
@@ -486,7 +463,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
 
         except Exception as e:
             logger.warning(f"[ProposalGenerator] 기대효과 생성 실패: {e}")
-            # 기본 효과 추가
+            # 실패 시 기본 효과 추가
             benefits.extend([
                 "업무 효율성 향상",
                 "사용자 만족도 개선",
@@ -502,7 +479,7 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         overview: ProjectOverview,
         benefits: list[str],
     ) -> str:
-        """경영진 요약 생성 (Claude)."""
+        """경영진을 위한 한 페이지 요약문을 작성합니다."""
         prompt = f"""{EXECUTIVE_SUMMARY_PROMPT}
 
 고객사: {context.client_name}
@@ -530,12 +507,10 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
 
         except Exception as e:
             logger.warning(f"[ProposalGenerator] 경영진 요약 생성 실패: {e}")
-            return f"""{context.client_name}의 {prd.title} 프로젝트는 {overview.background[:200]}
-
-본 제안서는 {len(prd.functional_requirements)}개의 기능 요구사항과 {len(prd.non_functional_requirements)}개의 비기능 요구사항을 기반으로 최적의 솔루션을 제안합니다."""
+            return f"{context.client_name}의 {prd.title} 프로젝트는 {overview.background[:200]}. 본 제안서는 {len(prd.functional_requirements)}개의 기능 요구사항과 {len(prd.non_functional_requirements)}개의 비기능 요구사항을 기반으로 최적의 솔루션을 제안합니다."
 
     def _generate_next_steps(self) -> list[str]:
-        """후속 절차 생성."""
+        """제안서 제출 이후의 진행 절차를 안내합니다."""
         return [
             "제안서 검토 및 Q&A 세션",
             "상세 범위 및 일정 협의",

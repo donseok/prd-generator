@@ -1,4 +1,7 @@
-"""PRD document endpoints."""
+"""
+PRD 문서 관리 API입니다.
+생성된 PRD 문서를 조회하거나 다운로드(내보내기)하는 기능을 제공합니다.
+"""
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
@@ -11,7 +14,7 @@ router = APIRouter()
 
 @router.get("/{prd_id}")
 async def get_prd(prd_id: str) -> dict:
-    """Get PRD document by ID."""
+    """ID로 PRD 문서 상세 내용 조회"""
     storage = get_file_storage()
     prd = await storage.get_prd(prd_id)
 
@@ -27,9 +30,12 @@ async def export_prd(
     format: str = "markdown"
 ) -> Response:
     """
-    Export PRD in specified format.
-
-    Supported formats: markdown, json, html
+    PRD 문서를 파일로 다운로드하는 API.
+    
+    지원하는 형식:
+    - markdown: 마크다운 텍스트 파일 (.md)
+    - json: 데이터 원본 파일 (.json)
+    - html: 웹브라우저 보기용 파일 (.html)
     """
     storage = get_file_storage()
     prd = await storage.get_prd(prd_id)
@@ -56,7 +62,7 @@ async def export_prd(
             }
         )
     elif format == "html":
-        # Generate HTML from markdown
+        # 마크다운을 간단한 HTML 스타일로 변환하여 보여줍니다.
         md_content = prd.to_markdown()
         html_content = f"""<!DOCTYPE html>
 <html lang="ko">
@@ -97,7 +103,7 @@ async def list_prds(
     limit: int = 20,
     status: str = None
 ) -> dict:
-    """List all PRD documents with pagination."""
+    """생성된 PRD 목록 조회 (페이지네이션 지원)"""
     storage = get_file_storage()
     prds = await storage.list_prds(skip=skip, limit=limit, status=status)
 
@@ -108,8 +114,8 @@ async def list_prds(
                 "id": prd.id,
                 "title": prd.title,
                 "status": prd.metadata.status,
-                "overall_confidence": prd.metadata.overall_confidence,
-                "requires_pm_review": prd.metadata.requires_pm_review,
+                "overall_confidence": prd.metadata.overall_confidence,  # AI의 확신도
+                "requires_pm_review": prd.metadata.requires_pm_review,  # 검토 필요 여부
                 "created_at": prd.metadata.created_at.isoformat() if prd.metadata.created_at else None,
                 "requirements_count": (
                     len(prd.functional_requirements) +
@@ -124,7 +130,7 @@ async def list_prds(
 
 @router.delete("/{prd_id}")
 async def delete_prd(prd_id: str) -> dict:
-    """Delete a PRD document."""
+    """PRD 문서 삭제 API"""
     storage = get_file_storage()
 
     deleted = await storage.delete_prd(prd_id)

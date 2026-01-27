@@ -1,4 +1,6 @@
-"""Main validator service for Layer 3."""
+"""Layer 3: 검증(Validation) 서비스입니다.
+추출된 요구사항의 품질을 검사하고, 문제가 있거나 AI가 확신하지 못하는 항목을 찾아냅니다.
+"""
 
 from typing import List, Tuple, Optional
 
@@ -14,9 +16,12 @@ from app.config import get_settings
 
 class Validator:
     """
-    Layer 3: Quality validation and PM review routing.
-
-    Validates requirements and routes low-confidence items for PM review.
+    요구사항 검증기 클래스입니다.
+    
+    주요 기능:
+    1. 개별 요구사항 품질 체크 (완전성, 일관성 등)
+    2. 기획자(PM)의 검토가 필요한 항목 분류
+    3. 요구사항 간의 충돌 감지
     """
 
     def __init__(self, claude_client: Optional[ClaudeClient] = None):
@@ -29,30 +34,26 @@ class Validator:
         job_id: str = ""
     ) -> Tuple[List[NormalizedRequirement], List[ReviewItem]]:
         """
-        Validate requirements and route low-confidence items for PM review.
-
-        Args:
-            requirements: List of normalized requirements
-            job_id: Processing job ID for review items
+        요구사항 목록 전체를 검증합니다.
 
         Returns:
-            Tuple of (validated_requirements, review_items)
+            (자동 승인된 요구사항 목록, 검토가 필요한 항목 목록)
         """
         validated = []
         review_items = []
 
         for req in requirements:
-            # Perform validation checks
+            # 개별 요구사항 검증 수행
             validation_result = await self._validate_requirement(req, requirements)
 
-            # Decide routing based on confidence and validation
+            # 검증 결과에 따라 승인 또는 검토 대기로 분류
             if self._needs_pm_review(req, validation_result):
                 review_item = self._create_review_item(req, validation_result, job_id)
                 review_items.append(review_item)
             else:
                 validated.append(req)
 
-        # Cross-requirement validation (conflicts)
+        # 요구사항 간의 충돌 감지 (AI 활용)
         conflicts = await self._detect_conflicts(requirements)
         for conflict in conflicts:
             conflict.job_id = job_id
@@ -65,17 +66,17 @@ class Validator:
         requirement: NormalizedRequirement,
         all_requirements: List[NormalizedRequirement]
     ) -> ValidationResult:
-        """Perform comprehensive validation on a single requirement."""
-        # Completeness check
+        """단일 요구사항에 대한 종합 검증을 수행합니다."""
+        # 1. 내용이 충분한지 체크 (완전성)
         completeness = self._check_completeness(requirement)
 
-        # Consistency check
+        # 2. 내용에 문제가 없는지 체크 (일관성)
         consistency_issues = self._check_consistency(requirement)
 
-        # Traceability check
+        # 3. 출처가 명확한지 체크 (추적성)
         traceability = self._check_traceability(requirement)
 
-        # Determine if valid
+        # 유효성 판단 기준: 완전성이 70% 이상이고 일관성 문제가 없으며 신뢰도가 기준치 이상이어야 함
         is_valid = (
             completeness > 0.7 and
             not consistency_issues and
@@ -96,33 +97,14 @@ class Validator:
 
     def _check_completeness(self, req: NormalizedRequirement) -> float:
         """
-        요구사항 완전성 점수 계산.
-
-        5가지 항목을 검사하여 0.0 ~ 1.0 사이의 점수를 반환합니다.
-        각 항목은 1점씩이며, 총점 5점을 기준으로 정규화됩니다.
-
-        점수 산정 기준 (5점 만점):
-        ┌─────────────────────────────────────────────────────┐
-        │ 항목               │ 조건                    │ 점수 │
-        ├─────────────────────────────────────────────────────┤
-        │ 1. 제목            │ 4자 이상               │ 1.0  │
-        │ 2. 설명            │ 11자 이상              │ 1.0  │
-        │ 3. 사용자 스토리   │ 있음 또는 CONSTRAINT   │ 1.0  │
-        │ 4. 인수 조건       │ 1개 이상               │ 1.0  │
-        │ 5. 우선순위        │ 설정됨                 │ 1.0  │
-        └─────────────────────────────────────────────────────┘
-
-        결과 해석:
-        - 1.0 (100%): 완벽하게 정의된 요구사항
-        - 0.8 (80%): 대부분 완전, 일부 보완 필요
-        - 0.6 (60%): 기본 정보만 있음, 보완 필요
-        - 0.4 이하: 불완전, PM 검토 필요
-
-        Args:
-            req: 검사할 요구사항
-
-        Returns:
-            0.0 ~ 1.0 사이의 완전성 점수
+        요구사항이 얼마나 구체적으로 작성되었는지 점수를 매깁니다. (0.0 ~ 1.0)
+        
+        평가 항목 (각 20점):
+        1. 제목 길이
+        2. 설명 길이
+        3. 사용자 스토리 존재 여부
+        4. 인수 조건(완료 기준) 존재 여부
+        5. 우선순위 설정 여부
         """
         score = 0.0
         max_score = 5.0
@@ -135,7 +117,7 @@ class Validator:
         if req.description and len(req.description) > 10:
             score += 1.0
 
-        # 3. 사용자 스토리 검사: FR/NFR은 필수, CONSTRAINT는 면제
+        # 3. 사용자 스토리 검사: 기능 요구사항은 필수
         if req.user_story or req.type.value == "CONSTRAINT":
             score += 1.0
 
@@ -143,42 +125,42 @@ class Validator:
         if req.acceptance_criteria and len(req.acceptance_criteria) > 0:
             score += 1.0
 
-        # 5. 우선순위 검사: HIGH/MEDIUM/LOW 중 하나 설정
+        # 5. 우선순위 검사: 설정되어 있어야 함
         if req.priority:
             score += 1.0
 
         return score / max_score
 
     def _check_consistency(self, req: NormalizedRequirement) -> List[str]:
-        """Check for consistency issues."""
+        """표현이 모호하거나 정보가 누락되었는지 확인합니다."""
         issues = []
 
-        # Check for vague terms
+        # 모호한 표현 사용 여부 검사
         vague_terms = ["등", "기타", "필요시", "적절한", "합리적인", "etc", "등등"]
         for term in vague_terms:
             if term in req.description.lower():
                 issues.append(f"모호한 표현 사용: '{term}'")
 
-        # Check for missing info flags
+        # AI가 감지한 누락 정보가 있는지 확인
         if req.missing_info:
-            for info in req.missing_info[:2]:  # Limit to 2
+            for info in req.missing_info[:2]:  # 최대 2개까지만 표시
                 issues.append(f"누락된 정보: {info}")
 
         return issues
 
     def _check_traceability(self, req: NormalizedRequirement) -> float:
-        """Check requirement traceability."""
+        """출처가 명확한지 점수를 매깁니다."""
         score = 0.0
 
-        # Has source reference
+        # 출처 정보가 있는지
         if req.source_reference:
             score += 0.5
 
-        # Has reasonable confidence
+        # AI 신뢰도가 높은지
         if req.confidence_score > 0.5:
             score += 0.3
 
-        # Has confidence reason
+        # 신뢰도 이유가 명시되어 있는지
         if req.confidence_reason:
             score += 0.2
 
@@ -190,56 +172,28 @@ class Validator:
         validation: ValidationResult
     ) -> bool:
         """
-        요구사항의 PM 검토 필요 여부 판단.
-
-        4가지 조건 중 하나라도 해당하면 PM 검토가 필요합니다.
-        이 메서드는 자동 승인과 수동 검토를 구분하는 핵심 로직입니다.
-
-        PM 검토 조건 4가지:
-        ┌─────────────────────────────────────────────────────────────┐
-        │ 조건                        │ 기준값                        │
-        ├─────────────────────────────────────────────────────────────┤
-        │ 1. 낮은 신뢰도              │ confidence < threshold (0.8)  │
-        │ 2. 불완전한 요구사항        │ completeness < 0.7 (70%)      │
-        │ 3. 일관성 문제              │ consistency_issues 존재       │
-        │ 4. 누락 정보                │ missing_info 목록 존재        │
-        └─────────────────────────────────────────────────────────────┘
-
-        설정 제어:
-        - enable_pm_review=False: PM 검토 비활성화 (모두 자동 승인)
-        - auto_approve_threshold: 신뢰도 기준 (기본값 0.8)
-
-        처리 흐름:
-        1. PM 검토 기능 활성화 여부 확인
-        2. 4가지 조건 순차 검사
-        3. 하나라도 해당하면 True 반환
-
-        Args:
-            requirement: 검사할 요구사항
-            validation: 검증 결과 (completeness, consistency 등)
-
-        Returns:
-            PM 검토 필요 여부
+        기획자(PM)의 검토가 필요한지 최종 판단하는 함수입니다.
+        설정된 조건 중 하나라도 만족하면 검토가 필요하다고 판단합니다.
         """
-        # 설정에서 PM 검토 기능 비활성화 시 항상 False
+        # PM 검토 기능이 꺼져있으면 무조건 통과
         if not self.settings.enable_pm_review:
             return False
 
         threshold = self.settings.auto_approve_threshold
 
-        # 조건 1: 신뢰도가 기준 미만
+        # 1. 신뢰도가 기준치 미만인 경우
         if requirement.confidence_score < threshold:
             return True
 
-        # 조건 2: 완전성 점수 70% 미만
+        # 2. 내용이 충분하지 않은 경우
         if validation.completeness_score < 0.7:
             return True
 
-        # 조건 3: 일관성 문제 발견
+        # 3. 모호한 표현 등 문제가 있는 경우
         if validation.consistency_issues:
             return True
 
-        # 조건 4: 누락된 정보 존재
+        # 4. 누락된 정보가 있는 경우
         if requirement.missing_info:
             return True
 
@@ -251,7 +205,7 @@ class Validator:
         completeness: float,
         consistency_issues: List[str]
     ) -> List[str]:
-        """Compile reasons why PM review is needed."""
+        """왜 검토가 필요한지 이유 목록을 작성합니다."""
         reasons = []
 
         threshold = self.settings.auto_approve_threshold
@@ -278,8 +232,8 @@ class Validator:
         validation: ValidationResult,
         job_id: str
     ) -> ReviewItem:
-        """Create a review item for PM review."""
-        # Determine issue type
+        """검토 항목 객체를 생성합니다."""
+        # 검토 유형 분류
         if requirement.confidence_score < 0.5:
             issue_type = ReviewItemType.LOW_CONFIDENCE
         elif requirement.missing_info:
@@ -287,7 +241,7 @@ class Validator:
         else:
             issue_type = ReviewItemType.AMBIGUOUS
 
-        # Build description
+        # 설명 작성
         reasons = validation.review_reasons or ["검토 필요"]
         description = "; ".join(reasons)
 
@@ -305,55 +259,21 @@ class Validator:
         requirements: List[NormalizedRequirement]
     ) -> List[ReviewItem]:
         """
-        Claude를 사용하여 요구사항 간 충돌 감지.
-
-        서로 상충되거나 동시에 만족할 수 없는 요구사항 쌍을 찾습니다.
-        이 기능은 설정으로 활성화/비활성화할 수 있습니다.
-
-        충돌 유형 3가지:
-        ┌─────────────────────────────────────────────────────────────────┐
-        │ 유형              │ 설명                    │ 예시              │
-        ├─────────────────────────────────────────────────────────────────┤
-        │ 1. 직접적 모순    │ A와 B가 서로 반대       │ "오프라인 전용" vs│
-        │                   │                         │ "실시간 동기화"   │
-        ├─────────────────────────────────────────────────────────────────┤
-        │ 2. 자원 충돌      │ 같은 자원을 다르게 사용 │ "DB를 MySQL"로 vs │
-        │                   │                         │ "DB를 PostgreSQL" │
-        ├─────────────────────────────────────────────────────────────────┤
-        │ 3. 우선순위 충돌  │ 동시에 만족 불가능      │ "최소 비용" vs    │
-        │                   │                         │ "최고 성능"       │
-        └─────────────────────────────────────────────────────────────────┘
-
-        처리 흐름:
-        1. 충돌 감지 기능 활성화 여부 확인
-        2. 요구사항 목록 요약 생성 (최대 20개)
-        3. Claude에 충돌 분석 요청
-        4. JSON 응답에서 충돌 목록 추출
-        5. ReviewItem 객체로 변환
-
-        Args:
-            requirements: 검사할 요구사항 목록
-
-        Returns:
-            충돌이 발견된 ReviewItem 목록
-
-        Note:
-            - 요구사항이 2개 미만이면 빈 목록 반환
-            - Claude 호출 실패 시 빈 목록 반환
-            - 최대 20개 요구사항만 분석 (성능 최적화)
+        AI를 사용하여 요구사항 간의 충돌을 감지합니다.
+        (예: '비용 최소화' vs '최고 성능' 같은 모순)
         """
-        # 설정에서 충돌 감지 기능 비활성화 시 건너뛰기
+        # 충돌 감지 기능이 꺼져있으면 건너뜀
         if not self.settings.enable_conflict_detection:
             return []
 
-        # 요구사항이 2개 미만이면 충돌 불가능
+        # 비교할 요구사항이 2개 미만이면 건너뜀
         if len(requirements) < 2:
             return []
 
-        # 요구사항 요약 생성 (Claude 프롬프트용)
+        # AI에게 보낼 요약 정보 생성 (최대 20개로 제한)
         req_summaries = "\n".join([
             f"{req.id}: {req.title} - {req.description[:100]}"
-            for req in requirements[:20]  # 성능을 위해 최대 20개로 제한
+            for req in requirements[:20]
         ])
 
         prompt = f"""다음 요구사항들 중 서로 충돌하는 항목을 찾아주세요.
@@ -378,7 +298,7 @@ JSON 형식으로 응답:
   ]
 }}
 
-충돌이 없으면 {{"conflicts": []}}를 반환하세요."""
+충돌이 없으면 {{'conflicts': []}}를 반환하세요."""
 
         try:
             result = await self.claude_client.complete_json(
@@ -392,7 +312,7 @@ JSON 형식으로 응답:
 
             for conflict in conflicts:
                 review_items.append(ReviewItem(
-                    job_id="",  # Will be set by caller
+                    job_id="",  # 호출자가 나중에 설정함
                     requirement_id=conflict.get("req1_id", ""),
                     issue_type=ReviewItemType.CONFLICT,
                     description=f"충돌 발견: {conflict.get('description', '')}",

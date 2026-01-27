@@ -1,23 +1,12 @@
-"""TRD generator - converts PRD to Technical Requirements Document.
+"""
+Layer 6: TRD (기술 요구사항 문서) 생성기입니다.
+PRD 내용을 바탕으로 구체적인 기술 스택, 아키텍처, DB 설계 등을 자동으로 제안합니다.
 
-Layer 6: 기술 요구사항 문서 생성기
-PRDDocument를 기반으로 TRD(Technical Requirements Document)를 생성합니다.
-
-처리 순서:
-1. 기술 스택 추천 (Claude 호출) - 요구사항 기반 기술 선정
-2. 시스템 아키텍처 설계 (Claude 호출) - 레이어별 컴포넌트 정의
-3. 데이터베이스 설계 (Claude 호출) - 엔티티 및 관계 정의
-4. API 명세 생성 (Claude 호출) - 엔드포인트 및 스키마 정의
-5. 보안 요구사항 추출 (NFR 기반 + 기본 요구사항)
-6. 성능 요구사항 추출 (NFR 기반 + 기본 요구사항)
-7. 인프라 요구사항 생성 (환경별 기본 템플릿)
-8. 기술 리스크 평가 (연동/기술/성능/보안 기반)
-9. 기술 요약 생성 (Claude 호출, 마지막에 생성)
-
-병렬화 가능 섹션:
-- 1, 2, 3, 4번은 의존성이 없어 병렬 실행 가능
-- 5, 6, 7, 8번은 로컬 처리로 빠름
-- 9번은 1, 2번 결과가 필요하여 마지막 순차 실행
+주요 기능:
+- 기술 스택 추천 (언어, 프레임워크, DB 등)
+- 시스템 아키텍처 설계
+- 데이터베이스 모델링 및 API 명세
+- 보안 및 인프라 요구사항 정의
 """
 
 import logging
@@ -62,10 +51,8 @@ logger = logging.getLogger(__name__)
 
 class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
     """
-    PRD를 기반으로 TRD(Technical Requirements Document) 생성.
-
-    BaseGenerator를 상속하여 일관된 생성 흐름과
-    공통 유틸리티 메서드를 활용합니다.
+    TRD 생성기 클래스입니다.
+    여러 AI 작업을 병렬로 수행하여 복잡한 기술 문서를 빠르게 작성합니다.
     """
 
     _id_prefix = "TRD"
@@ -77,53 +64,39 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
         context: TRDContext,
     ) -> TRDDocument:
         """
-        실제 TRD 생성 로직 (병렬 처리 최적화).
-
-        병렬화 전략:
-        - Phase 1: 독립 Claude 호출 병렬 (tech_stack, database, api_spec)
-        - Phase 2: 의존성 있는 Claude 호출 병렬 (architecture, security)
-        - Phase 3: 로컬 처리 (performance, infrastructure, risks)
-        - Phase 4: 최종 요약 (순차, 이전 결과 의존)
-
-        예상 효과: 50-60% 시간 단축
-
-        Args:
-            prd: 원본 PRD 문서
-            context: TRD 생성 컨텍스트
-
-        Returns:
-            TRDDocument: 생성된 TRD
+        TRD 생성 메인 로직입니다.
+        
+        효율을 위해 작업을 4단계로 나누어 진행합니다:
+        1. 독립적 AI 작업 (기술스택, DB, API) -> 동시에 실행
+        2. 의존적 AI 작업 (아키텍처, 보안) -> 1번 완료 후 실행
+        3. 로컬 작업 (성능, 인프라, 리스크) -> 계산만 하면 되므로 빠름
+        4. 최종 요약 -> 모든 결과 종합
         """
         import asyncio
 
-        # TRD ID 생성 (베이스 클래스 메서드 사용)
         trd_id = self._generate_id()
-
-        # 제목 설정
         title = f"{prd.title} - 기술 요구사항 문서 (TRD)"
 
-        # ========== Phase 1: 독립 Claude 호출 병렬 ==========
-        # tech_stack, database_design, api_specification은 서로 독립적
-        logger.info("[TRDGenerator] Phase 1: 독립 Claude 호출 병렬 시작")
+        # ========== 1단계: 독립적 AI 작업 (병렬 처리) ==========
+        # 서로 상관없는 작업들을 동시에 요청합니다.
+        logger.info("[TRDGenerator] Phase 1: 독립 AI 작업 시작")
 
         tech_task = self._generate_technology_stack(prd, context)
         db_task = self._generate_database_design(prd)
         api_task = self._generate_api_specification(prd)
 
+        # 3가지 작업 동시 실행
         technology_stack, database_design, api_specification = await asyncio.gather(
             tech_task,
             db_task,
             api_task
         )
 
-        logger.info("[TRDGenerator] 기술 스택 추천 완료")
-        logger.info("[TRDGenerator] 데이터베이스 설계 완료")
-        logger.info("[TRDGenerator] API 명세 생성 완료")
+        logger.info("[TRDGenerator] 기술스택/DB/API 생성 완료")
 
-        # ========== Phase 2: 의존성 있는 Claude 호출 병렬 ==========
-        # system_architecture는 technology_stack 필요
-        # security_requirements는 context만 필요
-        logger.info("[TRDGenerator] Phase 2: 의존 Claude 호출 병렬 시작")
+        # ========== 2단계: 의존적 AI 작업 (병렬 처리) ==========
+        # 기술 스택이 결정되어야 아키텍처를 설계할 수 있습니다.
+        logger.info("[TRDGenerator] Phase 2: 의존 AI 작업 시작")
 
         arch_task = self._generate_system_architecture(prd, technology_stack)
         security_task = self._extract_security_requirements(prd, context)
@@ -133,35 +106,37 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
             security_task
         )
 
-        logger.info("[TRDGenerator] 시스템 아키텍처 설계 완료")
-        logger.info("[TRDGenerator] 보안 요구사항 추출 완료")
+        logger.info("[TRDGenerator] 아키텍처/보안 생성 완료")
 
-        # ========== Phase 3: 로컬 처리 ==========
-        # 6. 성능 요구사항 추출
+        # ========== 3단계: 로컬 처리 ==========
+        # AI 없이 규칙 기반으로 처리할 수 있는 작업들입니다.
+        
+        # 성능 요구사항
         performance_requirements = self._extract_performance_requirements(prd)
         logger.info("[TRDGenerator] 성능 요구사항 추출 완료")
 
-        # 7. 인프라 요구사항 생성 (technology_stack 필요하지만 로컬 처리)
+        # 인프라 요구사항 (기술 스택 참조)
         infrastructure_requirements = await self._generate_infrastructure(prd, technology_stack, context)
         logger.info("[TRDGenerator] 인프라 요구사항 생성 완료")
 
-        # 8. 기술 리스크 평가 (technology_stack 필요)
+        # 기술 리스크 분석
         technical_risks = self._assess_technical_risks(prd, technology_stack)
         logger.info("[TRDGenerator] 기술 리스크 평가 완료")
 
-        # ========== Phase 4: 최종 요약 (순차) ==========
-        # technology_stack과 system_architecture 결과가 필요
+        # ========== 4단계: 최종 요약 ==========
+        # 모든 내용을 종합하여 요약문을 작성합니다.
         executive_summary = await self._generate_executive_summary(
             prd, technology_stack, system_architecture
         )
         logger.info("[TRDGenerator] 기술 요약 생성 완료")
 
-        # 메타데이터
+        # 메타데이터 생성
         metadata = TRDMetadata(
             source_prd_id=prd.id,
             source_prd_title=prd.title,
         )
 
+        # 최종 TRD 객체 반환
         return TRDDocument(
             id=trd_id,
             title=title,
@@ -180,8 +155,8 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
     async def _generate_technology_stack(
         self, prd: PRDDocument, context: TRDContext
     ) -> list[TechnologyStack]:
-        """기술 스택 추천 (Claude)."""
-        # 요구사항 요약
+        """AI에게 적절한 기술 스택(언어, 프레임워크 등) 추천을 요청합니다."""
+        # AI에게 줄 정보 요약
         fr_summary = "\n".join([f"- {r.title}: {r.description[:100]}" for r in prd.functional_requirements[:15]])
         nfr_summary = "\n".join([f"- {r.title}" for r in prd.non_functional_requirements[:10]])
         constraints_summary = "\n".join([f"- {c.title}" for c in prd.constraints[:5]])
@@ -228,7 +203,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
 
         except Exception as e:
             logger.warning(f"[TRDGenerator] 기술 스택 생성 실패: {e}")
-            # 기본 스택 반환
+            # 실패 시 기본값 반환
             return [
                 TechnologyStack(
                     category="Frontend",
@@ -250,7 +225,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
     async def _generate_system_architecture(
         self, prd: PRDDocument, tech_stack: list[TechnologyStack]
     ) -> SystemArchitecture:
-        """시스템 아키텍처 설계 (Claude)."""
+        """시스템 구조(아키텍처)를 설계합니다."""
         fr_summary = "\n".join([f"- {r.title}" for r in prd.functional_requirements[:10]])
         tech_summary = "\n".join([f"- {s.category}: {', '.join(s.technologies)}" for s in tech_stack])
 
@@ -323,7 +298,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
             )
 
     async def _generate_database_design(self, prd: PRDDocument) -> DatabaseDesign:
-        """데이터베이스 설계 (Claude)."""
+        """데이터베이스 구조(테이블)를 설계합니다."""
         fr_summary = "\n".join([f"- {r.title}: {r.description[:150]}" for r in prd.functional_requirements[:15]])
 
         prompt = f"""{DATABASE_DESIGN_PROMPT}
@@ -368,7 +343,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
             )
 
     async def _generate_api_specification(self, prd: PRDDocument) -> APISpecification:
-        """API 명세 생성 (Claude)."""
+        """주요 API 명세를 설계합니다."""
         fr_summary = "\n".join([
             f"- {r.id}: {r.title} - {r.description[:100]}"
             for r in prd.functional_requirements[:20]
@@ -425,10 +400,10 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
     async def _extract_security_requirements(
         self, prd: PRDDocument, context: TRDContext
     ) -> list[SecurityRequirement]:
-        """보안 요구사항 추출."""
-        # NFR에서 보안 관련 항목 추출
+        """보안 요구사항을 정리합니다."""
         security_reqs = []
 
+        # NFR에서 보안 관련 항목 찾기
         security_keywords = ["보안", "인증", "권한", "암호화", "security", "auth", "encryption"]
         for nfr in prd.non_functional_requirements:
             if any(kw in nfr.title.lower() or kw in nfr.description.lower() for kw in security_keywords):
@@ -474,7 +449,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
         return security_reqs
 
     def _extract_performance_requirements(self, prd: PRDDocument) -> list[PerformanceRequirement]:
-        """성능 요구사항 추출."""
+        """성능 요구사항을 정리합니다."""
         perf_reqs = []
 
         perf_keywords = ["성능", "응답", "처리량", "지연", "performance", "latency", "throughput"]
@@ -511,10 +486,10 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
     async def _generate_infrastructure(
         self, prd: PRDDocument, tech_stack: list[TechnologyStack], context: TRDContext
     ) -> list[InfrastructureRequirement]:
-        """인프라 요구사항 생성."""
+        """서버 및 인프라 요구사항을 정의합니다."""
         infra_reqs = []
 
-        # 기본 인프라 구성
+        # 클라우드 vs 온프레미스 환경에 따른 기본 구성
         if context.target_environment == "cloud":
             infra_reqs = [
                 InfrastructureRequirement(
@@ -542,7 +517,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
                     purpose="트래픽 분산 및 정적 콘텐츠 배포",
                 ),
             ]
-        else:  # on-premise or hybrid
+        else:  # 온프레미스 또는 하이브리드
             infra_reqs = [
                 InfrastructureRequirement(
                     category="Compute",
@@ -558,7 +533,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
                 ),
             ]
 
-        # 확장성 요구에 따른 조정
+        # 확장성이 많이 필요하면 캐시나 메시지 큐 추가
         if context.scalability_requirement == "high":
             infra_reqs.append(InfrastructureRequirement(
                 category="Cache",
@@ -578,7 +553,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
     def _assess_technical_risks(
         self, prd: PRDDocument, tech_stack: list[TechnologyStack]
     ) -> list[TechnicalRisk]:
-        """기술 리스크 평가."""
+        """기술적인 위험 요소를 분석합니다."""
         risks = []
 
         # 1. 연동 복잡성 리스크
@@ -595,7 +570,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
                 contingency="연동 범위 축소 또는 단계별 구현",
             ))
 
-        # 2. 기술 스택 성숙도 리스크
+        # 2. 신기술 사용 리스크
         new_tech_keywords = ["beta", "preview", "experimental"]
         for stack in tech_stack:
             if any(kw in " ".join(stack.technologies).lower() for kw in new_tech_keywords):
@@ -607,7 +582,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
                     contingency="안정적인 대체 기술로 전환",
                 ))
 
-        # 3. 성능 관련 리스크
+        # 3. 대용량 처리 리스크
         large_data_reqs = [
             r for r in prd.functional_requirements + prd.non_functional_requirements
             if any(kw in r.title.lower() or kw in r.description.lower()
@@ -622,7 +597,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
                 contingency="데이터 처리 범위 조정",
             ))
 
-        # 4. 보안 리스크
+        # 4. 보안 리스크 (항상 포함)
         risks.append(TechnicalRisk(
             description="보안 취약점 발생 가능성",
             level=RiskLevel.HIGH,
@@ -631,7 +606,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
             contingency="보안 패치 즉시 적용 체계 구축",
         ))
 
-        # 기본 리스크가 없으면 추가
+        # 리스크가 너무 적으면 일반 리스크 추가
         if len(risks) < 2:
             risks.append(TechnicalRisk(
                 description="일정 내 기술 구현 난이도",
@@ -649,7 +624,7 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
         tech_stack: list[TechnologyStack],
         architecture: SystemArchitecture,
     ) -> str:
-        """기술 요약 생성 (Claude)."""
+        """TRD의 핵심 내용을 요약합니다."""
         tech_summary = ", ".join([
             f"{s.category}: {', '.join(s.technologies[:2])}"
             for s in tech_stack[:4]

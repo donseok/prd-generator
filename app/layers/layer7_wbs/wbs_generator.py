@@ -1,22 +1,12 @@
-"""WBS generator - converts PRD to Work Breakdown Structure.
+"""
+Layer 7: WBS (작업분해구조) 생성기입니다.
+PRD를 바탕으로 구체적인 작업(Task), 일정, 리소스 할당 계획을 자동으로 생성합니다.
 
-Layer 7: 작업분해구조 생성기
-PRDDocument를 기반으로 WBS(Work Breakdown Structure)를 생성합니다.
-
-처리 순서:
-1. 프로젝트 단계 생성 (Claude 호출) - 방법론에 따른 단계 정의
-2. 작업 패키지 생성 (Claude 병렬 호출) - 단계별 작업 패키지 정의
-3. 세부 작업 생성 (Claude 병렬 호출) - 패키지별 세부 작업 정의
-4. 요구사항 매핑 (로컬 처리) - FR을 작업에 할당
-5. 의존성 설정 (로컬 처리) - 작업 간 FS 의존성 설정
-6. 리소스 배분 (로컬 처리) - 작업명 기반 리소스 유형 추론
-7. 일정 계산 (로컬 처리) - 시작일 기준 순차 계산
-8. 크리티컬 패스 계산 (로컬 처리) - 위상 정렬 기반 최장 경로
-9. 요약 생성 (로컬 처리) - 시간/M/M/기간 산정
-
-병렬화 적용:
-- 2번: 모든 단계에 대해 병렬로 작업 패키지 생성
-- 3번: 모든 작업 패키지에 대해 병렬로 세부 작업 생성
+주요 기능:
+- 프로젝트 단계(Phase) 및 마일스톤 정의
+- 작업 패키지(Work Package) 및 세부 작업(Task) 생성
+- 의존성 연결 및 일정 계산 (크리티컬 패스 포함)
+- 필요 인력 및 리소스 추정
 """
 
 import asyncio
@@ -55,10 +45,8 @@ logger = logging.getLogger(__name__)
 
 class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
     """
-    PRD를 기반으로 WBS(Work Breakdown Structure) 생성.
-
-    BaseGenerator를 상속하여 일관된 생성 흐름과
-    공통 유틸리티 메서드를 활용합니다.
+    WBS 생성기 클래스입니다.
+    큰 단위(단계)부터 작은 단위(세부 작업) 순서로 구체화하며 계획을 수립합니다.
     """
 
     _id_prefix = "WBS"
@@ -70,26 +58,27 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
         context: WBSContext,
     ) -> WBSDocument:
         """
-        실제 WBS 생성 로직.
-
-        Args:
-            prd: 원본 PRD 문서
-            context: WBS 생성 컨텍스트
-
-        Returns:
-            WBSDocument: 생성된 WBS
+        WBS 생성 메인 로직입니다.
+        
+        진행 순서:
+        1. 프로젝트 단계 정의 (Phase)
+        2. 작업 패키지 생성 (Work Package)
+        3. 세부 작업 생성 (Task) - 병렬 처리
+        4. 요구사항 연결 및 의존성 설정
+        5. 일정 및 리소스 계산
         """
-        # WBS ID 생성 (베이스 클래스 메서드 사용)
+        # 문서 ID 생성
         wbs_id = self._generate_id()
 
         # 제목 설정
         title = f"{prd.title} - 작업분해구조 (WBS)"
 
-        # 1. 프로젝트 단계 생성
+        # 1. 프로젝트 단계 생성 (AI)
         phases = await self._generate_phases(prd, context)
         logger.info(f"[WBSGenerator] 프로젝트 단계 생성 완료: {len(phases)}개")
 
-        # 2. 작업 패키지 생성 (병렬 처리)
+        # 2. 작업 패키지 생성 (AI 병렬 처리)
+        # 각 단계별로 하위 작업 패키지를 동시에 생성합니다.
         wp_tasks = [
             self._generate_work_packages(prd, phase, context)
             for phase in phases
@@ -99,9 +88,10 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
             phase.work_packages = work_packages
             logger.info(f"[WBSGenerator] {phase.name} 작업 패키지 생성 완료: {len(work_packages)}개")
 
-        # 3. 세부 작업 생성 (Semaphore로 동시 호출 제한)
+        # 3. 세부 작업 생성 (AI 병렬 처리)
+        # 작업 패키지별로 세부 작업 목록을 만듭니다. (동시 실행 수 제한)
         all_wps = [(phase, wp) for phase in phases for wp in phase.work_packages]
-        semaphore = asyncio.Semaphore(5)  # 최대 5개 동시 호출
+        semaphore = asyncio.Semaphore(5)  # 최대 5개까지만 동시 실행
 
         async def generate_with_semaphore(wp: WorkPackage) -> list[WBSTask]:
             async with semaphore:
@@ -113,23 +103,28 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
             wp.tasks = tasks
         logger.info(f"[WBSGenerator] 세부 작업 생성 완료: {sum(len(t) for t in task_results)}개 작업")
 
-        # 4. 요구사항 매핑
+        # 4. 요구사항 매핑 (로컬 처리)
+        # 어떤 작업이 어떤 요구사항을 구현하는 것인지 연결합니다.
         self._map_requirements_to_tasks(prd, phases)
         logger.info("[WBSGenerator] 요구사항 매핑 완료")
 
-        # 5. 의존성 설정
+        # 5. 의존성 설정 (로컬 처리)
+        # 작업 간의 순서(선후 관계)를 연결합니다.
         self._set_dependencies(phases)
         logger.info("[WBSGenerator] 의존성 설정 완료")
 
-        # 6. 리소스 배분
+        # 6. 리소스 배분 (로컬 처리)
+        # 각 작업에 필요한 역할(개발자, 디자이너 등)을 할당합니다.
         self._allocate_resources(phases, context)
         logger.info("[WBSGenerator] 리소스 배분 완료")
 
-        # 7. 일정 계산
+        # 7. 일정 계산 (로컬 처리)
+        # 시작일부터 종료일까지 날짜를 계산합니다.
         self._calculate_schedule(phases, context)
         logger.info("[WBSGenerator] 일정 계산 완료")
 
-        # 8. 크리티컬 패스 계산
+        # 8. 크리티컬 패스 계산 (로컬 처리)
+        # 전체 일정에 영향을 주는 가장 긴 작업 경로를 찾습니다.
         critical_path = self._calculate_critical_path(phases)
         logger.info(f"[WBSGenerator] 크리티컬 패스: {len(critical_path)}개 작업")
 
@@ -143,6 +138,7 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
             source_prd_title=prd.title,
         )
 
+        # 최종 WBS 객체 반환
         return WBSDocument(
             id=wbs_id,
             title=title,
@@ -154,7 +150,7 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
     async def _generate_phases(
         self, prd: PRDDocument, context: WBSContext
     ) -> list[WBSPhase]:
-        """프로젝트 단계 생성 (Claude)."""
+        """프로젝트 개발 방법론에 맞춰 단계(Phase)를 정의합니다."""
         fr_summary = "\n".join([f"- {r.title}" for r in prd.functional_requirements[:15]])
         milestone_summary = "\n".join([f"- {m.name}: {m.description}" for m in prd.milestones[:5]])
 
@@ -192,7 +188,7 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
 
         except Exception as e:
             logger.warning(f"[WBSGenerator] 프로젝트 단계 생성 실패: {e}")
-            # 기본 단계 반환
+            # 실패 시 기본 단계 반환 (워터폴 vs 애자일)
             if context.methodology == "waterfall":
                 return [
                     WBSPhase(id="PH-001", name="요구사항 분석", order=1, milestone="요구사항 확정",
@@ -223,7 +219,7 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
     async def _generate_work_packages(
         self, prd: PRDDocument, phase: WBSPhase, context: WBSContext
     ) -> list[WorkPackage]:
-        """작업 패키지 생성 (Claude)."""
+        """각 단계별로 수행해야 할 작업 패키지(중간 단위)를 생성합니다."""
         # 단계에 맞는 요구사항 필터링
         fr_summary = "\n".join([
             f"- {r.id}: {r.title}"
@@ -259,7 +255,7 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
 
         except Exception as e:
             logger.warning(f"[WBSGenerator] 작업 패키지 생성 실패 ({phase.name}): {e}")
-            # 기본 작업 패키지
+            # 실패 시 기본 패키지 반환
             return [
                 WorkPackage(
                     id=f"{phase.id}-WP-001",
@@ -271,7 +267,7 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
     async def _generate_tasks(
         self, prd: PRDDocument, work_package: WorkPackage, context: WBSContext
     ) -> list[WBSTask]:
-        """세부 작업 생성 (Claude)."""
+        """작업 패키지 내의 세부 작업(Task)을 생성합니다."""
         prompt = f"""{TASK_GENERATION_PROMPT}
 
 프로젝트: {prd.title}
@@ -321,7 +317,7 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
 
         except Exception as e:
             logger.warning(f"[WBSGenerator] 세부 작업 생성 실패 ({work_package.name}): {e}")
-            # 기본 작업
+            # 실패 시 기본 작업 반환
             return [
                 WBSTask(
                     id=f"{work_package.id}-T-001",
@@ -333,14 +329,14 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
             ]
 
     def _map_requirements_to_tasks(self, prd: PRDDocument, phases: list[WBSPhase]) -> None:
-        """요구사항을 작업에 매핑."""
-        # 개발 단계 찾기
+        """기능 요구사항을 개발 관련 작업들에 분배합니다."""
+        # 개발 단계(Phase) 찾기
         dev_phases = [p for p in phases if "개발" in p.name.lower() or "sprint" in p.name.lower()]
 
         if not dev_phases:
             return
 
-        # 요구사항을 개발 단계 작업들에 분배
+        # 개발 관련 작업들 모으기
         all_tasks = []
         for phase in dev_phases:
             for wp in phase.work_packages:
@@ -349,14 +345,14 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
         if not all_tasks:
             return
 
-        # 라운드 로빈 방식으로 요구사항 할당
+        # 단순 분배 (Round-Robin) 방식으로 요구사항 할당
         for i, req in enumerate(prd.functional_requirements):
             task_idx = i % len(all_tasks)
             if req.id not in all_tasks[task_idx].related_requirement_ids:
                 all_tasks[task_idx].related_requirement_ids.append(req.id)
 
     def _set_dependencies(self, phases: list[WBSPhase]) -> None:
-        """작업 간 의존성 설정."""
+        """작업들 간의 순서(의존성)를 자동으로 설정합니다."""
         prev_phase_last_task = None
 
         for phase in sorted(phases, key=lambda x: x.order):
@@ -367,7 +363,7 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
             if not phase_tasks:
                 continue
 
-            # 단계의 첫 작업은 이전 단계 마지막 작업에 의존
+            # 이전 단계의 마지막 작업이 끝나야 현재 단계의 첫 작업 시작
             if prev_phase_last_task and phase_tasks:
                 first_task = phase_tasks[0]
                 if not any(d.predecessor_id == prev_phase_last_task.id for d in first_task.dependencies):
@@ -376,7 +372,7 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
                         dependency_type=DependencyType.FINISH_TO_START,
                     ))
 
-            # 단계 내 작업들은 순차 의존성 (이미 설정되지 않은 경우)
+            # 같은 단계 내에서는 순차적으로 진행 (Waterfall 가정)
             for i in range(1, len(phase_tasks)):
                 current_task = phase_tasks[i]
                 prev_task = phase_tasks[i - 1]
@@ -390,13 +386,12 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
                 prev_phase_last_task = phase_tasks[-1]
 
     def _allocate_resources(self, phases: list[WBSPhase], context: WBSContext) -> None:
-        """리소스 배분."""
-        # 이미 할당된 리소스가 없는 작업에 기본 리소스 할당
+        """작업 이름에 따라 적절한 담당자를 배정합니다."""
         for phase in phases:
             for wp in phase.work_packages:
                 for task in wp.tasks:
                     if not task.resources:
-                        # 작업명에서 리소스 유형 추론
+                        # 키워드로 역할 추론
                         resource_type = "개발자"
                         if any(kw in task.name.lower() for kw in ["설계", "기획", "분석"]):
                             resource_type = "기획자/분석가"
@@ -414,7 +409,7 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
                         ))
 
     def _calculate_schedule(self, phases: list[WBSPhase], context: WBSContext) -> None:
-        """일정 계산."""
+        """작업별 시작일과 종료일을 계산합니다."""
         start_date = context.start_date or date.today()
         current_date = start_date
 
@@ -428,14 +423,14 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
 
                 for task in wp.tasks:
                     task.start_date = current_date
-                    # 작업 일수 계산 (8시간/일 기준)
+                    # 예상 시간(시간) / 하루 근무 시간 = 소요 일수
                     task_days = max(1, int(task.estimated_hours / context.working_hours_per_day))
                     task.end_date = current_date + timedelta(days=task_days - 1)
 
                     if task.end_date > wp_end_date:
                         wp_end_date = task.end_date
 
-                    # 순차 작업인 경우 다음 작업 시작일 업데이트
+                    # 다음 작업은 이 작업 다음날부터
                     current_date = task.end_date + timedelta(days=1)
 
                 wp.end_date = wp_end_date
@@ -444,20 +439,10 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
 
     def _calculate_critical_path(self, phases: list[WBSPhase]) -> list[str]:
         """
-        크리티컬 패스 계산 (동적 프로그래밍 기반).
-
-        크리티컬 패스는 프로젝트에서 가장 긴 경로로,
-        이 경로의 작업이 지연되면 전체 프로젝트가 지연됩니다.
-
-        알고리즘:
-        1. 모든 작업을 수집하고 ID 매핑 생성
-        2. 각 작업까지의 최장 거리를 동적 프로그래밍으로 계산
-        3. 가장 긴 경로의 끝점에서 역추적하여 경로 구성
-
-        Returns:
-            크리티컬 패스를 구성하는 작업 ID 목록
+        크리티컬 패스(Critical Path)를 계산합니다.
+        프로젝트 전체 일정에 직접적인 영향을 주는 가장 긴 작업 경로입니다.
         """
-        # 모든 작업 수집
+        # 모든 작업을 하나의 리스트로 모음
         all_tasks = []
         for phase in phases:
             for wp in phase.work_packages:
@@ -466,14 +451,13 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
         if not all_tasks:
             return []
 
-        # 작업 ID → 작업 매핑
         task_dict = {t.id: t for t in all_tasks}
 
-        # 동적 프로그래밍: 각 작업까지의 최장 경로 거리와 이전 작업 기록
+        # 각 작업까지의 최장 거리 계산 (동적 계획법)
         dist: dict[str, float] = {t.id: 0.0 for t in all_tasks}
         prev: dict[str, str | None] = {t.id: None for t in all_tasks}
 
-        # 위상 정렬 순서로 처리 (단계/작업패키지 순서 사용)
+        # 의존성에 따라 거리 누적
         for task in all_tasks:
             for dep in task.dependencies:
                 pred_id = dep.predecessor_id
@@ -483,15 +467,15 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
                         dist[task.id] = new_dist
                         prev[task.id] = pred_id
 
-        # 가장 긴 경로의 끝점 찾기
+        # 가장 오래 걸리는 경로의 끝점 찾기
         if not dist:
             return []
         end_task_id = max(dist.keys(), key=lambda x: dist[x] + task_dict[x].estimated_hours)
 
-        # 경로 역추적 (최대 100개로 제한하여 무한 루프 방지)
+        # 역추적하여 경로 구성
         critical_path = []
         current: str | None = end_task_id
-        max_iterations = min(len(all_tasks), 100)
+        max_iterations = min(len(all_tasks), 100) # 무한루프 방지
 
         for _ in range(max_iterations):
             if current is None:
@@ -505,24 +489,24 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
     def _generate_summary(
         self, phases: list[WBSPhase], critical_path: list[str], context: WBSContext
     ) -> WBSSummary:
-        """WBS 요약 생성."""
+        """전체 WBS의 요약 통계를 생성합니다."""
         total_phases = len(phases)
         total_work_packages = sum(len(p.work_packages) for p in phases)
         total_tasks = sum(p.total_tasks for p in phases)
         total_hours = sum(p.total_hours for p in phases)
 
-        # 버퍼 적용 (normalized_buffer 사용: 0.15 또는 15 둘 다 0.15로 변환)
+        # 버퍼(여유 시간) 포함 계산
         total_hours_with_buffer = total_hours * (1 + context.normalized_buffer)
 
-        # M/D, M/M 계산
+        # M/D (Man-Days), M/M (Man-Months) 계산
         total_man_days = total_hours_with_buffer / context.working_hours_per_day
-        total_man_months = total_man_days / 22  # 월 22일 기준
+        total_man_months = total_man_days / 22  # 월 22일 근무 기준
 
-        # 기간 계산 (팀 규모 고려)
-        effective_team_size = max(1, context.team_size * 0.7)  # 70% 효율
+        # 예상 기간 (팀원 수 고려)
+        effective_team_size = max(1, context.team_size * 0.7)  # 휴가 등 고려 70% 효율
         estimated_duration_days = int(total_man_days / effective_team_size)
 
-        # 리소스별 요약
+        # 리소스별 시간 합계
         resource_hours: dict[str, float] = {}
         for phase in phases:
             for wp in phase.work_packages:

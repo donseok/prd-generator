@@ -1,4 +1,12 @@
-"""File-based storage service for PRD generation system."""
+"""
+파일 기반 저장소 서비스입니다.
+데이터베이스 대신 파일 시스템(폴더와 파일)을 사용하여 데이터를 저장하고 관리합니다.
+
+관리하는 데이터:
+1. PRD 문서 (JSON 파일)
+2. 작업 상태 정보 (Jobs)
+3. 업로드된 파일들 (Uploads)
+"""
 
 import json
 import os
@@ -16,32 +24,33 @@ T = TypeVar("T", bound=BaseModel)
 
 
 class FileStorage:
-    """JSON file-based storage for PRDs, jobs, and uploads."""
+    """JSON 파일 기반의 단순 저장소 클래스입니다."""
 
     def __init__(self, base_path: str = "data"):
+        # 기본 저장 경로 설정 (기본값: data 폴더)
         self.base_path = Path(base_path)
         self.prd_path = self.base_path / "prd"
         self.jobs_path = self.base_path / "jobs"
         self.uploads_path = self.base_path / "uploads"
 
-        # Ensure directories exist
+        # 필요한 폴더들이 없으면 만듭니다.
         self._ensure_directories()
 
     def _ensure_directories(self):
-        """Create storage directories if they don't exist."""
+        """저장소 폴더 생성 함수"""
         for path in [self.prd_path, self.jobs_path, self.uploads_path]:
             path.mkdir(parents=True, exist_ok=True)
 
-    # ==================== PRD Operations ====================
+    # ==================== PRD 문서 관련 기능 ====================
 
     async def save_prd(self, prd: PRDDocument) -> str:
-        """Save PRD document to file."""
+        """PRD 문서를 파일로 저장합니다."""
         file_path = self.prd_path / f"{prd.id}.json"
         await self._save_model(file_path, prd)
         return prd.id
 
     async def get_prd(self, prd_id: str) -> Optional[PRDDocument]:
-        """Get PRD document by ID."""
+        """ID로 PRD 문서를 불러옵니다."""
         file_path = self.prd_path / f"{prd_id}.json"
         return await self._load_model(file_path, PRDDocument)
 
@@ -51,8 +60,12 @@ class FileStorage:
         limit: int = 20,
         status: Optional[str] = None
     ) -> list[PRDDocument]:
-        """List PRD documents with pagination."""
+        """
+        저장된 PRD 목록을 페이지 단위로 가져옵니다.
+        최신 수정된 순서대로 정렬됩니다.
+        """
         prds = []
+        # 파일들을 수정 시간 역순(최신순)으로 정렬
         files = sorted(
             self.prd_path.glob("*.json"),
             key=lambda f: f.stat().st_mtime,
@@ -62,18 +75,20 @@ class FileStorage:
         for file_path in files:
             prd = await self._load_model(file_path, PRDDocument)
             if prd:
+                # 상태 필터가 있으면 해당 상태의 문서만 포함
                 if status is None or prd.metadata.status == status:
                     prds.append(prd)
 
+        # 페이지네이션 (원하는 범위만 자르기)
         return prds[skip:skip + limit]
 
     async def delete_prd(self, prd_id: str) -> bool:
-        """Delete PRD document."""
+        """PRD 문서를 삭제합니다."""
         file_path = self.prd_path / f"{prd_id}.json"
         return self._delete_file(file_path)
 
     async def update_prd(self, prd: PRDDocument) -> bool:
-        """Update existing PRD document."""
+        """기존 PRD 문서를 업데이트합니다."""
         file_path = self.prd_path / f"{prd.id}.json"
         if not file_path.exists():
             return False
@@ -81,21 +96,21 @@ class FileStorage:
         await self._save_model(file_path, prd)
         return True
 
-    # ==================== Job Operations ====================
+    # ==================== 작업(Job) 상태 관련 기능 ====================
 
     async def save_job(self, job: ProcessingJob) -> str:
-        """Save processing job to file."""
+        """작업 상태 정보를 저장합니다."""
         file_path = self.jobs_path / f"{job.job_id}.json"
         await self._save_model(file_path, job)
         return job.job_id
 
     async def get_job(self, job_id: str) -> Optional[ProcessingJob]:
-        """Get processing job by ID."""
+        """작업 ID로 상태 정보를 조회합니다."""
         file_path = self.jobs_path / f"{job_id}.json"
         return await self._load_model(file_path, ProcessingJob)
 
     async def update_job(self, job: ProcessingJob) -> bool:
-        """Update existing processing job."""
+        """작업 상태를 업데이트합니다."""
         file_path = self.jobs_path / f"{job.job_id}.json"
         job.updated_at = datetime.now()
         await self._save_model(file_path, job)
@@ -107,7 +122,7 @@ class FileStorage:
         limit: int = 20,
         status: Optional[str] = None
     ) -> list[ProcessingJob]:
-        """List processing jobs with pagination."""
+        """작업 목록을 페이지 단위로 조회합니다."""
         jobs = []
         files = sorted(
             self.jobs_path.glob("*.json"),
@@ -124,11 +139,11 @@ class FileStorage:
         return jobs[skip:skip + limit]
 
     async def delete_job(self, job_id: str) -> bool:
-        """Delete processing job."""
+        """작업 정보를 삭제합니다."""
         file_path = self.jobs_path / f"{job_id}.json"
         return self._delete_file(file_path)
 
-    # ==================== Upload Operations ====================
+    # ==================== 파일 업로드 관련 기능 ====================
 
     async def save_upload(
         self,
@@ -136,45 +151,47 @@ class FileStorage:
         filename: str,
         document_id: str
     ) -> str:
-        """Save uploaded file and return path."""
-        # Create document-specific directory
+        """
+        업로드된 파일을 디스크에 저장합니다.
+        문서 ID별로 별도의 폴더에 저장됩니다.
+        """
+        # 문서별 폴더 생성
         doc_dir = self.uploads_path / document_id
         doc_dir.mkdir(parents=True, exist_ok=True)
 
         file_path = doc_dir / filename
-        # 동기 방식 사용 (Windows aiofiles 호환성 문제 해결)
+        # 파일 쓰기
         with open(file_path, "wb") as f:
             f.write(file_content)
 
-        # 절대 경로 반환 (상대 경로 사용 시 서버 CWD에 따라 파일을 못 찾는 문제 방지)
+        # 저장된 파일의 절대 경로 반환
         return str(file_path.resolve())
 
     async def get_upload(self, document_id: str, filename: str) -> Optional[bytes]:
-        """Get uploaded file content."""
+        """저장된 파일의 내용을 읽어옵니다."""
         file_path = self.uploads_path / document_id / filename
         if not file_path.exists():
             return None
 
-        # 동기 방식 사용 (Windows aiofiles 호환성 문제 해결)
         with open(file_path, "rb") as f:
             return f.read()
 
     async def delete_upload(self, document_id: str) -> bool:
-        """Delete all uploaded files for a document."""
+        """특정 문서와 관련된 모든 업로드 파일을 삭제합니다."""
         doc_dir = self.uploads_path / document_id
         if doc_dir.exists():
-            shutil.rmtree(doc_dir)
+            shutil.rmtree(doc_dir)  # 폴더 채로 삭제
             return True
         return False
 
     def get_upload_path(self, document_id: str, filename: str) -> Path:
-        """Get path to uploaded file."""
+        """업로드된 파일의 경로를 반환합니다."""
         return self.uploads_path / document_id / filename
 
-    # ==================== Input Document Operations ====================
+    # ==================== 입력 문서 메타데이터 기능 ====================
 
     async def save_input_document(self, doc: InputDocument) -> str:
-        """Save input document metadata."""
+        """입력 문서의 정보를 저장합니다."""
         doc_dir = self.uploads_path / doc.id
         doc_dir.mkdir(parents=True, exist_ok=True)
         file_path = doc_dir / "metadata.json"
@@ -182,46 +199,44 @@ class FileStorage:
         return doc.id
 
     async def get_input_document(self, document_id: str) -> Optional[InputDocument]:
-        """Get input document by ID."""
+        """입력 문서 정보를 조회합니다."""
         file_path = self.uploads_path / document_id / "metadata.json"
         return await self._load_model(file_path, InputDocument)
 
-    # ==================== Helper Methods ====================
+    # ==================== 내부 도우미 함수들 ====================
 
     async def _save_model(self, file_path: Path, model: BaseModel):
-        """Save Pydantic model to JSON file."""
-        # 동기 방식 사용 (Windows aiofiles 호환성 문제 해결)
+        """데이터 모델을 JSON 파일로 저장하는 공통 함수"""
         with open(file_path, "w", encoding="utf-8") as f:
             f.write(model.model_dump_json(indent=2))
 
     async def _load_model(self, file_path: Path, model_class: Type[T]) -> Optional[T]:
-        """Load Pydantic model from JSON file."""
+        """JSON 파일을 읽어서 데이터 모델로 변환하는 공통 함수"""
         if not file_path.exists():
             return None
 
         try:
-            # 동기 방식 사용 (Windows aiofiles 호환성 문제 해결)
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
                 return model_class.model_validate_json(content)
         except Exception as e:
-            print(f"Error loading {file_path}: {e}")
+            print(f"파일 로딩 에러 {file_path}: {e}")
             return None
 
     def _delete_file(self, file_path: Path) -> bool:
-        """Delete a file if it exists."""
+        """파일 삭제 공통 함수"""
         if file_path.exists():
             file_path.unlink()
             return True
         return False
 
 
-# Singleton instance
+# 싱글톤 인스턴스 (프로그램 전체에서 공유)
 _file_storage: Optional[FileStorage] = None
 
 
 def get_file_storage() -> FileStorage:
-    """Get or create file storage singleton."""
+    """FileStorage 인스턴스를 반환합니다."""
     global _file_storage
     if _file_storage is None:
         _file_storage = FileStorage()

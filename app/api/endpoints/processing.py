@@ -1,4 +1,7 @@
-"""Processing pipeline endpoints."""
+"""
+AI 처리 파이프라인 제어 API입니다.
+PRD 생성 작업을 시작하고, 진행 상황을 확인하거나 취소할 수 있습니다.
+"""
 
 from typing import List
 from fastapi import APIRouter, HTTPException, BackgroundTasks
@@ -11,7 +14,7 @@ router = APIRouter()
 
 
 class StartProcessingRequest(BaseModel):
-    """Request body for starting processing."""
+    """작업 시작 요청에 사용할 데이터 모델 (문서 ID 목록)"""
     document_ids: List[str]
 
 
@@ -21,17 +24,17 @@ async def start_processing(
     background_tasks: BackgroundTasks,
 ) -> dict:
     """
-    Start the PRD generation pipeline for given documents.
-
-    The pipeline processes documents through 4 layers:
-    1. Parsing - Extract text and structure
-    2. Normalization - Convert to requirements
-    3. Validation - Quality checks
-    4. Generation - Create PRD document
+    PRD 생성 파이프라인을 시작하는 API입니다.
+    
+    파이프라인 단계:
+    1. 파싱(Parsing): 문서 내용 읽기
+    2. 정규화(Normalization): 요구사항 정리
+    3. 검증(Validation): 품질 체크
+    4. 생성(Generation): PRD 문서 작성
     """
     storage = get_file_storage()
 
-    # Validate document IDs
+    # 요청된 문서 ID들이 실제로 존재하는지 확인
     documents = []
     filenames = []
     for doc_id in request.document_ids:
@@ -44,16 +47,16 @@ async def start_processing(
         documents.append(doc)
         filenames.append(doc.content.metadata.filename or doc_id)
 
-    # Create processing job
+    # 새로운 처리 작업(Job) 생성
     job = ProcessingJob(
         input_document_ids=request.document_ids,
         input_filenames=filenames,
     )
 
-    # Save job
+    # 작업 정보를 저장소에 기록
     await storage.save_job(job)
 
-    # Start background processing using asyncio.create_task
+    # 백그라운드에서 AI 처리 작업 시작 (사용자는 기다리지 않고 바로 응답을 받음)
     import asyncio
     asyncio.create_task(run_pipeline(job.job_id))
 
@@ -66,21 +69,21 @@ async def start_processing(
 
 
 async def run_pipeline(job_id: str):
-    """Background task to run the processing pipeline."""
+    """실제 파이프라인을 실행하는 백그라운드 함수"""
     import traceback
     from app.services import get_orchestrator
 
-    print(f"[Pipeline] Starting pipeline for job: {job_id}")
+    print(f"[Pipeline] 작업 시작 ID: {job_id}")
 
     storage = get_file_storage()
     job = await storage.get_job(job_id)
 
     if not job:
-        print(f"[Pipeline] Job not found: {job_id}")
+        print(f"[Pipeline] 작업을 찾을 수 없음: {job_id}")
         return
 
     try:
-        # Get input documents
+        # 처리할 문서 정보 가져오기
         documents = []
         for doc_id in job.input_document_ids:
             doc = await storage.get_input_document(doc_id)
@@ -90,19 +93,20 @@ async def run_pipeline(job_id: str):
         if not documents:
             raise ValueError("입력 문서를 찾을 수 없습니다")
 
-        print(f"[Pipeline] Processing {len(documents)} documents")
+        print(f"[Pipeline] {len(documents)}개 문서 처리 중")
 
-        # Run pipeline through orchestrator
+        # 오케스트레이터에게 작업을 맡김
         orchestrator = get_orchestrator()
         prd = await orchestrator.process(job, documents)
 
-        print(f"[Pipeline] Pipeline completed. PRD: {prd.id if prd else 'None (PM review required)'}")
+        print(f"[Pipeline] 파이프라인 완료. 결과: {prd.id if prd else '없음 (PM 검토 대기)'}")
 
-        # If prd is None, it means PM review is required
-        # The orchestrator already updated the job status
+        # 만약 prd가 None이면, 중간에 검토가 필요해서 멈춘 상태임
+        # (상태 업데이트는 orchestrator 안에서 이미 수행됨)
 
     except Exception as e:
-        print(f"[Pipeline] ERROR: {e}")
+        # 에러 발생 시 로그 출력 및 상태 실패로 변경
+        print(f"[Pipeline] 에러 발생: {e}")
         traceback.print_exc()
         job.update_status(ProcessingStatus.FAILED)
         job.error_message = str(e)
@@ -112,9 +116,12 @@ async def run_pipeline(job_id: str):
 @router.get("/status/{job_id}")
 async def get_processing_status(job_id: str) -> dict:
     """
-    Get current processing status and progress.
-
-    Returns progress through 4-layer pipeline.
+    현재 작업 진행 상태를 확인하는 API.
+    
+    반환 정보:
+    - 현재 단계 (예: 파싱 중, 검증 중)
+    - 진행률 (%)
+    - 에러 메시지 (있을 경우)
     """
     storage = get_file_storage()
     job = await storage.get_job(job_id)
@@ -137,13 +144,14 @@ async def get_processing_status(job_id: str) -> dict:
 
 @router.post("/cancel/{job_id}")
 async def cancel_processing(job_id: str) -> dict:
-    """Cancel an in-progress processing job."""
+    """진행 중인 작업을 취소하는 API"""
     storage = get_file_storage()
     job = await storage.get_job(job_id)
 
     if not job:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
 
+    # 이미 끝난 작업은 취소 불가
     if job.status in [ProcessingStatus.COMPLETED, ProcessingStatus.FAILED]:
         raise HTTPException(
             status_code=400,
@@ -163,7 +171,7 @@ async def list_jobs(
     limit: int = 20,
     status: str = None
 ) -> dict:
-    """List all processing jobs."""
+    """전체 작업 목록 조회 API"""
     storage = get_file_storage()
     jobs = await storage.list_jobs(skip=skip, limit=limit, status=status)
 

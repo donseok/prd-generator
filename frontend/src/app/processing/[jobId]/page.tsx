@@ -24,27 +24,35 @@ const LAYERS = [
 ];
 
 export default function ProcessingPage() {
+  /**
+   * 처리 상태 페이지 컴포넌트입니다.
+   * AI 파이프라인의 실시간 진행률과 현재 단계를 보여줍니다.
+   */
   const router = useRouter();
   const params = useParams();
   const jobId = params.jobId as string;
 
+  // 서버에서 작업 상태를 주기적으로 가져옵니다 (폴링)
   const { data: status, error } = useQuery({
     queryKey: ["processing", jobId],
     queryFn: () => api.getProcessingStatus(jobId),
     refetchInterval: (query) => {
       const data = query.state.data;
+      // 완료되었거나, 실패했거나, 리뷰가 필요하면 폴링 중단
       if (data?.status === "completed" || data?.status === "failed" || data?.status === "pm_review") {
         return false;
       }
-      return 2000; // Poll every 2 seconds
+      return 2000; // 2초마다 갱신
     },
   });
 
-  // Redirect when complete
+  // 상태 변경에 따른 자동 이동
   useEffect(() => {
     if (status?.status === "completed" && status.prd_id) {
+      // 완료되면 PRD 상세 페이지로 이동
       router.push(`/prd/${status.prd_id}`);
     } else if (status?.status === "pm_review") {
+      // 검토가 필요하면 리뷰 페이지로 이동
       router.push(`/review/${jobId}`);
     }
   }, [status, jobId, router]);
@@ -100,7 +108,7 @@ export default function ProcessingPage() {
           </div>
         ) : (
           <>
-            {/* Progress Bar */}
+            {/* 진행률 바 */}
             <div className="mb-12">
               <div className="flex justify-between text-sm mb-2">
                 <span className="text-slate-400">진행률</span>
@@ -114,7 +122,7 @@ export default function ProcessingPage() {
               </div>
             </div>
 
-            {/* Pipeline Visualization */}
+            {/* 단계별 상태 시각화 */}
             <div className="space-y-4">
               {LAYERS.map((layer, index) => {
                 const isComplete = index < currentLayerIndex || status.status === "completed";
@@ -175,7 +183,7 @@ export default function ProcessingPage() {
               })}
             </div>
 
-            {/* Documents */}
+            {/* 처리 중인 문서 목록 */}
             <div className="mt-8 p-4 bg-slate-800/30 rounded-lg border border-slate-700">
               <h4 className="text-sm font-medium text-slate-300 mb-2">처리 중인 문서</h4>
               <div className="flex flex-wrap gap-2">

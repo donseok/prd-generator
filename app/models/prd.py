@@ -1,4 +1,7 @@
-"""PRD document data models."""
+"""
+PRD (제품 요구사항 정의서) 데이터 모델입니다.
+최종적으로 생성되는 문서의 구조를 정의합니다.
+"""
 
 from datetime import datetime
 from typing import Optional
@@ -8,77 +11,79 @@ from .requirement import NormalizedRequirement
 
 
 class PRDOverview(BaseModel):
-    """PRD document overview section."""
+    """PRD의 개요 섹션입니다. 프로젝트의 전반적인 내용을 담습니다."""
 
-    background: str = Field(..., description="Project background")
-    goals: list[str] = Field(..., description="Project goals")
-    scope: str = Field(..., description="Project scope")
-    out_of_scope: list[str] = Field(default_factory=list, description="Out of scope items")
-    target_users: list[str] = Field(default_factory=list, description="Target user groups")
-    success_metrics: list[str] = Field(default_factory=list, description="Success metrics/KPIs")
+    background: str = Field(..., description="프로젝트 추진 배경")
+    goals: list[str] = Field(..., description="프로젝트 목표 목록")
+    scope: str = Field(..., description="프로젝트 범위 (할 것)")
+    out_of_scope: list[str] = Field(default_factory=list, description="범위 제외 사항 (안 할 것)")
+    target_users: list[str] = Field(default_factory=list, description="주요 타겟 사용자 그룹")
+    success_metrics: list[str] = Field(default_factory=list, description="성공 판단 기준 (KPI)")
 
 
 class Milestone(BaseModel):
-    """Project milestone."""
+    """프로젝트 주요 마일스톤(단계별 목표)입니다."""
 
     id: str
-    name: str
-    description: str
-    deliverables: list[str] = Field(default_factory=list)
-    dependencies: list[str] = Field(default_factory=list)
-    order: int = 0
+    name: str = "마일스톤 이름"
+    description: str = "설명"
+    deliverables: list[str] = Field(default_factory=list) # 산출물 목록
+    dependencies: list[str] = Field(default_factory=list) # 의존성 (선행 작업 등)
+    order: int = 0  # 순서
 
 
 class UnresolvedItem(BaseModel):
-    """Unresolved item requiring attention."""
+    """아직 해결되지 않은 이슈나 질문 사항입니다."""
 
     id: str
-    type: str = Field(..., description="Type: question, decision, risk, dependency")
+    type: str = Field(..., description="유형: 질문(question), 결정필요(decision), 위험(risk) 등")
     description: str
-    related_requirement_ids: list[str] = Field(default_factory=list)
-    priority: str = "MEDIUM"
-    suggested_action: Optional[str] = None
+    related_requirement_ids: list[str] = Field(default_factory=list) # 관련된 요구사항 ID들
+    priority: str = "MEDIUM" # 중요도
+    suggested_action: Optional[str] = None # 제안하는 해결 방안
 
 
 class PRDMetadata(BaseModel):
-    """PRD document metadata."""
+    """PRD 문서의 메타데이터입니다."""
 
     version: str = "1.0"
-    status: str = "draft"  # draft, review, approved
+    status: str = "draft"  # draft(초안), review(검토중), approved(승인됨)
     author: str = "PRD Generator"
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
-    source_documents: list[str] = Field(default_factory=list)
-    overall_confidence: float = Field(ge=0.0, le=1.0, default=0.0)
-    requires_pm_review: bool = False
-    pm_review_reasons: list[str] = Field(default_factory=list)
+    source_documents: list[str] = Field(default_factory=list) # 참고한 원본 문서들
+    overall_confidence: float = Field(ge=0.0, le=1.0, default=0.0) # AI의 전체 확신도 (0~1)
+    requires_pm_review: bool = False # 기획자 검토 필요 여부
+    pm_review_reasons: list[str] = Field(default_factory=list) # 검토가 필요한 이유들
 
 
 class PRDDocument(BaseModel):
-    """Complete PRD document."""
+    """
+    완성된 PRD 문서를 나타내는 메인 클래스입니다.
+    """
 
-    id: str = Field(..., description="PRD document ID")
-    title: str = Field(..., description="PRD title")
-    overview: PRDOverview
-    functional_requirements: list[NormalizedRequirement] = Field(default_factory=list)
-    non_functional_requirements: list[NormalizedRequirement] = Field(default_factory=list)
-    constraints: list[NormalizedRequirement] = Field(default_factory=list)
-    milestones: list[Milestone] = Field(default_factory=list)
-    unresolved_items: list[UnresolvedItem] = Field(default_factory=list)
-    metadata: PRDMetadata = Field(default_factory=PRDMetadata)
+    id: str = Field(..., description="PRD 문서 ID")
+    title: str = Field(..., description="프로젝트 제목")
+    overview: PRDOverview # 개요
+    functional_requirements: list[NormalizedRequirement] = Field(default_factory=list) # 기능 요구사항
+    non_functional_requirements: list[NormalizedRequirement] = Field(default_factory=list) # 비기능 요구사항
+    constraints: list[NormalizedRequirement] = Field(default_factory=list) # 제약사항
+    milestones: list[Milestone] = Field(default_factory=list) # 마일스톤
+    unresolved_items: list[UnresolvedItem] = Field(default_factory=list) # 미해결 항목
+    metadata: PRDMetadata = Field(default_factory=PRDMetadata) # 메타데이터
 
     def to_markdown(self) -> str:
-        """Convert PRD to Markdown format."""
+        """PRD 내용을 마크다운(Markdown) 텍스트로 변환하는 함수"""
         lines = []
 
-        # Title and metadata
+        # 제목 및 메타정보
         lines.append(f"# {self.title}")
         lines.append("")
         lines.append(f"**버전**: {self.metadata.version} | **상태**: {self.metadata.status} | **신뢰도**: {self.metadata.overall_confidence:.0%}")
         lines.append(f"**생성일**: {self.metadata.created_at.strftime('%Y-%m-%d %H:%M')}")
         lines.append("")
 
-        # Overview
+        # 1. 개요
         lines.append("## 1. 개요")
         lines.append("")
         lines.append("### 배경")
@@ -112,13 +117,14 @@ class PRDDocument(BaseModel):
                 lines.append(f"- {metric}")
             lines.append("")
 
-        # Functional Requirements
+        # 2. 기능 요구사항 (FR)
         if self.functional_requirements:
             lines.append("## 2. 기능 요구사항 (FR)")
             lines.append("")
             for req in self.functional_requirements:
                 lines.append(f"### {req.id}: {req.title}")
-                # Build source display string
+                
+                # 출처 표시 문자열 생성
                 source_display = ""
                 if req.source_info:
                     source_display = req.source_info.to_display_string()
@@ -139,18 +145,17 @@ class PRDDocument(BaseModel):
                     for ac in req.acceptance_criteria:
                         lines.append(f"- [ ] {ac}")
                     lines.append("")
-                # Show excerpt if available
+                # 원문 발췌가 있으면 표시
                 if req.source_info and req.source_info.excerpt:
                     lines.append(f"> 원문: \"{req.source_info.excerpt}\"")
                     lines.append("")
 
-        # Non-Functional Requirements
+        # 3. 비기능 요구사항 (NFR)
         if self.non_functional_requirements:
             lines.append("## 3. 비기능 요구사항 (NFR)")
             lines.append("")
             for req in self.non_functional_requirements:
                 lines.append(f"### {req.id}: {req.title}")
-                # Build source display string
                 source_display = ""
                 if req.source_info:
                     source_display = req.source_info.to_display_string()
@@ -163,18 +168,16 @@ class PRDDocument(BaseModel):
                 lines.append("")
                 lines.append(req.description)
                 lines.append("")
-                # Show excerpt if available
                 if req.source_info and req.source_info.excerpt:
                     lines.append(f"> 원문: \"{req.source_info.excerpt}\"")
                     lines.append("")
 
-        # Constraints
+        # 4. 제약조건
         if self.constraints:
             lines.append("## 4. 제약조건")
             lines.append("")
             for req in self.constraints:
                 lines.append(f"### {req.id}: {req.title}")
-                # Build source display string
                 source_display = ""
                 if req.source_info:
                     source_display = req.source_info.to_display_string()
@@ -185,12 +188,11 @@ class PRDDocument(BaseModel):
                     lines.append(f"**출처**: {source_display}")
                 lines.append(req.description)
                 lines.append("")
-                # Show excerpt if available
                 if req.source_info and req.source_info.excerpt:
                     lines.append(f"> 원문: \"{req.source_info.excerpt}\"")
                     lines.append("")
 
-        # Milestones
+        # 5. 마일스톤
         if self.milestones:
             lines.append("## 5. 마일스톤")
             lines.append("")
@@ -203,7 +205,7 @@ class PRDDocument(BaseModel):
                         lines.append(f"- {d}")
                 lines.append("")
 
-        # Unresolved Items
+        # 6. 미해결 사항
         if self.unresolved_items:
             lines.append("## 6. 미해결 사항")
             lines.append("")
@@ -213,7 +215,7 @@ class PRDDocument(BaseModel):
                     lines.append(f"  - 제안: {item.suggested_action}")
             lines.append("")
 
-        # Source Documents
+        # 출처 문서 목록
         if self.metadata.source_documents:
             lines.append("## 출처 문서")
             lines.append("")
@@ -223,12 +225,12 @@ class PRDDocument(BaseModel):
                 lines.append(f"{idx}. {doc}")
             lines.append("")
 
-        # Footer
+        # 바닥글
         lines.append("---")
         lines.append("*이 문서는 PRD 자동 생성 시스템에 의해 작성되었습니다.*")
 
         return "\n".join(lines)
 
     def to_json(self) -> str:
-        """Convert PRD to JSON format."""
+        """JSON 포맷으로 변환하는 함수"""
         return self.model_dump_json(indent=2)

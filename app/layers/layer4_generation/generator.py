@@ -1,10 +1,6 @@
-"""PRD document generator for Layer 4.
-
-Layer 4: PRD 문서 생성기
-정규화된 요구사항 목록을 기반으로 PRDDocument를 생성합니다.
-
-BaseGenerator를 상속하여 일관된 생성 흐름과
-공통 유틸리티 메서드를 활용합니다.
+"""
+Layer 4: PRD 문서 생성 서비스입니다.
+검증된 요구사항들을 바탕으로 최종 PRD 문서(PRDDocument)를 생성합니다.
 """
 
 from typing import List, Optional
@@ -30,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class PRDContext:
-    """PRD 생성 컨텍스트."""
+    """PRD 생성에 필요한 추가 정보들"""
     title: Optional[str] = None
     source_documents: Optional[List[str]] = None
     additional_context: Optional[dict] = None
@@ -38,13 +34,11 @@ class PRDContext:
 
 class PRDGenerator(BaseGenerator[List[NormalizedRequirement], PRDDocument, PRDContext]):
     """
-    Layer 4: PRD document generation.
-
-    정규화된 요구사항 목록을 받아 완전한 PRD 문서를 생성합니다.
-    BaseGenerator를 상속하여 일관된 생성 흐름을 따릅니다.
+    PRD 생성기 클래스입니다.
+    BaseGenerator를 상속받아 표준화된 문서 생성 흐름을 따릅니다.
     """
 
-    _id_prefix = "PRD"
+    _id_prefix = "PRD"  # 생성될 문서 ID의 접두어
     _generator_name = "PRDGenerator"
 
     async def _do_generate(
@@ -53,33 +47,26 @@ class PRDGenerator(BaseGenerator[List[NormalizedRequirement], PRDDocument, PRDCo
         context: PRDContext,
     ) -> PRDDocument:
         """
-        실제 PRD 생성 로직.
-
-        Args:
-            requirements: 정규화된 요구사항 목록
-            context: PRD 생성 컨텍스트
-
-        Returns:
-            PRDDocument: 생성된 PRD 문서
+        실제 PRD 생성을 수행하는 내부 함수입니다.
         """
-        # 요구사항 분류
+        # 1. 요구사항을 종류별로 분류 (기능 / 비기능 / 제약조건)
         functional = [r for r in requirements if r.type == RequirementType.FUNCTIONAL]
         non_functional = [r for r in requirements if r.type == RequirementType.NON_FUNCTIONAL]
         constraints = [r for r in requirements if r.type == RequirementType.CONSTRAINT]
 
-        # Claude를 사용한 개요 생성
+        # 2. AI를 사용하여 프로젝트 개요(Overview) 작성
         overview = await self._generate_overview(requirements, context)
 
-        # 마일스톤 생성
+        # 3. 우선순위에 따라 마일스톤 자동 생성
         milestones = await self._generate_milestones(requirements)
 
-        # 미해결 항목 수집
+        # 4. 미해결 항목(질문, 가정) 수집
         unresolved = self._collect_unresolved_items(requirements)
 
-        # 전체 신뢰도 계산
+        # 5. 전체 신뢰도 점수 계산 (평균)
         overall_confidence = self._calculate_overall_confidence(requirements)
 
-        # 메타데이터 생성
+        # 6. 메타데이터 생성
         source_docs = context.source_documents or []
         metadata = PRDMetadata(
             version="1.0",
@@ -93,12 +80,13 @@ class PRDGenerator(BaseGenerator[List[NormalizedRequirement], PRDDocument, PRDCo
             pm_review_reasons=self._get_review_reasons(requirements),
         )
 
-        # PRD ID 생성 (BaseGenerator 메서드 사용)
+        # 문서 ID 생성
         prd_id = self._generate_id()
 
-        # 제목 생성
+        # 제목 생성 (AI 활용)
         title = await self._generate_title(requirements, context)
 
+        # 최종 PRD 객체 반환
         return PRDDocument(
             id=prd_id,
             title=title,
@@ -118,27 +106,16 @@ class PRDGenerator(BaseGenerator[List[NormalizedRequirement], PRDDocument, PRDCo
         context: dict = None
     ) -> PRDDocument:
         """
-        호환성을 위한 기존 시그니처 유지.
-
-        기존 코드와의 호환성을 위해 dict context를 PRDContext로 변환합니다.
-
-        Args:
-            requirements: 정규화된 요구사항 목록
-            source_documents: 소스 문서 이름 목록
-            context: 추가 컨텍스트 딕셔너리
-
-        Returns:
-            PRDDocument: 생성된 PRD 문서
+        외부에서 호출하는 메인 함수입니다. (호환성 유지용)
+        입력받은 파라미터를 정리해서 내부 생성 함수(_do_generate)를 호출합니다.
         """
-        # 기존 dict 컨텍스트를 PRDContext로 변환
+        # 컨텍스트 객체 생성
         prd_context = PRDContext(
             title=context.get("title") if context else None,
             source_documents=source_documents,
             additional_context=context,
         )
 
-        # 부모 클래스의 generate 대신 직접 _do_generate 호출
-        # (입력이 List이므로 getattr(input_doc, 'title') 오류 방지)
         logger.info(f"[{self._generator_name}] PRD 생성 시작")
         start_time = datetime.now()
 
@@ -160,7 +137,8 @@ class PRDGenerator(BaseGenerator[List[NormalizedRequirement], PRDDocument, PRDCo
         requirements: List[NormalizedRequirement],
         context: PRDContext
     ) -> PRDOverview:
-        """PRD 개요 섹션 생성 (Claude 사용)."""
+        """AI를 사용하여 PRD의 개요 섹션(배경, 목표, 범위 등)을 작성합니다."""
+        # 요구사항 일부를 요약해서 AI에게 전달
         req_summary = "\n".join([
             f"- {req.title}: {req.description[:100]}"
             for req in requirements[:15]
@@ -168,7 +146,8 @@ class PRDGenerator(BaseGenerator[List[NormalizedRequirement], PRDDocument, PRDCo
 
         additional = context.additional_context or {}
 
-        prompt = f"""다음 요구사항들을 기반으로 PRD 개요를 작성해주세요.
+        prompt = f"""
+다음 요구사항들을 기반으로 PRD 개요를 작성해주세요.
 
 요구사항 요약:
 {req_summary}
@@ -212,18 +191,18 @@ JSON 형식으로 응답:
         self,
         requirements: List[NormalizedRequirement]
     ) -> List[Milestone]:
-        """요구사항 기반 마일스톤 생성."""
+        """요구사항의 우선순위를 기반으로 마일스톤(단계별 목표)을 생성합니다."""
         if not requirements:
             return []
 
-        # 우선순위별 그룹화
+        # 우선순위별로 분류
         high_priority = [r for r in requirements if r.priority.value == "HIGH"]
         medium_priority = [r for r in requirements if r.priority.value == "MEDIUM"]
         low_priority = [r for r in requirements if r.priority.value == "LOW"]
 
         milestones = []
 
-        # MVP 마일스톤 (높은 우선순위)
+        # 1단계: MVP (필수 기능)
         if high_priority:
             milestones.append(Milestone(
                 id="MS-001",
@@ -234,7 +213,7 @@ JSON 형식으로 응답:
                 order=1,
             ))
 
-        # Phase 2 (중간 우선순위)
+        # 2단계: 기능 확장
         if medium_priority:
             milestones.append(Milestone(
                 id="MS-002",
@@ -245,7 +224,7 @@ JSON 형식으로 응답:
                 order=2,
             ))
 
-        # Phase 3 (낮은 우선순위)
+        # 3단계: 개선 및 부가 기능
         if low_priority:
             milestones.append(Milestone(
                 id="MS-003",
@@ -263,12 +242,14 @@ JSON 형식으로 응답:
         requirements: List[NormalizedRequirement],
         context: PRDContext
     ) -> str:
-        """PRD 제목 생성."""
+        """PRD 제목을 생성합니다."""
+        # 이미 제목이 있으면 그것 사용
         if context.title:
             return context.title
 
         req_titles = ", ".join([r.title for r in requirements[:5]])
 
+        # AI에게 제목 추천 요청
         title = await self._call_claude_text(
             system_prompt="당신은 PRD 제목을 생성하는 전문가입니다. 간결하고 명확한 제목을 생성합니다.",
             user_prompt=f"다음 요구사항들을 포괄하는 PRD 제목을 한 줄로 작성해주세요 (20자 이내):\n{req_titles}",
@@ -284,7 +265,7 @@ JSON 형식으로 응답:
         self,
         requirements: List[NormalizedRequirement]
     ) -> List[UnresolvedItem]:
-        """요구사항에서 미해결 항목 수집."""
+        """요구사항에서 미해결 항목(누락 정보, 가정사항)을 수집하여 별도 목록으로 만듭니다."""
         items = []
         item_counter = 1
 
@@ -313,13 +294,13 @@ JSON 형식으로 응답:
                 ))
                 item_counter += 1
 
-        return items[:20]  # 최대 20개로 제한
+        return items[:20]  # 너무 많으면 잘라냄
 
     def _calculate_overall_confidence(
         self,
         requirements: List[NormalizedRequirement]
     ) -> float:
-        """전체 PRD 신뢰도 계산."""
+        """전체 요구사항의 평균 신뢰도를 계산합니다."""
         if not requirements:
             return 0.0
 
@@ -330,7 +311,7 @@ JSON 형식으로 응답:
         self,
         requirements: List[NormalizedRequirement]
     ) -> List[str]:
-        """PM 검토가 필요한 이유 수집."""
+        """PM 검토가 필요한 이유들을 정리합니다."""
         reasons = []
 
         low_confidence = [r for r in requirements if r.confidence_score < 0.8]

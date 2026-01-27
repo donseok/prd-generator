@@ -14,11 +14,18 @@ import {
 import { api } from "@/lib/api";
 
 export default function DashboardPage() {
+  /**
+   * 대시보드 페이지 컴포넌트입니다.
+   * 최근 생성된 PRD 목록과 진행 중인 작업 상태를 한눈에 보여줍니다.
+   */
+
+  // 서버에서 PRD 목록 가져오기
   const { data: prds } = useQuery({
     queryKey: ["prds"],
     queryFn: () => api.listPRDs(0, 5),
   });
 
+  // 서버에서 작업(Job) 목록 가져오기
   const { data: jobs } = useQuery({
     queryKey: ["jobs"],
     queryFn: () => api.listJobs(0, 5),
@@ -30,7 +37,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header */}
+      {/* 상단 헤더 (로고 및 네비게이션) */}
       <header className="border-b border-slate-700 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-6 py-4">
           <div className="flex items-center justify-between">
@@ -43,6 +50,7 @@ export default function DashboardPage() {
                 <p className="text-xs text-slate-400">4단계 AI 파이프라인</p>
               </div>
             </div>
+            {/* 새 문서 생성 버튼 */}
             <Link
               href="/upload"
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
@@ -55,7 +63,7 @@ export default function DashboardPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Quick Stats */}
+        {/* 요약 통계 카드 영역 */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
           <StatCard
             icon={<FileText className="w-5 h-5" />}
@@ -84,7 +92,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Recent PRDs */}
+          {/* 최근 PRD 목록 */}
           <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">최근 PRD</h2>
@@ -130,7 +138,7 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Recent Jobs */}
+          {/* 최근 작업 목록 */}
           <div className="bg-slate-800/50 rounded-xl border border-slate-700 p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold">최근 작업</h2>
@@ -179,7 +187,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Pipeline Overview */}
+        {/* 파이프라인 단계 설명 */}
         <div className="mt-8 bg-slate-800/50 rounded-xl border border-slate-700 p-6">
           <h2 className="text-lg font-semibold mb-4">파이프라인 구조</h2>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -211,6 +219,7 @@ export default function DashboardPage() {
   );
 }
 
+// 통계 카드 컴포넌트
 function StatCard({
   icon,
   label,
@@ -244,6 +253,7 @@ function StatCard({
   );
 }
 
+// 신뢰도 점수 뱃지 컴포넌트
 function ConfidenceBadge({ score }: { score: number }) {
   const percent = Math.round(score * 100);
   const color =
@@ -260,6 +270,7 @@ function ConfidenceBadge({ score }: { score: number }) {
   );
 }
 
+// 작업 상태 뱃지 컴포넌트
 function StatusBadge({ status, needsReview }: { status: string; needsReview?: boolean }) {
   if (needsReview) {
     return (
