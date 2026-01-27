@@ -213,8 +213,9 @@ class ClaudeClient:
 
         try:
             use_shell = sys.platform == "win32"
+            # --dangerously-skip-permissions: 권한 체크 스킵하여 속도 향상
             result = subprocess.run(
-                ["claude", "-p", prompt, "--output-format", "text"],
+                ["claude", "-p", prompt, "--output-format", "text", "--dangerously-skip-permissions"],
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5분 제한 시간
