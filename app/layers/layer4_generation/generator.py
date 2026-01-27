@@ -83,8 +83,8 @@ class PRDGenerator(BaseGenerator[List[NormalizedRequirement], PRDDocument, PRDCo
         # 문서 ID 생성
         prd_id = self._generate_id()
 
-        # 제목 생성 (AI 활용)
-        title = await self._generate_title(requirements, context)
+        # 제목 생성 (로컬 처리)
+        title = self._generate_title(requirements, context)
 
         # 최종 PRD 객체 반환
         return PRDDocument(
@@ -137,55 +137,67 @@ class PRDGenerator(BaseGenerator[List[NormalizedRequirement], PRDDocument, PRDCo
         requirements: List[NormalizedRequirement],
         context: PRDContext
     ) -> PRDOverview:
-        """AI를 사용하여 PRD의 개요 섹션(배경, 목표, 범위 등)을 작성합니다."""
-        # 요구사항 일부를 요약해서 AI에게 전달
-        req_summary = "\n".join([
-            f"- {req.title}: {req.description[:100]}"
-            for req in requirements[:15]
-        ])
+        """PRD의 개요 섹션을 생성합니다. AI 호출 실패 시 요구사항에서 직접 추출."""
+        # 먼저 요구사항에서 기본 정보 추출 (AI 없이)
+        goals = []
+        for req in requirements[:10]:
+            if req.type == RequirementType.FUNCTIONAL and req.title:
+                goal = req.title
+                if ':' in goal:
+                    goal = goal.split(':', 1)[1].strip()
+                if len(goal) > 5 and goal not in goals:
+                    goals.append(goal[:80])
+                if len(goals) >= 5:
+                    break
 
-        additional = context.additional_context or {}
+        # 배경 정보 추출 (첫 번째 요구사항 설명에서)
+        background = "시스템 개선 및 신규 기능 개발 프로젝트"
+        if requirements and requirements[0].description:
+            desc = requirements[0].description
+            if len(desc) > 20:
+                background = desc[:300]
 
-        prompt = f"""
-다음 요구사항들을 기반으로 PRD 개요를 작성해주세요.
+        # AI 호출 시도 (선택적)
+        try:
+            req_summary = "\n".join([
+                f"- {req.title}"
+                for req in requirements[:10]
+            ])
 
-요구사항 요약:
+            prompt = f"""요구사항 기반 PRD 개요를 JSON으로 작성:
+
+요구사항:
 {req_summary}
 
-추가 컨텍스트:
-{additional or '없음'}
+JSON형식(background, goals[], scope, out_of_scope[], target_users[], success_metrics[]):"""
 
-JSON 형식으로 응답:
-{{
-  "background": "프로젝트 배경 (2-3문장)",
-  "goals": ["목표 1", "목표 2", "목표 3"],
-  "scope": "프로젝트 범위 설명",
-  "out_of_scope": ["범위 외 항목 1", "범위 외 항목 2"],
-  "target_users": ["대상 사용자 1", "대상 사용자 2"],
-  "success_metrics": ["성공 지표 1", "성공 지표 2"]
-}}"""
+            result = await self._call_claude_json(
+                system_prompt="PRD 개요 작성 전문가. 간결하게 JSON만 반환.",
+                user_prompt=prompt,
+                section_name="overview",
+            )
 
-        result = await self._call_claude_json(
-            system_prompt="당신은 PRD 문서 작성 전문가입니다. 주어진 요구사항을 분석하여 명확하고 실행 가능한 개요를 작성합니다.",
-            user_prompt=prompt,
-            section_name="overview",
+            if result and result.get("background"):
+                return PRDOverview(
+                    background=result.get("background", background),
+                    goals=result.get("goals", goals) or goals,
+                    scope=result.get("scope", "프로젝트 범위 정의 필요"),
+                    out_of_scope=result.get("out_of_scope", []),
+                    target_users=result.get("target_users", ["시스템 사용자"]),
+                    success_metrics=result.get("success_metrics", []),
+                )
+        except Exception as e:
+            logger.warning(f"[PRDGenerator] Overview AI 생성 실패, 로컬 폴백 사용: {e}")
+
+        # 로컬 폴백 (AI 실패 시)
+        return PRDOverview(
+            background=background,
+            goals=goals or ["프로젝트 목표 정의 필요"],
+            scope="문서에서 정의된 기능 범위",
+            out_of_scope=[],
+            target_users=["시스템 사용자", "관리자"],
+            success_metrics=[],
         )
-
-        if result:
-            return PRDOverview(
-                background=result.get("background", "프로젝트 배경 정보가 필요합니다."),
-                goals=result.get("goals", ["목표 정의 필요"]),
-                scope=result.get("scope", "범위 정의 필요"),
-                out_of_scope=result.get("out_of_scope", []),
-                target_users=result.get("target_users", ["대상 사용자 정의 필요"]),
-                success_metrics=result.get("success_metrics", []),
-            )
-        else:
-            return PRDOverview(
-                background="자동 생성 실패 - 수동 입력 필요",
-                goals=["목표 정의 필요"],
-                scope="범위 정의 필요",
-            )
 
     async def _generate_milestones(
         self,
@@ -237,28 +249,37 @@ JSON 형식으로 응답:
 
         return milestones
 
-    async def _generate_title(
+    def _generate_title(
         self,
         requirements: List[NormalizedRequirement],
         context: PRDContext
     ) -> str:
-        """PRD 제목을 생성합니다."""
+        """PRD 제목을 생성합니다. (AI 호출 없이 로컬 처리)"""
         # 이미 제목이 있으면 그것 사용
         if context.title:
             return context.title
 
-        req_titles = ", ".join([r.title for r in requirements[:5]])
+        # 소스 문서에서 제목 추출 시도
+        if context.source_documents:
+            for doc_name in context.source_documents:
+                # 파일명에서 확장자 제거하고 제목으로 사용
+                if doc_name and doc_name != "unknown":
+                    title = doc_name.rsplit('.', 1)[0]  # 확장자 제거
+                    # 불필요한 접미사 제거
+                    for suffix in [' - 수행계획서', ' 수행계획서', ' 계획서', ' 제안서']:
+                        title = title.replace(suffix, '')
+                    if title and len(title) > 3:
+                        return title
 
-        # AI에게 제목 추천 요청
-        title = await self._call_claude_text(
-            system_prompt="당신은 PRD 제목을 생성하는 전문가입니다. 간결하고 명확한 제목을 생성합니다.",
-            user_prompt=f"다음 요구사항들을 포괄하는 PRD 제목을 한 줄로 작성해주세요 (20자 이내):\n{req_titles}",
-            temperature=0.5,
-            section_name="title",
-        )
+        # 첫 번째 요구사항 제목에서 추출
+        if requirements:
+            first_title = requirements[0].title
+            # "슬라이드 X: " 같은 접두사 제거
+            if ':' in first_title:
+                first_title = first_title.split(':', 1)[1].strip()
+            if first_title and len(first_title) > 5:
+                return first_title[:50]
 
-        if title:
-            return title.strip().strip('"').strip("'")
         return f"PRD - {datetime.now().strftime('%Y년 %m월')}"
 
     def _collect_unresolved_items(

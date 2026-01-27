@@ -149,23 +149,16 @@ class Normalizer:
             for s in parsed_content.sections[:8]
         ]) if parsed_content.sections else ""
 
-        # AI에게 보낼 프롬프트(명령어) 구성
-        prompt = f"""문서에서 소프트웨어 요구사항을 추출하세요.
+        # AI에게 보낼 프롬프트(명령어) 구성 - 간결하게
+        prompt = f"""문서에서 요구사항 추출. JSON배열만 반환:
 
-문서:
-{content_text}
+문서 내용:
+{content_text[:4000]}
 
-{f"섹션: {sections_text}" if sections_text else ""}
+{f"섹션: {sections_text[:1000]}" if sections_text else ""}
 
-JSON 배열로 반환:
-[{{"title":"제목","description":"설명","type":"FR|NFR|CONSTRAINT","priority":"HIGH|MEDIUM|LOW","user_story":"As a X, I want Y, so that Z","acceptance_criteria":["조건1"],"confidence_score":0.8,"confidence_reason":"이유","assumptions":[],"missing_info":[],"original_text":"원문","section_name":"섹션"}}]
-
-- FR: 기능 요구사항
-- NFR: 비기능(성능/보안)
-- CONSTRAINT: 제약조건
-- confidence_score: 0.0~1.0 (명확할수록 높음)
-
-요구사항 없으면 []반환. JSON만 출력."""
+형식: [{{"title":"제목","description":"설명","type":"FR|NFR|CONSTRAINT","priority":"HIGH|MEDIUM|LOW","confidence_score":0.8}}]
+FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
 
         try:
             start = datetime.now()

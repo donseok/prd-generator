@@ -45,8 +45,8 @@ class ClaudeClient:
         컴퓨터의 성능(CPU 코어 수)에 맞춰서 동시에 처리할 수 있는 작업 수를 자동으로 조절합니다.
         (너무 많이 실행하면 컴퓨터가 느려지는 것을 방지합니다)
         """
-        self._max_retries = 3  # 최대 3번까지 재시도
-        self._retry_delay = 2  # 재시도 전 2초 대기
+        self._max_retries = 2  # 최대 2번까지 재시도 (빠른 실패)
+        self._retry_delay = 1  # 재시도 전 1초 대기
 
         # CPU 코어 수 확인 후 작업자(Worker) 수 설정
         cpu_count = os.cpu_count() or 4
@@ -213,14 +213,17 @@ class ClaudeClient:
 
         try:
             use_shell = sys.platform == "win32"
-            # --dangerously-skip-permissions: 권한 체크 스킵하여 속도 향상
-            # --setting-sources user: 프로젝트 설정(CLAUDE.md) 무시하여 응답 오염 방지
+            # 속도 최적화 옵션:
+            # --dangerously-skip-permissions: 권한 체크 스킵
+            # --setting-sources user: 프로젝트 설정(CLAUDE.md) 무시
+            # --no-session-persistence: 세션 저장 안함
             result = subprocess.run(
                 ["claude", "-p", prompt, "--output-format", "text",
-                 "--dangerously-skip-permissions", "--setting-sources", "user"],
+                 "--dangerously-skip-permissions", "--setting-sources", "user",
+                 "--no-session-persistence"],
                 capture_output=True,
                 text=True,
-                timeout=300,  # 5분 제한 시간
+                timeout=120,  # 2분 제한 (빠른 실패)
                 env=env,
                 shell=use_shell,
                 encoding='utf-8',
@@ -247,7 +250,8 @@ class ClaudeClient:
         env = self._get_env()
 
         cmd = ["claude", "-p", prompt, "--output-format", "text",
-               "--dangerously-skip-permissions", "--setting-sources", "user"]
+               "--dangerously-skip-permissions", "--setting-sources", "user",
+               "--no-session-persistence"]
         for file_path in file_paths:
             cmd.extend(["--file", file_path])
 
@@ -256,7 +260,7 @@ class ClaudeClient:
             cmd,
             capture_output=True,
             text=True,
-            timeout=300,
+            timeout=120,  # 2분 제한
             env=env,
             shell=use_shell,
             encoding='utf-8',
