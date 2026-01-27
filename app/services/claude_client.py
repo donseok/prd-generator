@@ -214,8 +214,10 @@ class ClaudeClient:
         try:
             use_shell = sys.platform == "win32"
             # --dangerously-skip-permissions: 권한 체크 스킵하여 속도 향상
+            # --setting-sources user: 프로젝트 설정(CLAUDE.md) 무시하여 응답 오염 방지
             result = subprocess.run(
-                ["claude", "-p", prompt, "--output-format", "text", "--dangerously-skip-permissions"],
+                ["claude", "-p", prompt, "--output-format", "text",
+                 "--dangerously-skip-permissions", "--setting-sources", "user"],
                 capture_output=True,
                 text=True,
                 timeout=300,  # 5분 제한 시간
@@ -244,7 +246,8 @@ class ClaudeClient:
         """파일 첨부와 함께 Claude CLI 실행"""
         env = self._get_env()
 
-        cmd = ["claude", "-p", prompt, "--output-format", "text"]
+        cmd = ["claude", "-p", prompt, "--output-format", "text",
+               "--dangerously-skip-permissions", "--setting-sources", "user"]
         for file_path in file_paths:
             cmd.extend(["--file", file_path])
 
