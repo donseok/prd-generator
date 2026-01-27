@@ -213,6 +213,9 @@ class ClaudeClient:
 
         try:
             use_shell = sys.platform == "win32"
+            # 임시 디렉토리에서 실행하여 프로젝트 컨텍스트 분리
+            temp_dir = tempfile.gettempdir()
+
             # 속도 최적화 옵션:
             # --dangerously-skip-permissions: 권한 체크 스킵
             # --setting-sources user: 프로젝트 설정(CLAUDE.md) 무시
@@ -227,6 +230,7 @@ class ClaudeClient:
                 env=env,
                 shell=use_shell,
                 encoding='utf-8',
+                cwd=temp_dir,  # 임시 디렉토리에서 실행
             )
 
             elapsed = (datetime.now() - start_time).total_seconds()
