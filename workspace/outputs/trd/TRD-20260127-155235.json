@@ -1,0 +1,463 @@
+{
+  "id": "TRD-20260127-155235",
+  "title": "부산 스마트 계량 시스템 구축",
+  "version": "1.0",
+  "status": "draft",
+  "based_on_prd": "PRD-20260127-154446",
+  "created_at": "2026-01-27T15:52:35+09:00",
+  "technology_stack": {
+    "frontend_web": [
+      {"category": "Framework", "technology": "React", "version": "18.x", "reason": "PRD 제약조건 명시, 컴포넌트 기반 SPA"},
+      {"category": "State Management", "technology": "Zustand", "version": "4.x", "reason": "경량 상태관리, Redux 대비 보일러플레이트 감소"},
+      {"category": "UI Library", "technology": "Ant Design", "version": "5.x", "reason": "엔터프라이즈급 데이터 테이블, 차트 내장"},
+      {"category": "Chart Library", "technology": "Apache ECharts", "version": "5.x", "reason": "실시간 데이터 시각화, 대시보드"},
+      {"category": "HTTP Client", "technology": "Axios", "version": "1.x", "reason": "REST API 통신, 인터셉터 인증"},
+      {"category": "Build Tool", "technology": "Vite", "version": "5.x", "reason": "빠른 HMR, 최적화 프로덕션 빌드"},
+      {"category": "Language", "technology": "TypeScript", "version": "5.x", "reason": "타입 안정성, 유지보수성"}
+    ],
+    "frontend_mobile": [
+      {"category": "Framework", "technology": "Flutter", "version": "3.x", "reason": "PRD 제약조건 명시, iOS/Android 크로스 플랫폼"},
+      {"category": "Language", "technology": "Dart", "version": "3.x", "reason": "Flutter 공식 언어, AOT 컴파일"},
+      {"category": "State Management", "technology": "Riverpod", "version": "2.x", "reason": "타입 안전한 상태관리"},
+      {"category": "Push Notification", "technology": "FCM", "version": "-", "reason": "Android/iOS 통합 Push"},
+      {"category": "Local Storage", "technology": "Hive", "version": "2.x", "reason": "경량 로컬 DB, 오프라인 캐싱"}
+    ],
+    "backend": [
+      {"category": "Language", "technology": "Java", "version": "17 LTS", "reason": "Spring Boot 3.x 지원, 장기 지원"},
+      {"category": "Framework", "technology": "Spring Boot", "version": "3.2.x", "reason": "PRD 제약조건 명시, 엔터프라이즈급 안정성"},
+      {"category": "Security", "technology": "Spring Security", "version": "6.x", "reason": "JWT 인증, RBAC 권한 관리"},
+      {"category": "ORM", "technology": "Spring Data JPA + QueryDSL", "version": "3.x / 5.x", "reason": "타입 안전 동적 쿼리"},
+      {"category": "API Docs", "technology": "SpringDoc OpenAPI", "version": "2.x", "reason": "Swagger UI 자동 생성"},
+      {"category": "WebSocket", "technology": "Spring WebSocket + STOMP", "version": "6.x", "reason": "실시간 데이터 전송"},
+      {"category": "Scheduling", "technology": "Spring Scheduler + Quartz", "version": "2.x", "reason": "배치 처리, 알림 발송"}
+    ],
+    "cs_program": [
+      {"category": "IDE", "technology": "Visual Studio 2022 Professional", "version": "17.x", "reason": "PRD 제약조건 명시"},
+      {"category": "Language", "technology": "C#", "version": "11", "reason": "Windows 기반, 시리얼 통신 지원"},
+      {"category": "Framework", "technology": ".NET WinForms / WPF", "version": "7+", "reason": "터치스크린 UI, 기존 PC 호환"},
+      {"category": "Serial Comm", "technology": "System.IO.Ports", "version": "-", "reason": "RS-232C 인디게이터 통신"}
+    ],
+    "database": [
+      {"category": "Primary DB", "technology": "PostgreSQL", "version": "16.x", "reason": "PRD 제약조건 명시, ACID, JSON 지원"},
+      {"category": "Cache", "technology": "Redis", "version": "7.x", "reason": "OTP 임시 저장, 세션 캐싱, 실시간 상태"},
+      {"category": "Message Queue", "technology": "Redis Streams", "version": "7.x", "reason": "계량 이벤트 비동기 처리"}
+    ],
+    "infrastructure": [
+      {"category": "Server OS", "technology": "Rocky Linux 9", "reason": "기업 온프레미스 표준, 안정성"},
+      {"category": "WEB/WAS", "technology": "Spring Boot Embedded Tomcat", "reason": "별도 WAS 불요"},
+      {"category": "Reverse Proxy", "technology": "Nginx 1.24.x", "reason": "SSL 종단, 로드밸런싱"},
+      {"category": "Container", "technology": "Docker + Docker Compose", "reason": "환경 일관성, 배포 간소화"},
+      {"category": "CI/CD", "technology": "Jenkins / GitLab CI", "reason": "사내 표준 CI/CD"},
+      {"category": "Monitoring", "technology": "Prometheus + Grafana", "reason": "메트릭 수집, 대시보드"},
+      {"category": "Log Management", "technology": "ELK Stack", "reason": "중앙 집중 로그 관리"},
+      {"category": "VCS", "technology": "Git (GitLab)", "reason": "소스코드 버전 관리"}
+    ]
+  },
+  "system_architecture": {
+    "overview": "온프레미스 기반 멀티 티어 아키텍처. 현장 계량대(CS)→Nginx→Spring Boot(이중화)→PostgreSQL/Redis 구조. 모바일/웹 클라이언트는 Nginx를 통해 API Server에 접근.",
+    "components": [
+      {"name": "계량대 CS 프로그램", "role": "H/W 장비 연동, 중량값 수신, LPR/모바일/수동 계량 처리", "technology": "C# .NET WinForms"},
+      {"name": "Nginx Reverse Proxy", "role": "SSL 종단, 로드밸런싱, 정적 리소스 서빙", "technology": "Nginx 1.24"},
+      {"name": "Spring Boot API Server", "role": "REST API, 비즈니스 로직, 인증/인가, WebSocket", "technology": "Spring Boot 3.2"},
+      {"name": "AI 차량인식 Engine", "role": "LPR 이미지에서 차량번호 추출·검증", "technology": "외부 솔루션 or 자체 개발 (미결정)"},
+      {"name": "PostgreSQL DB", "role": "핵심 데이터 영구 저장", "technology": "PostgreSQL 16"},
+      {"name": "Redis", "role": "OTP 임시 저장, 세션, 실시간 상태, 이벤트 MQ", "technology": "Redis 7"},
+      {"name": "React Web App", "role": "계량관리 웹 시스템", "technology": "React 18 + Ant Design"},
+      {"name": "Flutter Mobile App", "role": "계량관리 모바일 APP", "technology": "Flutter 3.x"},
+      {"name": "외부 서비스", "role": "Push 알림, 계량표 공유, 알림톡", "technology": "FCM, 카카오 API, SMS Gateway"}
+    ],
+    "communication": [
+      {"from": "LPR/센서 장비", "to": "계량대 CS", "protocol": "TCP/UDP", "description": "차량번호 인식 데이터, 센서 이벤트"},
+      {"from": "인디게이터", "to": "계량대 CS", "protocol": "RS-232C", "description": "안정화 중량값 실시간 수신"},
+      {"from": "계량대 CS", "to": "전광판/차단기", "protocol": "TCP/RS-485", "description": "OTP 표시, 차단기 개폐 제어"},
+      {"from": "계량대 CS", "to": "API Server", "protocol": "HTTPS REST", "description": "계량 실적 전송, 배차 조회"},
+      {"from": "React Web", "to": "API Server", "protocol": "HTTPS REST + WSS", "description": "CRUD + 실시간 계량 현황"},
+      {"from": "Flutter App", "to": "API Server", "protocol": "HTTPS REST", "description": "배차조회, 모바일 계량, OTP"},
+      {"from": "API Server", "to": "PostgreSQL", "protocol": "TCP 5432", "description": "데이터 읽기/쓰기"},
+      {"from": "API Server", "to": "Redis", "protocol": "TCP 6379", "description": "OTP, 세션, 캐시, 이벤트"},
+      {"from": "API Server", "to": "AI Engine", "protocol": "HTTPS REST", "description": "이미지→차량번호 인식"},
+      {"from": "API Server", "to": "외부 서비스", "protocol": "HTTPS REST", "description": "Push, 카카오, SMS 발송"}
+    ]
+  },
+  "database_design": {
+    "tables": [
+      {
+        "name": "tb_user",
+        "description": "사용자 (관리자, 담당자, 운전자)",
+        "columns": [
+          {"name": "user_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "company_id", "type": "BIGINT", "nullable": true, "fk": "tb_company"},
+          {"name": "user_name", "type": "VARCHAR(50)", "nullable": false},
+          {"name": "phone_number", "type": "VARCHAR(20)", "nullable": false},
+          {"name": "user_role", "type": "VARCHAR(20)", "nullable": false, "description": "ADMIN, MANAGER, DRIVER"},
+          {"name": "login_id", "type": "VARCHAR(50)", "nullable": false},
+          {"name": "password_hash", "type": "VARCHAR(255)", "nullable": false},
+          {"name": "is_active", "type": "BOOLEAN", "nullable": false, "default": true},
+          {"name": "created_at", "type": "TIMESTAMPTZ", "nullable": false},
+          {"name": "updated_at", "type": "TIMESTAMPTZ", "nullable": false}
+        ]
+      },
+      {
+        "name": "tb_company",
+        "description": "운송사/회사",
+        "columns": [
+          {"name": "company_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "company_name", "type": "VARCHAR(100)", "nullable": false},
+          {"name": "company_type", "type": "VARCHAR(20)", "nullable": false},
+          {"name": "contact_phone", "type": "VARCHAR(20)", "nullable": true},
+          {"name": "is_active", "type": "BOOLEAN", "nullable": false, "default": true},
+          {"name": "created_at", "type": "TIMESTAMPTZ", "nullable": false}
+        ]
+      },
+      {
+        "name": "tb_vehicle",
+        "description": "차량 (LPR 매칭용)",
+        "columns": [
+          {"name": "vehicle_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "plate_number", "type": "VARCHAR(20)", "nullable": false, "unique": true},
+          {"name": "company_id", "type": "BIGINT", "nullable": true, "fk": "tb_company"},
+          {"name": "vehicle_type", "type": "VARCHAR(20)", "nullable": false},
+          {"name": "max_load_weight", "type": "DECIMAL(10,2)", "nullable": true},
+          {"name": "is_active", "type": "BOOLEAN", "nullable": false, "default": true},
+          {"name": "created_at", "type": "TIMESTAMPTZ", "nullable": false}
+        ]
+      },
+      {
+        "name": "tb_dispatch",
+        "description": "배차",
+        "columns": [
+          {"name": "dispatch_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "vehicle_id", "type": "BIGINT", "nullable": false, "fk": "tb_vehicle"},
+          {"name": "company_id", "type": "BIGINT", "nullable": false, "fk": "tb_company"},
+          {"name": "item_type", "type": "VARCHAR(20)", "nullable": false, "description": "부산물, 폐기물, 부재료, 반출, 일반"},
+          {"name": "item_name", "type": "VARCHAR(100)", "nullable": false},
+          {"name": "dispatch_date", "type": "DATE", "nullable": false},
+          {"name": "dispatch_status", "type": "VARCHAR(20)", "nullable": false, "default": "REGISTERED"},
+          {"name": "origin_location", "type": "VARCHAR(100)", "nullable": true},
+          {"name": "destination", "type": "VARCHAR(100)", "nullable": true},
+          {"name": "remarks", "type": "TEXT", "nullable": true},
+          {"name": "created_by", "type": "BIGINT", "nullable": false, "fk": "tb_user"},
+          {"name": "created_at", "type": "TIMESTAMPTZ", "nullable": false},
+          {"name": "updated_at", "type": "TIMESTAMPTZ", "nullable": false}
+        ]
+      },
+      {
+        "name": "tb_weighing",
+        "description": "계량실적",
+        "columns": [
+          {"name": "weighing_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "dispatch_id", "type": "BIGINT", "nullable": false, "fk": "tb_dispatch"},
+          {"name": "vehicle_id", "type": "BIGINT", "nullable": false, "fk": "tb_vehicle"},
+          {"name": "scale_id", "type": "BIGINT", "nullable": false, "fk": "tb_scale"},
+          {"name": "weighing_type", "type": "VARCHAR(20)", "nullable": false, "description": "FIRST, SECOND, THIRD"},
+          {"name": "weighing_step", "type": "VARCHAR(20)", "nullable": false, "description": "GROSS, TARE, COMPLETE"},
+          {"name": "gross_weight", "type": "DECIMAL(10,2)", "nullable": true},
+          {"name": "tare_weight", "type": "DECIMAL(10,2)", "nullable": true},
+          {"name": "net_weight", "type": "DECIMAL(10,2)", "nullable": true},
+          {"name": "weighing_mode", "type": "VARCHAR(20)", "nullable": false, "description": "LPR_AUTO, MOBILE_OTP, MANUAL, RE_WEIGH"},
+          {"name": "lpr_plate_number", "type": "VARCHAR(20)", "nullable": true},
+          {"name": "ai_confidence", "type": "DECIMAL(5,4)", "nullable": true},
+          {"name": "lpr_image_path", "type": "VARCHAR(500)", "nullable": true},
+          {"name": "status", "type": "VARCHAR(20)", "nullable": false, "default": "IN_PROGRESS"},
+          {"name": "weighed_at", "type": "TIMESTAMPTZ", "nullable": true},
+          {"name": "created_at", "type": "TIMESTAMPTZ", "nullable": false},
+          {"name": "updated_at", "type": "TIMESTAMPTZ", "nullable": false}
+        ]
+      },
+      {
+        "name": "tb_weighing_slip",
+        "description": "전자 계량표",
+        "columns": [
+          {"name": "slip_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "weighing_id", "type": "BIGINT", "nullable": false, "fk": "tb_weighing"},
+          {"name": "slip_number", "type": "VARCHAR(30)", "nullable": false, "unique": true},
+          {"name": "slip_data", "type": "JSONB", "nullable": false},
+          {"name": "shared_via", "type": "VARCHAR(20)", "nullable": true},
+          {"name": "shared_at", "type": "TIMESTAMPTZ", "nullable": true},
+          {"name": "created_at", "type": "TIMESTAMPTZ", "nullable": false}
+        ]
+      },
+      {
+        "name": "tb_otp_session",
+        "description": "OTP 세션",
+        "columns": [
+          {"name": "otp_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "user_id", "type": "BIGINT", "nullable": true, "fk": "tb_user"},
+          {"name": "otp_code", "type": "VARCHAR(6)", "nullable": false},
+          {"name": "vehicle_id", "type": "BIGINT", "nullable": true, "fk": "tb_vehicle"},
+          {"name": "phone_number", "type": "VARCHAR(20)", "nullable": false},
+          {"name": "expires_at", "type": "TIMESTAMPTZ", "nullable": false},
+          {"name": "is_verified", "type": "BOOLEAN", "nullable": false, "default": false},
+          {"name": "created_at", "type": "TIMESTAMPTZ", "nullable": false}
+        ]
+      },
+      {
+        "name": "tb_scale",
+        "description": "계량대",
+        "columns": [
+          {"name": "scale_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "scale_name", "type": "VARCHAR(50)", "nullable": false},
+          {"name": "location", "type": "VARCHAR(100)", "nullable": false},
+          {"name": "scale_type", "type": "VARCHAR(20)", "nullable": false},
+          {"name": "max_capacity", "type": "DECIMAL(10,2)", "nullable": true},
+          {"name": "is_active", "type": "BOOLEAN", "nullable": false, "default": true},
+          {"name": "last_calibrated_at", "type": "TIMESTAMPTZ", "nullable": true}
+        ]
+      },
+      {
+        "name": "tb_gate_pass",
+        "description": "출문관리",
+        "columns": [
+          {"name": "gate_pass_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "weighing_id", "type": "BIGINT", "nullable": false, "fk": "tb_weighing"},
+          {"name": "dispatch_id", "type": "BIGINT", "nullable": false, "fk": "tb_dispatch"},
+          {"name": "pass_status", "type": "VARCHAR(20)", "nullable": false},
+          {"name": "passed_at", "type": "TIMESTAMPTZ", "nullable": true},
+          {"name": "created_at", "type": "TIMESTAMPTZ", "nullable": false}
+        ]
+      },
+      {
+        "name": "tb_master_code",
+        "description": "공통코드 마스터",
+        "columns": [
+          {"name": "code_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "code_group", "type": "VARCHAR(30)", "nullable": false},
+          {"name": "code_value", "type": "VARCHAR(30)", "nullable": false},
+          {"name": "code_name", "type": "VARCHAR(100)", "nullable": false},
+          {"name": "sort_order", "type": "INTEGER", "nullable": false, "default": 0},
+          {"name": "is_active", "type": "BOOLEAN", "nullable": false, "default": true},
+          {"name": "parent_code_id", "type": "BIGINT", "nullable": true}
+        ]
+      },
+      {
+        "name": "tb_notification",
+        "description": "알림",
+        "columns": [
+          {"name": "noti_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "user_id", "type": "BIGINT", "nullable": false, "fk": "tb_user"},
+          {"name": "noti_type", "type": "VARCHAR(20)", "nullable": false},
+          {"name": "title", "type": "VARCHAR(200)", "nullable": false},
+          {"name": "message", "type": "TEXT", "nullable": false},
+          {"name": "is_read", "type": "BOOLEAN", "nullable": false, "default": false},
+          {"name": "sent_at", "type": "TIMESTAMPTZ", "nullable": false}
+        ]
+      },
+      {
+        "name": "tb_weighing_log",
+        "description": "계량 로그",
+        "columns": [
+          {"name": "log_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "weighing_id", "type": "BIGINT", "nullable": false, "fk": "tb_weighing"},
+          {"name": "log_type", "type": "VARCHAR(20)", "nullable": false},
+          {"name": "log_message", "type": "TEXT", "nullable": false},
+          {"name": "created_at", "type": "TIMESTAMPTZ", "nullable": false}
+        ]
+      },
+      {
+        "name": "tb_inquiry_call",
+        "description": "문의/통화 이력",
+        "columns": [
+          {"name": "call_id", "type": "BIGSERIAL", "nullable": false, "pk": true},
+          {"name": "user_id", "type": "BIGINT", "nullable": false, "fk": "tb_user"},
+          {"name": "inquiry_type", "type": "VARCHAR(30)", "nullable": false},
+          {"name": "target_dept", "type": "VARCHAR(50)", "nullable": false},
+          {"name": "call_status", "type": "VARCHAR(20)", "nullable": false},
+          {"name": "created_at", "type": "TIMESTAMPTZ", "nullable": false}
+        ]
+      }
+    ],
+    "indexes": [
+      {"table": "tb_vehicle", "name": "idx_vehicle_plate", "columns": ["plate_number"], "type": "B-Tree UNIQUE", "purpose": "LPR 차량번호 매칭"},
+      {"table": "tb_dispatch", "name": "idx_dispatch_date_status", "columns": ["dispatch_date", "dispatch_status"], "type": "B-Tree", "purpose": "일별 배차 현황"},
+      {"table": "tb_dispatch", "name": "idx_dispatch_vehicle", "columns": ["vehicle_id"], "type": "B-Tree", "purpose": "차량별 배차 이력"},
+      {"table": "tb_dispatch", "name": "idx_dispatch_company", "columns": ["company_id"], "type": "B-Tree", "purpose": "운송사별 배차 조회"},
+      {"table": "tb_weighing", "name": "idx_weighing_dispatch", "columns": ["dispatch_id"], "type": "B-Tree", "purpose": "배차별 계량 실적"},
+      {"table": "tb_weighing", "name": "idx_weighing_vehicle", "columns": ["vehicle_id"], "type": "B-Tree", "purpose": "차량별 계량 이력"},
+      {"table": "tb_weighing", "name": "idx_weighing_date", "columns": ["weighed_at"], "type": "B-Tree", "purpose": "기간별 실적 조회"},
+      {"table": "tb_weighing", "name": "idx_weighing_status", "columns": ["status"], "type": "B-Tree", "purpose": "상태별 필터링"},
+      {"table": "tb_weighing", "name": "idx_weighing_mode", "columns": ["weighing_mode"], "type": "B-Tree", "purpose": "계량 방식별 통계"},
+      {"table": "tb_weighing_slip", "name": "idx_slip_number", "columns": ["slip_number"], "type": "B-Tree UNIQUE", "purpose": "계량표 번호 검색"},
+      {"table": "tb_otp_session", "name": "idx_otp_code_expires", "columns": ["otp_code", "expires_at"], "type": "B-Tree", "purpose": "OTP 코드 검증"},
+      {"table": "tb_otp_session", "name": "idx_otp_phone", "columns": ["phone_number"], "type": "B-Tree", "purpose": "전화번호 OTP 조회"},
+      {"table": "tb_user", "name": "idx_user_login", "columns": ["login_id"], "type": "B-Tree UNIQUE", "purpose": "로그인 ID 조회"},
+      {"table": "tb_user", "name": "idx_user_phone", "columns": ["phone_number"], "type": "B-Tree", "purpose": "전화번호 사용자 조회"},
+      {"table": "tb_notification", "name": "idx_noti_user_read", "columns": ["user_id", "is_read"], "type": "B-Tree", "purpose": "미읽은 알림 조회"}
+    ]
+  },
+  "api_specification": {
+    "base_url": "/api/v1",
+    "authentication": "Bearer Token (JWT) - Access Token 30min + Refresh Token 7d",
+    "content_type": "application/json",
+    "endpoints": {
+      "auth": [
+        {"method": "POST", "path": "/auth/login", "description": "로그인", "auth": false},
+        {"method": "POST", "path": "/auth/login/otp", "description": "OTP 로그인", "auth": false},
+        {"method": "POST", "path": "/auth/refresh", "description": "토큰 갱신", "auth": "refresh_token"},
+        {"method": "POST", "path": "/auth/logout", "description": "로그아웃", "auth": true}
+      ],
+      "dispatches": [
+        {"method": "GET", "path": "/dispatches", "description": "배차 목록 조회", "auth": true},
+        {"method": "POST", "path": "/dispatches", "description": "배차 등록", "auth": true, "roles": ["ADMIN", "MANAGER"]},
+        {"method": "GET", "path": "/dispatches/{id}", "description": "배차 상세", "auth": true},
+        {"method": "PUT", "path": "/dispatches/{id}", "description": "배차 수정", "auth": true, "roles": ["ADMIN", "MANAGER"]},
+        {"method": "DELETE", "path": "/dispatches/{id}", "description": "배차 삭제", "auth": true, "roles": ["ADMIN"]},
+        {"method": "GET", "path": "/dispatches/my", "description": "내 배차 목록", "auth": true, "roles": ["DRIVER"]}
+      ],
+      "weighings": [
+        {"method": "POST", "path": "/weighings", "description": "계량 시작", "auth": true},
+        {"method": "PUT", "path": "/weighings/{id}/complete", "description": "계량 완료", "auth": true},
+        {"method": "PUT", "path": "/weighings/{id}/re-weigh", "description": "재계량", "auth": true},
+        {"method": "GET", "path": "/weighings", "description": "계량 실적 조회", "auth": true},
+        {"method": "GET", "path": "/weighings/{id}", "description": "계량 상세", "auth": true},
+        {"method": "GET", "path": "/weighings/realtime", "description": "실시간 현황 (WebSocket)", "auth": true},
+        {"method": "GET", "path": "/weighings/statistics", "description": "계량 통계", "auth": true}
+      ],
+      "otp": [
+        {"method": "POST", "path": "/otp/generate", "description": "OTP 생성", "auth": "internal"},
+        {"method": "POST", "path": "/otp/verify", "description": "OTP 검증", "auth": false}
+      ],
+      "slips": [
+        {"method": "GET", "path": "/slips/{weighing_id}", "description": "전자 계량표 조회", "auth": true},
+        {"method": "POST", "path": "/slips/{slip_id}/share", "description": "계량표 공유", "auth": true},
+        {"method": "GET", "path": "/slips/history", "description": "계량표 이력", "auth": true}
+      ],
+      "notifications": [
+        {"method": "GET", "path": "/notifications", "description": "알림 목록", "auth": true},
+        {"method": "PUT", "path": "/notifications/{id}/read", "description": "알림 읽음", "auth": true},
+        {"method": "POST", "path": "/notifications/push/register", "description": "FCM 토큰 등록", "auth": true}
+      ],
+      "master": [
+        {"method": "GET", "path": "/master/companies", "description": "운송사 목록", "auth": true},
+        {"method": "GET", "path": "/master/vehicles", "description": "차량 목록", "auth": true},
+        {"method": "GET", "path": "/master/scales", "description": "계량대 목록", "auth": true},
+        {"method": "GET", "path": "/master/codes/{group}", "description": "공통 코드", "auth": true},
+        {"method": "POST", "path": "/master/companies", "description": "운송사 등록", "auth": true, "roles": ["ADMIN"]},
+        {"method": "POST", "path": "/master/vehicles", "description": "차량 등록", "auth": true, "roles": ["ADMIN"]}
+      ],
+      "gate_passes": [
+        {"method": "GET", "path": "/gate-passes", "description": "출문 목록", "auth": true},
+        {"method": "POST", "path": "/gate-passes", "description": "출문 처리", "auth": true, "roles": ["MANAGER"]},
+        {"method": "PUT", "path": "/gate-passes/{id}", "description": "출문 상태 변경", "auth": true, "roles": ["MANAGER"]}
+      ],
+      "inquiries": [
+        {"method": "GET", "path": "/inquiries/contacts", "description": "문의 연락처 목록", "auth": true},
+        {"method": "POST", "path": "/inquiries/call-log", "description": "통화 이력 기록", "auth": true}
+      ]
+    }
+  },
+  "security_requirements": {
+    "authentication": {
+      "method": "JWT (Access Token 30min + Refresh Token 7d)",
+      "rbac_roles": ["ADMIN", "MANAGER", "DRIVER"],
+      "session_management": "Redis 기반 Refresh Token, 동시 세션 제한",
+      "otp": "TOTP 6자리, 유효시간 5분, Redis TTL",
+      "mobile_auth": "전화번호 + 인증번호 안전 로그인"
+    },
+    "data_security": {
+      "transport": "TLS 1.3 (Nginx SSL 종단)",
+      "password": "bcrypt (cost factor 12)",
+      "pii_protection": "전화번호/차량번호 마스킹, 민감 컬럼 AES-256",
+      "secret_management": "Spring Vault 또는 환경변수"
+    },
+    "security_policies": [
+      "OWASP Top 10 대응",
+      "SQL Injection 방지 (JPA Parameterized Query)",
+      "XSS 방지 (React 자동 이스케이프 + CSP)",
+      "CSRF 방지 (JWT Stateless, SameSite Cookie)",
+      "Rate Limiting (Nginx limit_req)",
+      "CORS 화이트리스트",
+      "입력값 검증 (Bean Validation)",
+      "로그인/계량/배차 변경 감사 로그"
+    ],
+    "network_security": {
+      "firewall": "필요 포트만 허용 (5432, 6379, 8080, 443)",
+      "vpn": "계량대 CS ↔ 서버 간 사내 VPN",
+      "db_access": "애플리케이션 서버에서만 접근",
+      "outbound": "화이트리스트 (카카오, FCM)"
+    }
+  },
+  "performance_requirements": {
+    "response_time": [
+      {"metric": "LPR 인식→자동 계량 E2E", "target": "< 3초"},
+      {"metric": "API 응답 p50", "target": "< 200ms"},
+      {"metric": "API 응답 p95", "target": "< 500ms"},
+      {"metric": "API 응답 p99", "target": "< 1,000ms"},
+      {"metric": "웹 페이지 FCP", "target": "< 2초"},
+      {"metric": "웹 페이지 LCP", "target": "< 3초"},
+      {"metric": "모바일 화면 전환", "target": "< 1초"},
+      {"metric": "WebSocket 데이터 전달", "target": "< 500ms"}
+    ],
+    "throughput": [
+      {"metric": "동시 웹 접속자", "target": "50명 이상"},
+      {"metric": "동시 모바일 접속자", "target": "200명 이상"},
+      {"metric": "API TPS (평상시)", "target": "100 TPS"},
+      {"metric": "API TPS (피크)", "target": "300 TPS"},
+      {"metric": "일일 계량 처리 건수", "target": "500건 이상"}
+    ],
+    "optimization_strategies": [
+      "Redis 캐싱 (기준정보, 배차, 차량 / TTL 5분)",
+      "HikariCP Connection Pool (min:10, max:30)",
+      "QueryDSL 동적 쿼리 + 인덱스 활용",
+      "Nginx 정적 파일 캐싱 + Gzip 압축",
+      "React 코드 스플리팅 (Lazy Loading)",
+      "LPR 이미지 리사이즈 최적화"
+    ]
+  },
+  "infrastructure_requirements": {
+    "servers": [
+      {"env": "Development", "count": 1, "spec": "4 vCPU, 16GB RAM, 200GB SSD"},
+      {"env": "Staging", "count": 2, "spec": "4 vCPU, 16GB RAM, 200GB SSD"},
+      {"env": "Production - WAS", "count": 2, "spec": "8 vCPU, 32GB RAM, 100GB SSD", "ha": "Active-Active"},
+      {"env": "Production - DB", "count": 2, "spec": "8 vCPU, 32GB RAM, 500GB SSD", "ha": "Primary + Standby"},
+      {"env": "Production - Redis", "count": 1, "spec": "4 vCPU, 16GB RAM, 50GB SSD"},
+      {"env": "Production - Nginx", "count": 1, "spec": "2 vCPU, 4GB RAM, 50GB SSD"},
+      {"env": "Monitoring", "count": 1, "spec": "4 vCPU, 8GB RAM, 200GB SSD"}
+    ],
+    "deployment": {
+      "strategy": "Rolling Update (Spring Boot 2대 순차)",
+      "rollback": "이전 Docker 이미지 태그로 즉시 롤백 (< 5분)",
+      "process": ["MR → 코드 리뷰 → Merge", "Jenkins 빌드 → Docker 이미지 → Registry", "Staging 자동 배포 → 스모크 테스트", "Production 승인 → Rolling Update", "헬스체크 → 완료"]
+    },
+    "backup": [
+      {"target": "PostgreSQL", "method": "pg_dump 전체 백업", "frequency": "일 1회 (야간)", "retention": "30일"},
+      {"target": "PostgreSQL", "method": "WAL 아카이브", "frequency": "실시간", "retention": "7일"},
+      {"target": "Redis", "method": "RDB Snapshot", "frequency": "6시간", "retention": "3일"},
+      {"target": "LPR 이미지", "method": "NAS 동기화", "frequency": "일 1회", "retention": "90일"},
+      {"target": "애플리케이션 로그", "method": "ELK 수집", "frequency": "실시간", "retention": "90일"}
+    ],
+    "monitoring": [
+      {"target": "Application", "tool": "Actuator + Prometheus", "alert": "p95 > 1초, 에러율 > 1%"},
+      {"target": "Database", "tool": "pg_stat + Exporter", "alert": "Connection > 80%, 슬로우쿼리 > 3초"},
+      {"target": "Redis", "tool": "Redis Exporter", "alert": "Memory > 80%"},
+      {"target": "Infrastructure", "tool": "Node Exporter", "alert": "CPU > 80%, Memory > 85%, Disk > 90%"},
+      {"target": "LPR 장비", "tool": "Custom Health Check", "alert": "연결 끊김, 인식률 < 90%"},
+      {"target": "Log", "tool": "ELK + Kibana", "alert": "ERROR > 10건/분"},
+      {"target": "Nginx", "tool": "Nginx Exporter", "alert": "5xx > 0.5%"}
+    ],
+    "disaster_recovery": [
+      {"scenario": "WAS 서버 장애", "response": "Nginx 자동 failover", "rto": "< 30초"},
+      {"scenario": "DB Primary 장애", "response": "Standby 수동 승격", "rto": "< 30분"},
+      {"scenario": "Redis 장애", "response": "DB 직접 조회 Fallback", "rto": "< 10분"},
+      {"scenario": "LPR 장비 장애", "response": "수동 계량 모드 전환", "rto": "즉시"},
+      {"scenario": "네트워크 장애", "response": "CS 로컬 캐싱 후 동기화", "rto": "< 1시간"},
+      {"scenario": "전체 시스템 장애", "response": "수동 운영 전환", "rto": "즉시"}
+    ]
+  },
+  "technical_risks": [
+    {"id": "TR-001", "risk": "LPR 차량번호 인식률 미달 (야간, 우천, 오염)", "impact": "HIGH", "probability": "MEDIUM", "mitigation": "AI 검증 이중화, OTP 대체, 보조 조명 설치"},
+    {"id": "TR-002", "risk": "AI 인식 엔진 성능 지연 (3초 목표 미달)", "impact": "HIGH", "probability": "LOW", "mitigation": "벤치마크 수행, 로컬 GPU 서버, 경량 모델"},
+    {"id": "TR-003", "risk": "RS-232C 인디게이터 통신 불안정", "impact": "MEDIUM", "probability": "MEDIUM", "mitigation": "재시도 로직, 타임아웃, 예비 컨버터"},
+    {"id": "TR-004", "risk": "기존 시스템 데이터 마이그레이션 실패", "impact": "HIGH", "probability": "MEDIUM", "mitigation": "단계별 마이그레이션, 롤백 계획, 병행 운영"},
+    {"id": "TR-005", "risk": "카카오 API/SMS 외부 서비스 장애", "impact": "LOW", "probability": "MEDIUM", "mitigation": "멀티 채널, 재시도 큐, 서킷브레이커"},
+    {"id": "TR-006", "risk": "동시 다수 차량 진입 시 병목", "impact": "MEDIUM", "probability": "LOW", "mitigation": "비동기 이벤트, 계량 큐, 차단기 제어"},
+    {"id": "TR-007", "risk": "Push 알림 지연/미수신", "impact": "LOW", "probability": "MEDIUM", "mitigation": "FCM 고신뢰성, 알림톡 보조, 폴링 fallback"},
+    {"id": "TR-008", "risk": "Flutter 크로스 플랫폼 호환성 이슈", "impact": "MEDIUM", "probability": "LOW", "mitigation": "네이티브 테스트, CI 자동 빌드, 베타 테스트"},
+    {"id": "TR-009", "risk": "CS↔서버 네트워크 끊김", "impact": "HIGH", "probability": "LOW", "mitigation": "로컬 캐싱, 자동 동기화, 네트워크 이중화"},
+    {"id": "TR-010", "risk": "보안 취약점 (OTP 탈취, 인증 우회)", "impact": "HIGH", "probability": "LOW", "mitigation": "OTP TTL 5분, IP 접근 제어, 감사 로그, 침투 테스트"}
+  ],
+  "source_documents": [
+    "workspace/outputs/prd/PRD-20260127-154446.md",
+    "workspace/outputs/prd/PRD-20260127-154446.json",
+    "workspace/inputs/projects/부산 스마트 계량 시스템 구축 - 수행계획서.pptx"
+  ]
+}

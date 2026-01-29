@@ -1,0 +1,459 @@
+{
+  "id": "PROP-20260127-160954",
+  "title": "부산 스마트 계량 시스템 구축 제안서",
+  "client_name": "동국씨엠 부산공장",
+  "proposer": "동국시스템즈 DMES팀",
+  "created_at": "2026-01-27",
+  "version": "1.0",
+  "based_on": {
+    "prd": "PRD-20260127-154446",
+    "trd": "TRD-20260127-155235",
+    "wbs": "WBS-20260127-160043"
+  },
+  "executive_summary": {
+    "core_message": "LPR+AI 기반 차량번호 자동인식, 모바일 APP, 전자 계량표를 결합한 스마트 계량 시스템으로 RFID 수동 운영의 안전 위험·비효율·업무 과중 문제를 근본적으로 해결",
+    "key_metrics": {
+      "auto_weighing_ratio": "90% 이상",
+      "paper_slip_usage": "0% (Paperless)",
+      "processing_time_reduction": "30% 이상",
+      "error_rate_reduction": "50% 이상",
+      "plate_recognition_rate": "95% 이상"
+    },
+    "investment_overview": {
+      "project_period": "2026.04 ~ 2026.11 (8개월, 32주)",
+      "total_effort": "498 MD (24.9 M/M)",
+      "total_effort_with_buffer": "598 MD (29.9 M/M)",
+      "team_size": "9명 (전담 6 + 부분 투입 3)",
+      "methodology": "Hybrid (Waterfall 기반 + Agile 스프린트)",
+      "buffer_ratio": "20%"
+    }
+  },
+  "current_challenges": [
+    {
+      "id": "CH-001",
+      "title": "안전 위험",
+      "description": "종이 계량표 수취 과정에서 차량 근처 안전사고 위험"
+    },
+    {
+      "id": "CH-002",
+      "title": "운영 비효율",
+      "description": "다중 배차 시 복수 RFID 카드 사용, 카드 관리 행정비용"
+    },
+    {
+      "id": "CH-003",
+      "title": "업무 과중",
+      "description": "특정 부서(물류관제실) 전화 문의 집중"
+    },
+    {
+      "id": "CH-004",
+      "title": "정확도 한계",
+      "description": "복잡한 1차/2차/3차 계량 처리, 재계량 불가 구조"
+    },
+    {
+      "id": "CH-005",
+      "title": "시스템 노후화",
+      "description": "배차/계량 관리 시스템 분산 운영, UI/UX 노후"
+    }
+  ],
+  "project_goals": [
+    {
+      "id": "G-001",
+      "title": "무인 계량 자동화",
+      "description": "LPR + AI 기반 차량번호 자동인식으로 무인 자동 계량 실현"
+    },
+    {
+      "id": "G-002",
+      "title": "Paperless 운영",
+      "description": "모바일 APP 기반 전자 계량표 도입으로 종이 계량표 완전 대체"
+    },
+    {
+      "id": "G-003",
+      "title": "시스템 통합",
+      "description": "기존 배차/계량관리 시스템 통합 및 UI/UX 현대화"
+    },
+    {
+      "id": "G-004",
+      "title": "프로세스 단순화",
+      "description": "계량 프로세스 간소화로 에러율 감소 및 처리 속도 향상"
+    },
+    {
+      "id": "G-005",
+      "title": "계량 정확도 향상",
+      "description": "재계량 기능 개발로 오류 정정 기회 확보"
+    }
+  ],
+  "kpi": [
+    {
+      "name": "무인 자동 계량 비율",
+      "current": "0%",
+      "target": "90% 이상",
+      "measurement": "계량 모드별 실적 통계 (LPR_AUTO 비율)"
+    },
+    {
+      "name": "종이 계량표 사용률",
+      "current": "100%",
+      "target": "0%",
+      "measurement": "전자 계량표 발행율"
+    },
+    {
+      "name": "계량 처리 시간",
+      "current": "기준값 측정 필요",
+      "target": "30% 단축",
+      "measurement": "계량 시작~완료 시간 비교"
+    },
+    {
+      "name": "계량 에러율",
+      "current": "기준값 측정 필요",
+      "target": "50% 감소",
+      "measurement": "재계량·오류 건수 대비"
+    },
+    {
+      "name": "차량번호 인식률",
+      "current": "-",
+      "target": "95% 이상",
+      "measurement": "LPR+AI 인식 성공률 통계"
+    },
+    {
+      "name": "사용자 만족도",
+      "current": "측정 필요",
+      "target": "80% 이상",
+      "measurement": "차량기사/운송사/담당자 설문"
+    }
+  ],
+  "solution": {
+    "modules": [
+      {
+        "id": "MOD-001",
+        "name": "LPR + AI 차량번호 자동인식",
+        "features": [
+          "LPR 장치 1차 인식 + AI 시스템 2차 검증",
+          "LiDAR 센서 차량 감지 → LPR 촬영 트리거",
+          "차량번호 인식률 95% 이상 목표",
+          "배차 정보 자동 매칭 → 자동 계량"
+        ]
+      },
+      {
+        "id": "MOD-002",
+        "name": "계량관리 모바일 APP (Flutter)",
+        "features": [
+          "담당자/운전자 구분 로그인",
+          "배차지시 현황 조회 및 다중 배차 선택 계량",
+          "모바일 OTP 보안 계량",
+          "전자 계량표 조회, 카카오톡/SMS 공유",
+          "배차/계량 실적 조회 (월별/일별)",
+          "Push 알림 및 알림톡"
+        ]
+      },
+      {
+        "id": "MOD-003",
+        "name": "계량 웹 관리 시스템 (React)",
+        "features": [
+          "통합 배차 등록 관리 (부산물/폐기물/부재료/반출/일반)",
+          "실시간 계량 현황 대시보드 (WebSocket)",
+          "기준정보 관리 (운송사, 차량, 공통코드)",
+          "출문관리 기능",
+          "반응형 디자인, 고해상도/가변SIZE, 차트"
+        ]
+      },
+      {
+        "id": "MOD-004",
+        "name": "계량대 CS 프로그램 (C# .NET)",
+        "features": [
+          "인디게이터 연동 (RS-232C): 안정화 중량값 수신/저장",
+          "LPR 자동계량, 모바일 OTP 계량, 수동 계량 3모드",
+          "초기화/재계량 기능",
+          "전광판, 자동차단기, 센서 등 H/W 제어",
+          "네트워크 장애 시 로컬 캐싱 후 자동 동기화"
+        ]
+      },
+      {
+        "id": "MOD-005",
+        "name": "전자 계량표 및 유선통화 이원화",
+        "features": [
+          "종이 계량표 100% 대체 (Paperless)",
+          "카카오톡, SMS 공유",
+          "유선통화 이원화 (문의유형별 연결)"
+        ]
+      }
+    ]
+  },
+  "technology_stack": {
+    "backend": {
+      "language": "Java 17",
+      "framework": "Spring Boot 3.2",
+      "security": "Spring Security 6 (JWT + RBAC)",
+      "orm": "Spring Data JPA + QueryDSL"
+    },
+    "frontend_web": {
+      "framework": "React 18",
+      "language": "TypeScript 5",
+      "ui_library": "Ant Design 5",
+      "build_tool": "Vite 5"
+    },
+    "mobile": {
+      "framework": "Flutter 3.x",
+      "language": "Dart 3",
+      "state_management": "Riverpod 2",
+      "push": "Firebase Cloud Messaging"
+    },
+    "cs_program": {
+      "language": "C# 11 (.NET 7+)",
+      "framework": ".NET WinForms/WPF",
+      "ide": "Visual Studio 2022 Professional"
+    },
+    "database": {
+      "primary": "PostgreSQL 16",
+      "cache": "Redis 7"
+    },
+    "infrastructure": {
+      "web_server": "Nginx 1.24",
+      "container": "Docker + Docker Compose",
+      "ci_cd": "Jenkins / GitLab CI",
+      "monitoring": "Prometheus + Grafana + ELK Stack",
+      "server_os": "CentOS / Rocky Linux 9"
+    }
+  },
+  "architecture": {
+    "deployment": "On-premise",
+    "api_servers": "2대 Active-Active (Spring Boot)",
+    "database": "PostgreSQL Primary + Standby",
+    "reverse_proxy": "Nginx (SSL 종단, 로드밸런싱)",
+    "security": {
+      "authentication": "JWT (Access 30분 + Refresh 7일)",
+      "authorization": "RBAC (ADMIN/MANAGER/DRIVER)",
+      "otp": "6자리, TTL 5분, Redis 관리",
+      "encryption": "TLS 1.3, bcrypt, AES-256"
+    },
+    "performance_targets": {
+      "lpr_e2e": "3초 이내",
+      "api_p95": "500ms 이내",
+      "web_lcp": "3초 이내",
+      "availability": "99% 이상",
+      "concurrent_mobile": "200명 이상",
+      "daily_weighings": "500건 이상"
+    }
+  },
+  "scope": {
+    "in_scope": [
+      "LPR 차량번호 인식 시스템 (LPR + AI + 모바일 OTP)",
+      "스마트 계량 웹 관리 시스템 (배차등록, 기준정보, 계량관리, 출문관리)",
+      "계량대 CS 프로그램 (인디게이터/LPR 연동)",
+      "계량관리 모바일 APP (로그인, 배차조회, 계량진행, 전자계량표, OTP)",
+      "모바일 API (사용자/배차 정보 연동, 모바일 계량 처리)",
+      "H/W 인프라 구축 (LPR, 전광판, 자동차단기, 센서, 인터폰)",
+      "유선통화 이원화 (문의유형별 통화 기능)",
+      "사용자 교육 및 안정화 모니터링"
+    ],
+    "out_of_scope": [
+      "포항공장 계량 시스템 (이미 구축 완료)",
+      "ERP 또는 MES 시스템 전면 교체",
+      "타 공장 확대 적용"
+    ]
+  },
+  "timeline": {
+    "total_duration": "32주 (8개월: 2026.04 ~ 2026.11)",
+    "phases": [
+      {
+        "id": "Phase-1",
+        "name": "분석 및 설계",
+        "period": "W1~W9 (9주)",
+        "dates": "2026.04 ~ 2026.05",
+        "activities": "현행 분석, 프로세스 설계, H/W 설계, DB/API 설계, UI/UX 설계",
+        "deliverables": "분석서, 설계서, ERD, API 명세, 와이어프레임"
+      },
+      {
+        "id": "Phase-2",
+        "name": "인프라 구축",
+        "period": "W5~W15 (11주)",
+        "dates": "2026.05 ~ 2026.07",
+        "activities": "H/W 발주/설치, 서버 구축, 네트워크, CI/CD, 모니터링",
+        "deliverables": "설치 보고서, 서버 환경, 연동 테스트"
+      },
+      {
+        "id": "Phase-3",
+        "name": "프로그램 개발",
+        "period": "W9~W24 (15주)",
+        "dates": "2026.06 ~ 2026.09",
+        "activities": "백엔드 API, React 웹, Flutter APP, CS 프로그램, AI/LPR 연동",
+        "deliverables": "소스 코드, 단위 테스트"
+      },
+      {
+        "id": "Phase-4",
+        "name": "테스트",
+        "period": "W20~W26 (7주)",
+        "dates": "2026.08 ~ 2026.09",
+        "activities": "기능/통합/현장/성능/보안 테스트, UAT",
+        "deliverables": "테스트 보고서, 결함 보고서, UAT 승인"
+      },
+      {
+        "id": "Phase-5",
+        "name": "적용 및 안정화",
+        "period": "W27~W35 (9주)",
+        "dates": "2026.10 ~ 2026.11",
+        "activities": "데이터 마이그레이션, 단계별 적용, 교육, 안정화",
+        "deliverables": "교육 자료, 안정화 보고서, 운영 매뉴얼"
+      }
+    ],
+    "milestones": [
+      {"name": "Kick-Off", "date": "2026.04.01"},
+      {"name": "분석/설계 완료", "date": "2026.05.31"},
+      {"name": "인프라 구축 완료", "date": "2026.07.15"},
+      {"name": "프로그램 개발 완료", "date": "2026.09.15"},
+      {"name": "테스트 완료 (UAT)", "date": "2026.09.30"},
+      {"name": "시스템 Open", "date": "2026.11.01"}
+    ]
+  },
+  "resource_plan": {
+    "total_man_months": 24.9,
+    "total_man_months_with_buffer": 29.9,
+    "total_man_days": 498,
+    "total_man_days_with_buffer": 598,
+    "buffer_ratio": "20%",
+    "team": [
+      {"role": "PM/PL", "count": 1, "effort_md": 39, "period": "전 기간 (100%)"},
+      {"role": "BA (업무 분석가)", "count": 1, "effort_md": 34, "period": "전 기간 (Phase별 변동)"},
+      {"role": "백엔드 개발자", "count": 2, "effort_md": 94, "period": "Phase 2~4 (100%)"},
+      {"role": "프론트엔드 개발자", "count": 1, "effort_md": 52, "period": "Phase 3~4 (100%)"},
+      {"role": "모바일 개발자", "count": 1, "effort_md": 52, "period": "Phase 3~4 (100%)"},
+      {"role": "CS 개발자", "count": 1, "effort_md": 76, "period": "Phase 2~4 (100%)"},
+      {"role": "인프라 엔지니어", "count": 1, "effort_md": 48, "period": "Phase 2 중심 (변동)"},
+      {"role": "QA 엔지니어", "count": 0.5, "effort_md": 62, "period": "Phase 4 (100%)"},
+      {"role": "UI/UX 디자이너", "count": 0.5, "effort_md": 14, "period": "Phase 1 (100%)"}
+    ],
+    "work_packages": [
+      {"id": "WP-1", "name": "프로젝트 관리", "effort_md": 39, "ratio": "7.8%"},
+      {"id": "WP-2", "name": "분석/설계", "effort_md": 50, "ratio": "10.0%"},
+      {"id": "WP-3", "name": "인프라 구축", "effort_md": 48, "ratio": "9.6%"},
+      {"id": "WP-4", "name": "백엔드 개발", "effort_md": 94, "ratio": "18.9%"},
+      {"id": "WP-5", "name": "웹 프론트엔드 개발", "effort_md": 52, "ratio": "10.4%"},
+      {"id": "WP-6", "name": "모바일 APP 개발", "effort_md": 52, "ratio": "10.4%"},
+      {"id": "WP-7", "name": "계량대 CS 개발", "effort_md": 76, "ratio": "15.3%"},
+      {"id": "WP-8", "name": "테스트", "effort_md": 62, "ratio": "12.5%"},
+      {"id": "WP-9", "name": "적용/안정화", "effort_md": 55, "ratio": "11.0%"}
+    ]
+  },
+  "organization": {
+    "client_side": [
+      {"role": "Project Leader", "name": "홍춘식 부장", "department": "동국씨엠, 디지털혁신팀"},
+      {"role": "PM", "name": "김준기 팀장", "department": "동국씨엠, 디지털혁신팀"}
+    ],
+    "developer_side": [
+      {"role": "개발 리더", "name": "김의신 차장", "department": "동국시스템즈, DMES팀"}
+    ]
+  },
+  "risks": [
+    {
+      "id": "R-001",
+      "title": "LPR 차량번호 인식률 미달",
+      "impact": "HIGH",
+      "probability": "MEDIUM",
+      "mitigation": "AI 검증 이중화, 모바일 OTP 대체 프로세스, 보조 조명 설치"
+    },
+    {
+      "id": "R-002",
+      "title": "AI 인식 엔진 성능 지연",
+      "impact": "HIGH",
+      "probability": "LOW",
+      "mitigation": "벤치마크 수행, 로컬 GPU 서버, 경량 모델 병행"
+    },
+    {
+      "id": "R-003",
+      "title": "RS-232C 인디게이터 통신 불안정",
+      "impact": "MEDIUM",
+      "probability": "MEDIUM",
+      "mitigation": "재시도 로직, 타임아웃 관리, 예비 컨버터"
+    },
+    {
+      "id": "R-004",
+      "title": "기존 데이터 마이그레이션 실패",
+      "impact": "HIGH",
+      "probability": "MEDIUM",
+      "mitigation": "단계별 마이그레이션, 검증 구간, 롤백 계획, 병행 운영"
+    },
+    {
+      "id": "R-005",
+      "title": "외부 서비스 장애 (카카오/SMS)",
+      "impact": "LOW",
+      "probability": "MEDIUM",
+      "mitigation": "멀티 채널 대체, 재시도 큐, 서킷브레이커"
+    },
+    {
+      "id": "R-006",
+      "title": "LPR 장비 납품 지연",
+      "impact": "HIGH",
+      "probability": "MEDIUM",
+      "mitigation": "사전 발주, 대안 업체, 시뮬레이터 선행 개발"
+    },
+    {
+      "id": "R-007",
+      "title": "요구사항 변경",
+      "impact": "HIGH",
+      "probability": "HIGH",
+      "mitigation": "변경 관리 프로세스, 20% 버퍼, 월간 점검회의"
+    },
+    {
+      "id": "R-008",
+      "title": "네트워크 장애 (계량대-서버)",
+      "impact": "HIGH",
+      "probability": "LOW",
+      "mitigation": "로컬 캐싱, 오프라인 모드, 네트워크 이중화"
+    },
+    {
+      "id": "R-009",
+      "title": "인력 이탈",
+      "impact": "HIGH",
+      "probability": "MEDIUM",
+      "mitigation": "문서화 강화, 지식 공유, 크로스 트레이닝"
+    },
+    {
+      "id": "R-010",
+      "title": "보안 취약점 (OTP 탈취, 인증 우회)",
+      "impact": "HIGH",
+      "probability": "LOW",
+      "mitigation": "OTP TTL 5분, IP 접근 제어, 보안 감사 로그, 침투 테스트"
+    }
+  ],
+  "prerequisites": [
+    "LPR 장비 제조사/모델 최종 선정",
+    "AI 차량번호 인식 엔진 선정 (자체개발 vs 외부 솔루션)",
+    "기존 배차/계량 시스템 데이터 마이그레이션 범위 확정",
+    "카카오 API 연동 계약 및 비용 확인",
+    "SMS 서비스 계약",
+    "H/W 장비 발주 예산 확보",
+    "서버 VM 자원 확보 (Dev/Staging/Prod)",
+    "현업/PMO 인력 지원 합의",
+    "기존 터치스크린 방식 병행 운영 계획 합의",
+    "현장 테스트용 차량 운행 협조"
+  ],
+  "expected_benefits": {
+    "quantitative": [
+      {"item": "무인 자동 계량 비율", "before": "0%", "after": "90%+"},
+      {"item": "종이 계량표 사용", "before": "100%", "after": "0% (Paperless)"},
+      {"item": "계량 처리 시간", "before": "기존 기준", "after": "30%+ 단축"},
+      {"item": "계량 에러율", "before": "기존 기준", "after": "50%+ 감소"},
+      {"item": "RFID 카드 관리 비용", "before": "연간 발생", "after": "0원"},
+      {"item": "종이 인쇄/용지 비용", "before": "연간 발생", "after": "0원"}
+    ],
+    "qualitative": [
+      "현장 안전성 확보 (종이 계량표 수취 과정 제거)",
+      "무인 자동 계량으로 차량 대기 시간 단축",
+      "재계량 기능 도입으로 계량 데이터 정확도 향상",
+      "모바일 APP 통한 전자 계량표 편의성",
+      "통합 웹 시스템으로 일원 관리",
+      "향후 추가 계량대/타 공장 확장 가능 아키텍처",
+      "유선통화 이원화로 특정 부서 업무 과중 해소",
+      "포항공장 수준의 스마트 계량 운영 체계 구축"
+    ]
+  },
+  "critical_path": {
+    "tasks_count": 15,
+    "total_effort": "103 MD",
+    "path": "Kick-Off → 현행분석 → 프로세스설계 → DB설계 → 스키마생성 → 배차API → 계량API → LPR자동계량 → E2E테스트 → 현장테스트 → UAT → 데이터이관 → 단계적용 → 안정화 → SystemOpen"
+  },
+  "references": {
+    "prd": "workspace/outputs/prd/PRD-20260127-154446.md",
+    "trd": "workspace/outputs/trd/TRD-20260127-155235.md",
+    "wbs": "workspace/outputs/wbs/WBS-20260127-160043.md",
+    "source": "workspace/inputs/projects/부산 스마트 계량 시스템 구축 - 수행계획서.pptx"
+  }
+}

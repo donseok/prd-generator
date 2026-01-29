@@ -635,7 +635,207 @@ def normalize_proposal_data(data: dict) -> dict:
     if "storytelling_structure" in data:
         return data
 
-    # 새로운 구조 (ProposalDocument 모델)를 PPT 구조로 변환
+    # --- 새로운 구조 감지: current_challenges 키가 있으면 새 JSON 포맷 ---
+    if "current_challenges" in data:
+        return _normalize_new_format(data)
+
+    # --- 기존 구조 (ProposalDocument 모델) 변환 ---
+    return _normalize_legacy_format(data)
+
+
+def _normalize_new_format(data: dict) -> dict:
+    """새 제안서 JSON 포맷 (current_challenges, kpi, solution.modules 등) 정규화."""
+    exec_summary = data.get("executive_summary", {})
+    core_msg = exec_summary.get("core_message", "")
+    invest = exec_summary.get("investment_overview", {})
+    key_metrics = exec_summary.get("key_metrics", {})
+
+    normalized = {
+        "title": data.get("title", "프로젝트 제안서"),
+        "metadata": {
+            "proposal_date": data.get("created_at", ""),
+            "client_company": data.get("client_name", ""),
+            "proposer": data.get("proposer", ""),
+        },
+        "storytelling_structure": {
+            "hook": "RFID 수동 운영의 한계를 넘어, 스마트 계량 시대로",
+            "solution": core_msg[:80] if core_msg else "디지털 전환으로 업무 효율 혁신",
+            "cta": "지금 바로 스마트 계량 시스템을 시작하세요!",
+        },
+    }
+
+    # executive_summary
+    normalized["executive_summary"] = {
+        "problem": core_msg,
+        "solution": core_msg,
+        "duration": invest.get("project_period", "8개월"),
+        "effort": invest.get("total_effort_with_buffer", invest.get("total_effort", "")),
+        "key_benefits": [
+            f"무인 자동 계량 {key_metrics.get('auto_weighing_ratio', '90%+')}",
+            f"Paperless {key_metrics.get('paper_slip_usage', '0%')}",
+        ],
+    }
+
+    # current_situation from current_challenges
+    challenges_raw = data.get("current_challenges", [])
+    challenges = []
+    for ch in challenges_raw:
+        challenges.append({
+            "area": ch.get("title", ""),
+            "symptom": ch.get("description", ""),
+            "business_impact": ch.get("description", ""),
+        })
+
+    # future_vision from project_goals
+    goals = data.get("project_goals", [])
+    future_vision = {}
+    for i, g in enumerate(goals[:4]):
+        future_vision[f"vision_{i+1}"] = f"{g.get('title', '')}: {g.get('description', '')}"
+
+    normalized["current_situation"] = {
+        "challenges": challenges,
+        "risks_if_no_change": [
+            "종이 계량표 안전사고 위험 지속",
+            "RFID 카드 관리 비용 누적",
+            "특정 부서 업무 과중 심화",
+            "디지털 전환 지연으로 경쟁력 저하",
+        ],
+        "future_vision": future_vision,
+    }
+
+    # objectives from kpi
+    kpi_list = data.get("kpi", [])
+    kpis = []
+    for kpi in kpi_list[:4]:
+        kpis.append({
+            "metric": kpi.get("name", ""),
+            "current": kpi.get("current", "-"),
+            "target": kpi.get("target", ""),
+            "improvement": kpi.get("measurement", ""),
+        })
+    normalized["objectives"] = {
+        "kpis": kpis,
+        "goals": [g.get("description", "") for g in goals],
+    }
+
+    # solution from scope + solution.modules
+    scope_data = data.get("scope", {})
+    in_scope_raw = scope_data.get("in_scope", [])
+    out_scope_raw = scope_data.get("out_of_scope", [])
+
+    in_scope = [{"category": "", "value": s} if isinstance(s, str) else s for s in in_scope_raw]
+    out_scope = [{"item": s} if isinstance(s, str) else s for s in out_scope_raw]
+
+    modules = data.get("solution", {}).get("modules", [])
+    module_overview = ", ".join(m.get("name", "") for m in modules[:3])
+
+    normalized["solution"] = {
+        "value_proposition": "LPR+AI 자동인식으로 무인 계량 시대를 엽니다",
+        "overview": module_overview,
+        "scope": {
+            "in_scope": in_scope,
+            "out_of_scope": out_scope,
+        },
+    }
+
+    # technical_approach from technology_stack (nested dict → flat list)
+    tech_data = data.get("technology_stack", {})
+    tech_list = []
+    category_names = {
+        "backend": "백엔드",
+        "frontend_web": "프론트엔드(Web)",
+        "mobile": "모바일",
+        "cs_program": "계량대 CS",
+        "database": "데이터베이스",
+        "infrastructure": "인프라",
+    }
+    for cat_key, cat_label in category_names.items():
+        cat = tech_data.get(cat_key, {})
+        if isinstance(cat, dict):
+            parts = []
+            for k, v in cat.items():
+                parts.append(v)
+            tech_list.append({"category": cat_label, "technology": ", ".join(parts)})
+    normalized["technical_approach"] = {"technology_stack": tech_list}
+
+    # timeline
+    timeline_data = data.get("timeline", {})
+    phases_raw = timeline_data.get("phases", [])
+    phases = []
+    for ph in phases_raw:
+        phases.append({
+            "phase": ph.get("name", ""),
+            "duration": ph.get("period", ""),
+            "period": ph.get("dates", ""),
+        })
+    normalized["timeline"] = {
+        "total_duration": timeline_data.get("total_duration", "8개월"),
+        "phases": phases,
+    }
+
+    # team from resource_plan.team
+    resource = data.get("resource_plan", {})
+    team_raw = resource.get("team", [])
+    team_comp = []
+    for m in team_raw:
+        team_comp.append({
+            "role": m.get("role", ""),
+            "count": m.get("count", 1),
+            "expertise": m.get("period", ""),
+        })
+    normalized["team"] = {
+        "composition": team_comp,
+        "effort_summary": {
+            "total": {"man_months": resource.get("total_man_months_with_buffer", resource.get("total_man_months", 24.9))}
+        },
+    }
+
+    # risk_management from risks
+    risks_raw = data.get("risks", [])
+    risks_conv = []
+    for r in risks_raw:
+        risks_conv.append({
+            "risk": r.get("title", ""),
+            "impact": r.get("impact", "MEDIUM"),
+            "mitigation": r.get("mitigation", ""),
+        })
+    normalized["risk_management"] = risks_conv
+
+    # expected_benefits
+    benefits = data.get("expected_benefits", {})
+    if isinstance(benefits, dict):
+        quant_raw = benefits.get("quantitative", [])
+        quant = []
+        for b in quant_raw[:4]:
+            quant.append({
+                "metric": b.get("item", ""),
+                "before": b.get("before", ""),
+                "after": b.get("after", ""),
+                "improvement": "개선",
+            })
+        normalized["expected_benefits"] = {
+            "quantitative": quant,
+            "qualitative": benefits.get("qualitative", []),
+        }
+    else:
+        normalized["expected_benefits"] = {"quantitative": [], "qualitative": []}
+
+    # next_steps from milestones
+    milestones = timeline_data.get("milestones", [])
+    steps = []
+    for i, ms in enumerate(milestones[:5]):
+        steps.append({
+            "step": i + 1,
+            "action": ms.get("name", ""),
+            "duration": ms.get("date", ""),
+        })
+    normalized["next_steps"] = steps
+
+    return normalized
+
+
+def _normalize_legacy_format(data: dict) -> dict:
+    """기존 ProposalDocument 모델 JSON 포맷 정규화."""
     normalized = {
         "title": data.get("title", "프로젝트 제안서"),
         "metadata": data.get("metadata", {}),
@@ -663,10 +863,8 @@ def normalize_proposal_data(data: dict) -> dict:
     # project_overview → current_situation 변환
     overview = data.get("project_overview", {})
     background = overview.get("background", "")
-    # 배경에서 문제점 추출
     challenges = []
     if background:
-        # 쉼표나 마침표로 분리된 문제점들을 추출
         problems = ["유지보수 인력 확보 어려움", "수기 대장 작성 병행", "운전기사 대기 시간 45분", "실시간 현황 파악 어려움"]
         for i, prob in enumerate(problems):
             challenges.append({
@@ -717,7 +915,6 @@ def normalize_proposal_data(data: dict) -> dict:
     in_scope_list = scope.get("in_scope", [])
     out_scope_list = scope.get("out_of_scope", [])
 
-    # in_scope 변환 (string list → dict list)
     in_scope_converted = []
     for item in in_scope_list:
         if isinstance(item, str):
@@ -725,7 +922,6 @@ def normalize_proposal_data(data: dict) -> dict:
         else:
             in_scope_converted.append(item)
 
-    # out_scope 변환
     out_scope_converted = []
     for item in out_scope_list:
         if isinstance(item, str):
@@ -757,7 +953,7 @@ def normalize_proposal_data(data: dict) -> dict:
             tech_converted.append(item)
     normalized["technical_approach"] = {"technology_stack": tech_converted}
 
-    # timeline 변환 (phases 구조 맞춤)
+    # timeline 변환
     timeline_data = data.get("timeline", {})
     phases = timeline_data.get("phases", [])
     phases_converted = []
@@ -801,7 +997,7 @@ def normalize_proposal_data(data: dict) -> dict:
         })
     normalized["risk_management"] = risks_converted
 
-    # expected_benefits 변환 (list → dict with quantitative)
+    # expected_benefits 변환
     benefits = data.get("expected_benefits", [])
     if isinstance(benefits, list):
         quant = []
@@ -818,7 +1014,7 @@ def normalize_proposal_data(data: dict) -> dict:
     else:
         normalized["expected_benefits"] = benefits
 
-    # next_steps 변환 (list → dict list)
+    # next_steps 변환
     steps = data.get("next_steps", [])
     steps_converted = []
     for i, step in enumerate(steps):
