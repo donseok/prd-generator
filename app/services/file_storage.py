@@ -9,6 +9,7 @@
 """
 
 import json
+import logging
 import os
 import shutil
 import aiofiles
@@ -18,6 +19,9 @@ from typing import Optional, TypeVar, Type
 from pydantic import BaseModel
 
 from app.models import PRDDocument, ProcessingJob, InputDocument
+from app.exceptions import StorageError
+
+logger = logging.getLogger(__name__)
 
 
 T = TypeVar("T", bound=BaseModel)
@@ -207,8 +211,15 @@ class FileStorage:
 
     async def _save_model(self, file_path: Path, model: BaseModel):
         """데이터 모델을 JSON 파일로 저장하는 공통 함수"""
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(model.model_dump_json(indent=2))
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(model.model_dump_json(indent=2))
+        except Exception as e:
+            logger.error(f"파일 저장 실패 {file_path}: {e}", exc_info=True)
+            raise StorageError(
+                f"파일 저장에 실패했습니다: {file_path.name}",
+                details={"path": str(file_path), "error": str(e)},
+            )
 
     async def _load_model(self, file_path: Path, model_class: Type[T]) -> Optional[T]:
         """JSON 파일을 읽어서 데이터 모델로 변환하는 공통 함수"""
@@ -220,7 +231,7 @@ class FileStorage:
                 content = f.read()
                 return model_class.model_validate_json(content)
         except Exception as e:
-            print(f"파일 로딩 에러 {file_path}: {e}")
+            logger.error(f"파일 로딩 에러 {file_path}: {e}", exc_info=True)
             return None
 
     def _delete_file(self, file_path: Path) -> bool:

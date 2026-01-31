@@ -19,6 +19,8 @@ from typing import Optional
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
+from app.exceptions import ClaudeClientError
+
 # 로깅 설정: 시스템의 동작 상태를 기록합니다.
 logging.basicConfig(
     level=logging.INFO,
@@ -419,8 +421,10 @@ class ClaudeClient:
                     logger.error(f"[JSON] 추출 파싱 실패: {e2}")
 
             logger.error(f"[JSON] 최종 파싱 실패")
-            # 빈 딕셔너리 반환 (예외 대신)
-            return {}
+            raise ClaudeClientError(
+                "Claude 응답에서 유효한 JSON을 추출할 수 없습니다",
+                details={"response_preview": cleaned[:200]},
+            )
 
 
 # 전역 변수로 클라이언트 인스턴스 저장 (싱글톤 패턴)

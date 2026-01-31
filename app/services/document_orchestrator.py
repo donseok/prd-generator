@@ -153,7 +153,7 @@ class DocumentOrchestrator:
                     bundle.errors.append("제안서 생성 실패")
             
         except Exception as e:
-            logger.error(f"문서 생성 중 오류: {e}")
+            logger.error(f"문서 생성 중 오류: {e}", exc_info=True)
             bundle.errors.append(str(e))
         
         bundle.total_time_seconds = time.time() - total_start
@@ -233,7 +233,7 @@ class DocumentOrchestrator:
             return json_path
             
         except Exception as e:
-            logger.error(f"PRD 생성 오류: {e}")
+            logger.error(f"PRD 생성 오류: {e}", exc_info=True)
             return None
     
     async def _generate_trd(self, prd_path: Path, verbose: bool) -> Optional[Path]:
@@ -274,7 +274,7 @@ class DocumentOrchestrator:
             return json_path
             
         except Exception as e:
-            logger.error(f"TRD 생성 오류: {e}")
+            logger.error(f"TRD 생성 오류: {e}", exc_info=True)
             return None
     
     async def _generate_wbs(self, prd_path: Path, verbose: bool) -> Optional[Path]:
@@ -316,7 +316,7 @@ class DocumentOrchestrator:
             return json_path
             
         except Exception as e:
-            logger.error(f"WBS 생성 오류: {e}")
+            logger.error(f"WBS 생성 오류: {e}", exc_info=True)
             return None
     
     async def _generate_proposal(
@@ -359,7 +359,7 @@ class DocumentOrchestrator:
             return md_path
             
         except Exception as e:
-            logger.error(f"제안서 생성 오류: {e}")
+            logger.error(f"제안서 생성 오류: {e}", exc_info=True)
             return None
     
     def _get_input_files(self) -> List[Path]:

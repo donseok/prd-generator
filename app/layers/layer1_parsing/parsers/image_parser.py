@@ -128,7 +128,7 @@ class ImageParser(BaseParser):
                 end = response.rfind("}") + 1
                 if start >= 0 and end > start:
                     return json.loads(response[start:end])
-            except:
+            except (json.JSONDecodeError, ValueError, KeyError):
                 pass
 
             # Return as text analysis

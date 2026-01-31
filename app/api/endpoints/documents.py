@@ -3,12 +3,22 @@
 사용자가 PRD 생성을 위해 업로드한 파일들을 저장하고 목록을 보여줍니다.
 """
 
+import logging
 import uuid
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from typing import List
 
 from app.models import InputDocument, InputType, ParsedContent, InputMetadata
 from app.services import get_file_storage
+from app.utils.validation import (
+    validate_filename,
+    validate_file_size,
+    validate_file_extension,
+    validate_file_signature,
+    validate_document_count,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -53,18 +63,36 @@ async def upload_documents(
     storage = get_file_storage()
     uploaded_documents = []
 
+    # 업로드 문서 수 검증
+    validate_document_count(len(files))
+
+    total_size = 0
+
     for file in files:
-        # 파일별로 고유 ID 생성 (UUID의 앞 8자리만 사용)
-        doc_id = str(uuid.uuid4())[:8]
+        # 파일명 검증
+        safe_filename = validate_filename(file.filename)
+
+        # 확장자 검증
+        extension = validate_file_extension(safe_filename)
 
         # 파일 내용을 읽음
         content = await file.read()
 
+        # 크기 검증 (개별 + 전체 누적)
+        total_size += len(content)
+        validate_file_size(len(content), total_size)
+
+        # 파일 시그니처 검증
+        validate_file_signature(content, extension)
+
+        # 파일별로 고유 ID 생성 (UUID의 앞 8자리만 사용)
+        doc_id = str(uuid.uuid4())[:8]
+
         # 저장소(FileStorage)에 파일 저장
-        file_path = await storage.save_upload(content, file.filename, doc_id)
+        file_path = await storage.save_upload(content, safe_filename, doc_id)
 
         # 문서 종류 판단
-        input_type = detect_input_type(file.filename)
+        input_type = detect_input_type(safe_filename)
 
         # 입력 문서 정보 생성 (내용 파싱은 나중에 함)
         input_doc = InputDocument(
@@ -72,7 +100,7 @@ async def upload_documents(
             input_type=input_type,
             content=ParsedContent(
                 raw_text="",  # 파싱 전이라 아직 비어있음
-                metadata=InputMetadata(filename=file.filename),
+                metadata=InputMetadata(filename=safe_filename),
             ),
             source_path=file_path,
         )
@@ -82,7 +110,7 @@ async def upload_documents(
 
         uploaded_documents.append({
             "id": doc_id,
-            "filename": file.filename,
+            "filename": safe_filename,
             "input_type": input_type.value,
             "size_bytes": len(content),
         })

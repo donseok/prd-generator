@@ -183,7 +183,7 @@ class BaseGenerator(ABC, Generic[InputT, OutputT, ContextT]):
             return result
 
         except Exception as e:
-            logger.warning(f"{log_prefix} Claude JSON 호출 실패: {e}")
+            logger.warning(f"{log_prefix} Claude JSON 호출 실패: {e}", exc_info=True)
             return {}
 
     async def _call_claude_text(
@@ -224,7 +224,7 @@ class BaseGenerator(ABC, Generic[InputT, OutputT, ContextT]):
             return result.strip()
 
         except Exception as e:
-            logger.warning(f"{log_prefix} Claude 텍스트 호출 실패: {e}")
+            logger.warning(f"{log_prefix} Claude 텍스트 호출 실패: {e}", exc_info=True)
             return ""
 
     async def _call_claude_json_with_fallback(

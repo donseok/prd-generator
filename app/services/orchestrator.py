@@ -9,8 +9,11 @@ PRD 생성 파이프라인의 전체 흐름을 관리하는 '지휘자' 역할�
 """
 
 import asyncio
+import logging
 from typing import List, Optional, Callable
 from datetime import datetime
+
+logger = logging.getLogger(__name__)
 
 from app.models import (
     InputDocument,
@@ -238,7 +241,7 @@ class PipelineOrchestrator:
                             source_path = project_root / source_path
 
                         if not source_path.exists():
-                            print(f"[Parsing] 경고: 파일을 찾을 수 없음: {source_path}")
+                            logger.warning(f"[Parsing] 파일을 찾을 수 없음: {source_path}")
                             return None
 
                         return await parser.parse(source_path)
@@ -247,9 +250,7 @@ class PipelineOrchestrator:
                         return doc.content
 
                 except Exception as e:
-                    print(f"파싱 실패 ({doc.id}): {e}")
-                    import traceback
-                    traceback.print_exc()
+                    logger.error(f"파싱 실패 ({doc.id}): {e}", exc_info=True)
                     return None
 
         # 모든 문서에 대해 파싱 작업을 동시에 시작하고 결과를 기다림

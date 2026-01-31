@@ -203,9 +203,7 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
             return requirements
 
         except Exception as e:
-            logger.error(f"[extract_all] 추출 실패: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.error(f"[extract_all] 추출 실패: {type(e).__name__}: {e}", exc_info=True)
             # 예외 발생 시에도 문서 내용에서 직접 추출 시도
             return self._extract_from_parsed_content(parsed_content, start_counter, source_file, document_id)
 

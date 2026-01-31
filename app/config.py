@@ -17,6 +17,13 @@ class Settings(BaseSettings):
     enable_pm_review: bool = False  # PM(기획자) 검토 단계를 켤지 끌지 결정
     enable_conflict_detection: bool = False  # 요구사항 간의 충돌을 감지하는 기능을 켤지 결정
 
+    # 입력 유효성 검증 설정
+    max_file_size_mb: int = 50
+    max_total_upload_mb: int = 200
+    max_document_count: int = 20
+    max_filename_length: int = 255
+    allowed_origins: list[str] = ["http://localhost:3000"]
+
     # 서버 설정: 서버가 실행될 주소와 포트 번호
     host: str = "0.0.0.0"  # 모든 외부 접속 허용
     port: int = 8000

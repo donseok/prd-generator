@@ -3,12 +3,19 @@ PRD(제품 요구사항 정의서) 생성 시스템의 메인 진입점 파일�
 웹 서버 애플리케이션을 생성하고 설정하는 역할을 담당합니다.
 """
 
+import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from datetime import datetime
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.config import get_settings
 from app.api.router import api_router
+from app.exceptions import PRDGeneratorError, InputValidationError
+
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -25,13 +32,13 @@ async def lifespan(app: FastAPI):
     """
     # 시작 시: 서비스 초기화
     settings = get_settings()
-    print(f"PRD 생성기가 다음 주소에서 시작됩니다: {settings.host}:{settings.port}")
-    print("AI 처리를 위해 Claude Code CLI를 사용합니다")
+    logger.info(f"PRD 생성기가 다음 주소에서 시작됩니다: {settings.host}:{settings.port}")
+    logger.info("AI 처리를 위해 Claude Code CLI를 사용합니다")
 
     yield
 
     # 종료 시: 리소스 정리
-    print("PRD 생성기가 종료됩니다")
+    logger.info("PRD 생성기가 종료됩니다")
 
 
 def create_app() -> FastAPI:
@@ -57,11 +64,38 @@ def create_app() -> FastAPI:
     # CORS 미들웨어 설정: 프론트엔드 웹페이지가 이 서버에 접속할 수 있도록 허용하는 설정입니다.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],  # 실제 운영 환경에서는 구체적인 주소로 제한해야 합니다.
+        allow_origins=settings.allowed_origins,
         allow_credentials=True,
         allow_methods=["*"],  # 모든 통신 방식 허용 (GET, POST 등)
         allow_headers=["*"],  # 모든 헤더 정보 허용
     )
+
+    # 글로벌 예외 핸들러: 커스텀 예외를 구조화된 JSON 응답으로 변환
+    @app.exception_handler(PRDGeneratorError)
+    async def prd_error_handler(request: Request, exc: PRDGeneratorError):
+        status_code = 400 if isinstance(exc, InputValidationError) else 500
+        return JSONResponse(
+            status_code=status_code,
+            content={
+                "error_code": exc.error_code,
+                "message": exc.message,
+                "details": exc.details,
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
+
+    @app.exception_handler(Exception)
+    async def general_error_handler(request: Request, exc: Exception):
+        logger.error(f"처리되지 않은 예외: {exc}", exc_info=True)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error_code": "ERR_INTERNAL",
+                "message": "내부 서버 오류가 발생했습니다",
+                "details": None,
+                "timestamp": datetime.now().isoformat(),
+            },
+        )
 
     # API 라우터 포함: /api/v1 주소 아래에 모든 기능을 연결합니다.
     app.include_router(api_router, prefix="/api/v1")

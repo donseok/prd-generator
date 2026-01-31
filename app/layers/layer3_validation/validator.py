@@ -2,6 +2,7 @@
 추출된 요구사항의 품질을 검사하고, 문제가 있거나 AI가 확신하지 못하는 항목을 찾아냅니다.
 """
 
+import logging
 from typing import List, Tuple, Optional
 
 from app.models import (
@@ -12,6 +13,8 @@ from app.models import (
 )
 from app.services import ClaudeClient, get_claude_client
 from app.config import get_settings
+
+logger = logging.getLogger(__name__)
 
 
 class Validator:
@@ -323,5 +326,5 @@ JSON 형식으로 응답:
             return review_items
 
         except Exception as e:
-            print(f"Conflict detection failed: {e}")
+            logger.error(f"충돌 감지 실패: {e}", exc_info=True)
             return []

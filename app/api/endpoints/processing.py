@@ -3,12 +3,15 @@ AI 처리 파이프라인 제어 API입니다.
 PRD 생성 작업을 시작하고, 진행 상황을 확인하거나 취소할 수 있습니다.
 """
 
+import logging
 from typing import List
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
 from app.models import ProcessingJob, ProcessingStatus
 from app.services import get_file_storage
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -70,16 +73,15 @@ async def start_processing(
 
 async def run_pipeline(job_id: str):
     """실제 파이프라인을 실행하는 백그라운드 함수"""
-    import traceback
     from app.services import get_orchestrator
 
-    print(f"[Pipeline] 작업 시작 ID: {job_id}")
+    logger.info(f"[Pipeline] 작업 시작 ID: {job_id}")
 
     storage = get_file_storage()
     job = await storage.get_job(job_id)
 
     if not job:
-        print(f"[Pipeline] 작업을 찾을 수 없음: {job_id}")
+        logger.error(f"[Pipeline] 작업을 찾을 수 없음: {job_id}")
         return
 
     try:
@@ -93,21 +95,20 @@ async def run_pipeline(job_id: str):
         if not documents:
             raise ValueError("입력 문서를 찾을 수 없습니다")
 
-        print(f"[Pipeline] {len(documents)}개 문서 처리 중")
+        logger.info(f"[Pipeline] {len(documents)}개 문서 처리 중")
 
         # 오케스트레이터에게 작업을 맡김
         orchestrator = get_orchestrator()
         prd = await orchestrator.process(job, documents)
 
-        print(f"[Pipeline] 파이프라인 완료. 결과: {prd.id if prd else '없음 (PM 검토 대기)'}")
+        logger.info(f"[Pipeline] 파이프라인 완료. 결과: {prd.id if prd else '없음 (PM 검토 대기)'}")
 
         # 만약 prd가 None이면, 중간에 검토가 필요해서 멈춘 상태임
         # (상태 업데이트는 orchestrator 안에서 이미 수행됨)
 
     except Exception as e:
         # 에러 발생 시 로그 출력 및 상태 실패로 변경
-        print(f"[Pipeline] 에러 발생: {e}")
-        traceback.print_exc()
+        logger.error(f"[Pipeline] 에러 발생: {e}", exc_info=True)
         job.update_status(ProcessingStatus.FAILED)
         job.error_message = str(e)
         await storage.update_job(job)
