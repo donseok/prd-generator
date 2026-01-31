@@ -3,7 +3,7 @@
 > **중요**: 이 작업을 시작하기 전에 이전 컨텍스트를 클리어하고 새로운 세션으로 시작합니다.
 
 당신은 프레젠테이션 디자인 전문가입니다.
-제안서(PROP-*.md) 파일을 기반으로 **python-pptx**를 사용하여 고객 프레젠테이션 PPT를 생성하세요.
+제안서(PROP-*.json 또는 PROP-*.md) 파일을 기반으로 **python-pptx**를 사용하여 고객 프레젠테이션 PPT를 생성하세요.
 
 ---
 
@@ -12,7 +12,7 @@
 | 항목 | 값 |
 |------|-----|
 | **테마** | 다크 테마 (어두운 배경) |
-| **슬라이드 수** | 20장 |
+| **슬라이드 수** | 21장 |
 | **로고** | 없음 |
 
 ### 컬러 스킴 (다크 테마)
@@ -39,50 +39,136 @@ COLORS = {
 
 ## 1단계: 입력 파일 읽기
 
-1. **제안서**: `workspace/outputs/proposals/PROP-*.md` 중 최신 파일
+**읽기 우선순위:**
+1. **JSON 우선**: `workspace/outputs/proposals/PROP-*.json` (ppt_maker가 JSON을 직접 파싱)
+2. **MD 폴백**: `workspace/outputs/proposals/PROP-*.md`
+- 파일명의 타임스탬프(YYYYMMDD-HHMMSS) 기준으로 최신 파일 판별
 
 ---
 
-## 2단계: 슬라이드 구성 (20장)
+## 2단계: 슬라이드 구성 (21장)
 
-| # | 슬라이드 | 내용 | 레이아웃 |
-|---|---------|------|---------|
-| 1 | **표지** | 프로젝트명, 제안일, 고객사 | 중앙 정렬, 큰 타이틀 |
-| 2 | **목차** | 전체 구조 | 번호 리스트 |
-| 3 | **경영진 요약 1** | 핵심 메시지 | 큰 텍스트 + 키 수치 |
-| 4 | **경영진 요약 2** | "왜 지금?" | 임팩트 문구 |
-| 5 | **현재 문제 1** | 문제점 나열 | 아이콘 + 텍스트 |
-| 6 | **현재 문제 2** | 비즈니스 영향 | 표 형식 |
-| 7 | **변화의 필요성** | Before vs After | 2컬럼 비교 |
-| 8 | **프로젝트 목표** | 목표 및 KPI | 카드 형식 |
-| 9 | **솔루션 개요** | 핵심 솔루션 | 중앙 큰 텍스트 |
-| 10 | **작업 범위** | In/Out Scope | 2컬럼 |
-| 11 | **시스템 아키텍처** | 아키텍처 다이어그램 | 다이어그램 중심 |
-| 12 | **기술 스택** | 기술 목록 | 아이콘 그리드 |
-| 13 | **프로젝트 일정** | 간트 차트/타임라인 | 가로 막대 |
-| 14 | **마일스톤** | 주요 마일스톤 | 타임라인 |
-| 15 | **투입 인력** | 팀 구성 | 역할 카드 |
-| 16 | **공수 및 예산** | M/M 요약 | 원형/막대 차트 |
-| 17 | **리스크 관리** | 리스크 & 대응 | 표 형식 |
-| 18 | **기대 효과** | 정량/정성 효과 | 숫자 강조 |
-| 19 | **다음 단계** | 후속 절차 | 스텝 다이어그램 |
-| 20 | **Q&A / 연락처** | 연락처, 감사 인사 | 중앙 정렬 |
+PPT 스크립트(`app/scripts/ppt_maker.py`)는 `normalize_proposal_data()` 함수로 제안서 JSON을 정규화한 후 21장의 슬라이드를 생성합니다.
+
+| # | 슬라이드 | 생성 함수 | 데이터 소스 | 레이아웃 |
+|---|---------|----------|-----------|---------|
+| 1 | **표지** | `add_title_slide()` | title, metadata | 중앙 정렬, 큰 타이틀 |
+| 2 | **목차** | `add_content_slide()` | 하드코딩 목차 | 번호 리스트 |
+| 3 | **경영진 요약 (핵심)** | `add_highlight_slide()` | executive_summary | 큰 텍스트 + 키 수치 |
+| 4 | **경영진 요약 (상세)** | `add_content_slide()` | executive_summary | 불릿 리스트 |
+| 5 | **섹션: 현재 상황** | `add_section_title_slide()` | - | 섹션 타이틀 |
+| 6 | **현재의 도전과 과제** | `add_content_slide()` | current_situation.challenges | 불릿 리스트 |
+| 7 | **변화하지 않으면?** | `add_content_slide()` | current_situation.risks_if_no_change | 불릿 리스트 |
+| 8 | **Before vs After** | `add_two_column_slide()` | current_situation | 2컬럼 비교 |
+| 9 | **섹션: 프로젝트 목표** | `add_section_title_slide()` | - | 섹션 타이틀 |
+| 10 | **KPI 카드** | `add_kpi_card_slide()` | objectives.kpis | 카드 형식 |
+| 11 | **섹션: 우리의 솔루션** | `add_section_title_slide()` | - | 섹션 타이틀 |
+| 12 | **솔루션 개요** | `add_highlight_slide()` | solution.value_proposition | 중앙 큰 텍스트 |
+| 13 | **작업 범위** | `add_two_column_slide()` | solution.scope | 2컬럼 In/Out |
+| 14 | **기술 스택** | `add_content_slide()` | technical_approach.technology_stack | 기술 목록 |
+| 15 | **섹션: 일정 계획** | `add_section_title_slide()` | - | 섹션 타이틀 |
+| 16 | **타임라인** | `add_timeline_slide()` | timeline.phases | 가로 타임라인 |
+| 17 | **팀 구성** | `add_team_slide()` | team.composition | 역할 카드 |
+| 18 | **리스크 관리** | `add_risk_table_slide()` | risk_management | 표 형식 |
+| 19 | **기대 효과** | `add_highlight_slide()` | expected_benefits | 숫자 강조 |
+| 20 | **다음 단계** | `add_steps_slide()` | next_steps | 스텝 다이어그램 |
+| 21 | **Q&A** | `add_closing_slide()` | metadata | 중앙 정렬, 감사 인사 |
 
 ---
 
-## 3단계: PPT 생성 스크립트 실행
+## 3단계: 정규화 데이터 구조
 
-다음 Python 스크립트를 실행하세요:
+`normalize_proposal_data()` 함수가 제안서 JSON을 다음 구조로 변환합니다. PPT 생성에 사용되는 핵심 키:
 
-```bash
-python -m app.scripts.ppt_maker
+```python
+{
+    "title": "프로젝트명",
+    "metadata": {
+        "proposal_date": "2024-01-01",
+        "client_company": "고객사명",
+        "proposer": "제안사"
+    },
+    "storytelling_structure": {
+        "hook": "공감 메시지",
+        "solution": "핵심 솔루션",
+        "cta": "행동 촉구 메시지"
+    },
+    "executive_summary": {
+        "problem": "핵심 문제",
+        "solution": "핵심 솔루션",
+        "duration": "N개월",
+        "effort": "N M/M",
+        "key_benefits": "핵심 기대효과"
+    },
+    "current_situation": {
+        "challenges": [{"area": "영역", "issue": "문제", "impact": "영향"}],
+        "risks_if_no_change": ["리스크1", "리스크2"],
+        "future_vision": {"positive": ["비전1"], "negative": ["위험1"]}
+    },
+    "objectives": {
+        "kpis": [{"name": "KPI명", "current": "현재", "target": "목표", "improvement": "개선율"}],
+        "goals": [{"type": "핵심", "goal": "목표", "criteria": "기준"}]
+    },
+    "solution": {
+        "value_proposition": "가치 제안",
+        "overview": "솔루션 개요",
+        "scope": {
+            "in_scope": ["포함1"],
+            "out_of_scope": ["제외1"]
+        }
+    },
+    "technical_approach": {
+        "technology_stack": [{"category": "구분", "tech": "기술", "reason": "사유"}]
+    },
+    "timeline": {
+        "total_duration": "N개월",
+        "phases": [{"name": "단계명", "duration": "기간", "deliverables": ["산출물"]}]
+    },
+    "team": {
+        "composition": [{"role": "역할", "count": N, "skills": "역량"}],
+        "effort_summary": {"total": {"man_months": N}}
+    },
+    "risk_management": [{"risk": "리스크", "impact": "영향도", "mitigation": "대응"}],
+    "expected_benefits": {
+        "quantitative": [{"metric": "지표", "before": "현재", "after": "목표", "improvement": "개선"}],
+        "qualitative": ["정성적 효과1"]
+    },
+    "next_steps": [{"step": 1, "action": "내용", "duration": "기간"}]
+}
 ```
 
 ---
 
-## 4단계: 출력
+## 4단계: PPT 생성 스크립트 실행
+
+다음 Python 스크립트를 실행하세요:
+
+```bash
+C:\Users\donse\anaconda3\python.exe -m app.scripts.ppt_maker
+```
+
+---
+
+## 5단계: 출력 확인
 
 - **PPTX**: `workspace/outputs/ppt/PPT-[YYYYMMDD-HHMMSS].pptx`
+
+---
+
+## 불완전 데이터 처리
+
+PPT 생성 시 일부 데이터가 없을 수 있습니다. `normalize_proposal_data()`가 다음과 같이 폴백합니다:
+
+**최소 필수 필드:**
+- `title` (없으면 "프로젝트 제안서")
+- `executive_summary` (없으면 빈 문자열)
+
+**선택 필드 기본값:**
+- `current_situation.challenges` → 빈 리스트 (슬라이드에 "데이터 없음" 표시)
+- `objectives.kpis` → 빈 리스트
+- `timeline.phases` → 빈 리스트
+- `team.composition` → 빈 리스트
+- `risk_management` → 빈 리스트
 
 ---
 
@@ -103,14 +189,37 @@ python -m app.scripts.ppt_maker
 - 제안일 + 고객사명 (24pt, 회색)
 - 배경: 그라데이션 또는 기하학적 패턴
 
-### 숫자 강조 슬라이드
+### 숫자 강조 슬라이드 (3, 12, 19)
 - 핵심 수치를 **72pt 이상 크게**
 - 단위/설명은 작게 (24pt)
 - 예: "**45분 → 20분**" (대기시간 56% 단축)
 
-### 비교 슬라이드
+### 비교 슬라이드 (8, 13)
 - 2컬럼 레이아웃
 - 왼쪽: 현재 (어두운 빨강 계열)
 - 오른쪽: 미래 (밝은 초록 계열)
+
+### 섹션 타이틀 슬라이드 (5, 9, 11, 15)
+- 큰 섹션 제목 중앙 배치
+- 보라색 포인트 컬러 배경 또는 강조선
+
+---
+
+## 에러 처리
+
+- **제안서 파일 없음**: "workspace/outputs/proposals/ 폴더에 제안서 파일이 없습니다. /pro:pro-maker를 먼저 실행하세요." 표시 후 중단
+- **JSON 파싱 실패**: MD 파일로 폴백 시도
+- **스크립트 실행 실패**: 에러 메시지 확인 후 python-pptx 설치 여부 점검 (`pip install python-pptx`)
+
+---
+
+## 파이프라인
+
+```
+[입력 파일] → PRD → TRD → WBS → Proposal → PPT
+                                             ^^^^
+선행: 제안서 생성 완료 필요 (/pro:pro-maker)
+대안: python -m app.scripts.ppt_maker
+```
 
 이제 `workspace/outputs/proposals/` 폴더에서 최신 제안서를 읽고 PPT를 생성하세요.

@@ -1223,7 +1223,7 @@ def main():
     
     if result:
         print(f"\n[완료] PPT 생성 완료: {output_path}")
-        print(f"   슬라이드 수: 20장")
+        print(f"   슬라이드 수: 21장")
     else:
         print("\n[실패] PPT 생성 실패")
 
