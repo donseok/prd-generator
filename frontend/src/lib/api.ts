@@ -329,6 +329,12 @@ export const api = {
     return response.data;
   },
 
+  // PPTX 파일 열기 (PowerPoint 프로그램 실행)
+  async openPptxFile(docId: string): Promise<OpenPptxResponse> {
+    const response = await client.post(`/outputs/documents/${docId}/open-pptx`);
+    return response.data;
+  },
+
   // === Auto-Doc 문서 생성 API ===
 
   // 입력 파일 목록 조회
@@ -405,6 +411,13 @@ export interface DeleteAllResponse {
   message: string;
   deleted_count: number;
   details: Record<string, number>;
+}
+
+// PPTX 파일 열기 응답
+export interface OpenPptxResponse {
+  success: boolean;
+  message: string;
+  file_path: string;
 }
 
 export default api;

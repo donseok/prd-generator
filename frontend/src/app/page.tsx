@@ -267,8 +267,8 @@ export default function MainPage() {
               <button
                 onClick={toggleTheme}
                 className={`p-2.5 rounded-xl transition-all duration-300 hover:scale-105 ${isDarkMode
-                    ? 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06]'
-                    : 'bg-slate-100 hover:bg-slate-200 border border-slate-200'
+                  ? 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06]'
+                  : 'bg-slate-100 hover:bg-slate-200 border border-slate-200'
                   }`}
                 title={isDarkMode ? "라이트 모드" : "다크 모드"}
               >
@@ -278,8 +278,8 @@ export default function MainPage() {
               <button
                 onClick={() => refetchOutputs()}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 hover:scale-105 ${isDarkMode
-                    ? 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] text-white/80'
-                    : 'bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700'
+                  ? 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] text-white/80'
+                  : 'bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700'
                   }`}
               >
                 <RefreshCw className="w-4 h-4" />
@@ -290,8 +290,8 @@ export default function MainPage() {
                 onClick={handleDeleteAll}
                 disabled={deleting || outputs.length === 0}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 ${isDarkMode
-                    ? 'bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400'
-                    : 'bg-red-50 hover:bg-red-100 border border-red-200 text-red-600'
+                  ? 'bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400'
+                  : 'bg-red-50 hover:bg-red-100 border border-red-200 text-red-600'
                   }`}
               >
                 {deleting ? (
@@ -372,10 +372,10 @@ export default function MainPage() {
                 key={type}
                 onClick={() => setDocFilter(type)}
                 className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 whitespace-nowrap text-sm ${isActive
-                    ? "bg-gradient-to-r from-violet-500/90 to-cyan-500/90 text-white shadow-lg shadow-violet-500/20"
-                    : isDarkMode
-                      ? "bg-white/[0.02] text-white/50 hover:bg-white/[0.05] hover:text-white/80 border border-white/[0.04]"
-                      : "bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 border border-slate-200"
+                  ? "bg-gradient-to-r from-violet-500/90 to-cyan-500/90 text-white shadow-lg shadow-violet-500/20"
+                  : isDarkMode
+                    ? "bg-white/[0.02] text-white/50 hover:bg-white/[0.05] hover:text-white/80 border border-white/[0.04]"
+                    : "bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 border border-slate-200"
                   }`}
               >
                 <Icon className="w-4 h-4" />
@@ -443,8 +443,8 @@ function StatCard({
   return (
     <div
       className={`group relative overflow-hidden rounded-2xl p-4 transition-all duration-300 hover:scale-[1.02] ${isDarkMode
-          ? 'bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.1]'
-          : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg'
+        ? 'bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.1]'
+        : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg'
         }`}
       style={{
         animation: `fadeInUp 0.5s ease-out forwards`,
@@ -490,8 +490,8 @@ function DocumentCard({
   return (
     <div
       className={`group relative overflow-hidden rounded-2xl transition-all duration-300 hover:scale-[1.005] ${isDarkMode
-          ? 'bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.1]'
-          : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-xl'
+        ? 'bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.1]'
+        : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-xl'
         }`}
       style={{
         animation: `fadeInUp 0.4s ease-out forwards`,
@@ -530,8 +530,8 @@ function DocumentCard({
                 <button
                   onClick={() => onViewContent(doc, "json")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isDarkMode
-                      ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/40'
-                      : 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100'
+                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/40'
+                    : 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100'
                     }`}
                 >
                   <Code2 className="w-3 h-3" />
@@ -542,8 +542,8 @@ function DocumentCard({
                 <button
                   onClick={() => onViewContent(doc, "md")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isDarkMode
-                      ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/40'
-                      : 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
+                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/40'
+                    : 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
                     }`}
                 >
                   <FileType className="w-3 h-3" />
@@ -551,13 +551,23 @@ function DocumentCard({
                 </button>
               )}
               {doc.has_pptx && (
-                <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium ${isDarkMode
-                    ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20'
-                    : 'bg-rose-50 text-rose-600 border border-rose-200'
-                  }`}>
+                <button
+                  onClick={async () => {
+                    try {
+                      await api.openPptxFile(doc.id);
+                    } catch (error) {
+                      console.error("PPTX 파일 열기 실패:", error);
+                      alert("PPTX 파일을 열 수 없습니다.");
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isDarkMode
+                    ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 hover:border-rose-500/40'
+                    : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100'
+                    }`}
+                >
                   <Presentation className="w-3 h-3" />
                   PPTX
-                </span>
+                </button>
               )}
             </div>
 
@@ -639,8 +649,8 @@ function ContentViewerModal({
               {contentViewer.docTitle}
             </h2>
             <span className={`px-3 py-1 rounded-lg text-xs font-medium ${contentViewer.format === "json"
-                ? isDarkMode ? "bg-blue-500/15 text-blue-400 border border-blue-500/30" : "bg-blue-50 text-blue-600 border border-blue-200"
-                : isDarkMode ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-emerald-50 text-emerald-600 border border-emerald-200"
+              ? isDarkMode ? "bg-blue-500/15 text-blue-400 border border-blue-500/30" : "bg-blue-50 text-blue-600 border border-blue-200"
+              : isDarkMode ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-emerald-50 text-emerald-600 border border-emerald-200"
               }`}>
               {contentViewer.format.toUpperCase()}
             </span>

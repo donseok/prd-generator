@@ -1,0 +1,604 @@
+{
+  "id": "TRD-20260207-064239",
+  "title": "냉연 통합 MES/APS 시스템 (NEXUS) TRD",
+  "executive_summary": "냉연 통합 MES/APS 시스템(NEXUS)은 기존 레거시 MES(2012년)와 APS(2015년)를 현대적인 마이크로서비스 아키텍처 기반의 통합 플랫폼으로 재구축하는 프로젝트입니다. 핵심 기술 목표는 MES-APS 간 실시간 데이터 연동(15분→2초), 화면 응답시간 개선(5.2초→3초), 그리고 99.9% 시스템 가용성 달성입니다. 본 시스템은 클라우드 하이브리드 아키텍처를 채택하여, 실시간 데이터 수집 및 핵심 트랜잭션은 On-premise에서 처리하고, 분석/리포팅은 클라우드에서 처리합니다. 기술 스택은 Backend에 Java(Spring Boot)와 Python(APS 알고리즘), Frontend에 React+TypeScript, Database에 PostgreSQL+TimescaleDB(시계열), 메시지 브로커로 Apache Kafka를 선정하여 이벤트 기반 아키텍처(EDA)를 구현합니다.",
+  "technology_stack": [
+    {
+      "category": "Frontend",
+      "technologies": ["React 18.2+", "TypeScript 5.3+", "Ant Design 5.x", "Apache ECharts 5.x", "Zustand 4.x", "Vite 5.x", "Workbox 7.x"],
+      "rationale": "대규모 엔터프라이즈 웹앱에 검증된 생태계, Gantt Chart 등 복잡한 시각화 지원, PWA를 통한 오프라인 및 모바일 지원"
+    },
+    {
+      "category": "Backend",
+      "technologies": ["Java 21 LTS", "Spring Boot 3.2+", "Python 3.11+", "Google OR-Tools 9.x", "Kong 3.x"],
+      "rationale": "엔터프라이즈급 안정성, SAP RFC/BAPI 연동 지원, APS 최적화 알고리즘 풍부한 라이브러리"
+    },
+    {
+      "category": "Database",
+      "technologies": ["PostgreSQL 16+", "TimescaleDB 2.13+", "Redis 7.x", "Elasticsearch 8.x"],
+      "rationale": "ACID 트랜잭션, 시계열 데이터 최적화, 실시간 캐싱 및 검색 지원"
+    },
+    {
+      "category": "Messaging",
+      "technologies": ["Apache Kafka 3.6+", "Confluent Schema Registry 7.x"],
+      "rationale": "고처리량 이벤트 스트리밍, 시스템 간 비동기 연동"
+    },
+    {
+      "category": "OT/Edge",
+      "technologies": ["KEPServerEX 6.x", "Eclipse Milo 0.6+", "OSIsoft PI"],
+      "rationale": "OPC-UA 기반 Level 2 연동, 기존 히스토리안 호환"
+    },
+    {
+      "category": "Infrastructure",
+      "technologies": ["Docker 24+", "Kubernetes 1.28+", "Rancher", "AWS EKS", "GitLab CI", "ArgoCD"],
+      "rationale": "컨테이너 오케스트레이션, GitOps 기반 CI/CD, 클라우드 하이브리드 배포"
+    },
+    {
+      "category": "Monitoring",
+      "technologies": ["Grafana", "Prometheus", "ELK Stack 8.x", "HashiCorp Vault 1.15+"],
+      "rationale": "메트릭 수집, 로그 분석, 보안 키 관리"
+    }
+  ],
+  "system_architecture": {
+    "overview": "클라우드 하이브리드 아키텍처 기반의 이벤트 기반 마이크로서비스 시스템. On-premise에서 실시간 데이터 수집 및 핵심 트랜잭션 처리, Cloud에서 분석 및 리포팅 처리. OT/IT 네트워크 DMZ 분리.",
+    "architecture_style": "클라우드 하이브리드 + 이벤트 기반 마이크로서비스",
+    "layers": [
+      {
+        "name": "Presentation Layer",
+        "description": "사용자 인터페이스 제공",
+        "components": [
+          {
+            "name": "Web Application",
+            "type": "서비스",
+            "description": "React 기반 웹 애플리케이션",
+            "responsibilities": ["관리자 UI", "현장 터치스크린 UI", "대시보드 TV 뷰"],
+            "dependencies": ["API Gateway"],
+            "interfaces": ["REST API", "WebSocket"]
+          },
+          {
+            "name": "PWA",
+            "type": "서비스",
+            "description": "Progressive Web App (모바일)",
+            "responsibilities": ["KPI 조회", "알림 수신"],
+            "dependencies": ["API Gateway", "Push Service"],
+            "interfaces": ["REST API", "Push Notification"]
+          }
+        ]
+      },
+      {
+        "name": "API Gateway Layer",
+        "description": "인증, 라우팅, 트래픽 관리",
+        "components": [
+          {
+            "name": "Kong Gateway",
+            "type": "서비스",
+            "description": "API Gateway",
+            "responsibilities": ["JWT 인증", "라우팅", "레이트 리밋", "API 버저닝"],
+            "dependencies": ["Keycloak"],
+            "interfaces": ["REST API"]
+          }
+        ]
+      },
+      {
+        "name": "Application Layer",
+        "description": "비즈니스 로직 처리",
+        "components": [
+          {
+            "name": "APS Service",
+            "type": "마이크로서비스",
+            "description": "생산계획 및 스케줄링",
+            "responsibilities": ["스케줄링 엔진", "제약조건 처리", "What-if 시뮬레이션"],
+            "dependencies": ["PostgreSQL", "Kafka", "MES Service"],
+            "interfaces": ["REST API", "Kafka Consumer/Producer"]
+          },
+          {
+            "name": "MES Service",
+            "type": "마이크로서비스",
+            "description": "생산실행 관리",
+            "responsibilities": ["작업지시", "실적 관리", "코일 추적"],
+            "dependencies": ["PostgreSQL", "Kafka", "Redis"],
+            "interfaces": ["REST API", "Kafka Consumer/Producer"]
+          },
+          {
+            "name": "Quality Service",
+            "type": "마이크로서비스",
+            "description": "품질 관리",
+            "responsibilities": ["SPC 관리", "품질 판정", "성적서 생성", "클레임 역추적"],
+            "dependencies": ["PostgreSQL", "Elasticsearch"],
+            "interfaces": ["REST API"]
+          },
+          {
+            "name": "Equipment Service",
+            "type": "마이크로서비스",
+            "description": "설비 관리",
+            "responsibilities": ["설비 상태 모니터링", "OEE 산출", "롤 관리"],
+            "dependencies": ["PostgreSQL", "TimescaleDB"],
+            "interfaces": ["REST API"]
+          },
+          {
+            "name": "Analytics Service",
+            "type": "마이크로서비스",
+            "description": "분석 및 리포트 (Cloud)",
+            "responsibilities": ["BI 데이터 마트", "리포트 생성", "KPI 대시보드"],
+            "dependencies": ["Data Lake", "Redshift"],
+            "interfaces": ["REST API"]
+          },
+          {
+            "name": "Integration Service",
+            "type": "마이크로서비스",
+            "description": "외부 시스템 연동",
+            "responsibilities": ["SAP 연동", "LIMS 연동", "WMS 연동", "EMS 연동"],
+            "dependencies": ["Kafka", "SAP JCo"],
+            "interfaces": ["RFC/BAPI", "REST API", "Kafka"]
+          }
+        ]
+      },
+      {
+        "name": "Data Layer",
+        "description": "데이터 저장 및 관리",
+        "components": [
+          {
+            "name": "PostgreSQL Cluster",
+            "type": "데이터베이스",
+            "description": "트랜잭션 데이터베이스",
+            "responsibilities": ["마스터 데이터", "트랜잭션 데이터"],
+            "dependencies": [],
+            "interfaces": ["SQL"]
+          },
+          {
+            "name": "TimescaleDB",
+            "type": "데이터베이스",
+            "description": "시계열 데이터베이스",
+            "responsibilities": ["Level 2 태그 데이터", "설비 메트릭"],
+            "dependencies": [],
+            "interfaces": ["SQL"]
+          },
+          {
+            "name": "Redis Cluster",
+            "type": "캐시",
+            "description": "인메모리 캐시",
+            "responsibilities": ["세션", "실시간 대시보드 데이터"],
+            "dependencies": [],
+            "interfaces": ["Redis Protocol"]
+          }
+        ]
+      },
+      {
+        "name": "OT/Edge Layer",
+        "description": "현장 데이터 수집 (DMZ)",
+        "components": [
+          {
+            "name": "Edge Gateway",
+            "type": "게이트웨이",
+            "description": "라인별 데이터 수집기",
+            "responsibilities": ["OPC-UA 수집", "로컬 버퍼링", "데이터 전송"],
+            "dependencies": ["OPC-UA Server", "Kafka"],
+            "interfaces": ["OPC-UA", "Kafka"]
+          },
+          {
+            "name": "RFID Middleware",
+            "type": "미들웨어",
+            "description": "RFID 데이터 처리",
+            "responsibilities": ["RFID 리더기 연동", "코일 위치 추적"],
+            "dependencies": ["MES Service"],
+            "interfaces": ["TCP/IP", "REST API"]
+          }
+        ]
+      }
+    ],
+    "data_flow": "Level 2 (PLC/HMI) → OPC-UA Server → Edge Gateway → Kafka → MES Service → PostgreSQL/TimescaleDB. SAP 수주 → Kafka → APS Service → 스케줄링 → MES Service → 작업지시. 품질 데이터 → Quality Service → SPC 판정 → 알람/Hold.",
+    "deployment_diagram": "On-Premise: Kubernetes Cluster (Rancher RKE2) - APS, MES, Quality, Equipment Services + PostgreSQL, TimescaleDB, Redis, Kafka. Cloud (AWS EKS): Analytics, Report, Notification Services + RDS Read Replica, S3 Data Lake. DMZ: Edge Gateway 9대 (라인당 1대)."
+  },
+  "database_design": {
+    "database_type": "RDBMS + 시계열DB",
+    "recommended_engine": "PostgreSQL 16 + TimescaleDB 2.13",
+    "entities": [
+      {
+        "name": "coil",
+        "description": "코일 마스터 및 상태",
+        "attributes": [
+          "coil_id: VARCHAR(20) PK",
+          "parent_coil_id: VARCHAR(20) FK",
+          "steel_grade_id: VARCHAR(20) FK",
+          "thickness: DECIMAL(6,3)",
+          "width: DECIMAL(6,1)",
+          "weight: DECIMAL(10,2)",
+          "length: DECIMAL(10,2)",
+          "status: VARCHAR(20)",
+          "current_location: VARCHAR(50)",
+          "quality_grade: VARCHAR(10)",
+          "created_at: TIMESTAMPTZ",
+          "updated_at: TIMESTAMPTZ"
+        ],
+        "primary_key": "coil_id",
+        "relationships": ["1:N coil_genealogy", "1:N work_order", "1:N quality_inspection"]
+      },
+      {
+        "name": "work_order",
+        "description": "작업지시",
+        "attributes": [
+          "work_order_id: BIGSERIAL PK",
+          "plan_id: BIGINT FK",
+          "coil_id: VARCHAR(20) FK",
+          "process_line_id: VARCHAR(20) FK",
+          "sequence: INTEGER",
+          "status: VARCHAR(20)",
+          "planned_start_time: TIMESTAMPTZ",
+          "planned_end_time: TIMESTAMPTZ",
+          "actual_start_time: TIMESTAMPTZ",
+          "actual_end_time: TIMESTAMPTZ",
+          "priority: INTEGER",
+          "is_urgent: BOOLEAN"
+        ],
+        "primary_key": "work_order_id",
+        "relationships": ["N:1 production_plan", "N:1 coil", "1:N production_result"]
+      },
+      {
+        "name": "production_plan",
+        "description": "생산계획",
+        "attributes": [
+          "plan_id: BIGSERIAL PK",
+          "plan_type: VARCHAR(20)",
+          "plan_date: DATE",
+          "status: VARCHAR(20)",
+          "created_by: VARCHAR(50)",
+          "confirmed_by: VARCHAR(50)",
+          "confirmed_at: TIMESTAMPTZ"
+        ],
+        "primary_key": "plan_id",
+        "relationships": ["1:N work_order"]
+      },
+      {
+        "name": "quality_inspection",
+        "description": "품질 검사",
+        "attributes": [
+          "inspection_id: BIGSERIAL PK",
+          "coil_id: VARCHAR(20) FK",
+          "process_line_id: VARCHAR(20) FK",
+          "inspection_type: VARCHAR(50)",
+          "result_value: JSONB",
+          "judgement: VARCHAR(20)",
+          "inspected_at: TIMESTAMPTZ",
+          "inspector_id: VARCHAR(50)"
+        ],
+        "primary_key": "inspection_id",
+        "relationships": ["N:1 coil"]
+      },
+      {
+        "name": "tag_data",
+        "description": "Level 2 태그 데이터 (TimescaleDB Hypertable)",
+        "attributes": [
+          "time: TIMESTAMPTZ PK",
+          "tag_id: VARCHAR(100) PK",
+          "value: DOUBLE PRECISION",
+          "quality: INTEGER",
+          "process_line_id: VARCHAR(20)"
+        ],
+        "primary_key": "time, tag_id",
+        "relationships": []
+      },
+      {
+        "name": "equipment",
+        "description": "설비 마스터",
+        "attributes": [
+          "equipment_id: VARCHAR(20) PK",
+          "process_line_id: VARCHAR(20) FK",
+          "equipment_name: VARCHAR(100)",
+          "equipment_type: VARCHAR(50)",
+          "status: VARCHAR(20)",
+          "installed_date: DATE"
+        ],
+        "primary_key": "equipment_id",
+        "relationships": ["N:1 process_line", "1:N equipment_event"]
+      }
+    ],
+    "indexing_strategy": "coil: status, location, steel_grade 복합 인덱스. work_order: status+line, planned_time 인덱스. tag_data: TimescaleDB 자동 인덱싱 (time + tag_id). 검색용 Elasticsearch 인덱스 (코일 검색, 클레임 역추적).",
+    "partitioning_strategy": "production_result: 월별 Range 파티션 (3년 온라인, 10년 아카이브). tag_data: 일별 Hypertable chunk (1년 상세, 5년 요약). audit_log: 월별 파티션 (7년 보관)."
+  },
+  "api_specification": {
+    "base_url": "/api/v1",
+    "authentication_method": "JWT (OAuth 2.0 + OpenID Connect)",
+    "endpoints": [
+      {
+        "path": "/plans",
+        "method": "GET",
+        "description": "생산계획 목록 조회",
+        "request_body": null,
+        "response_body": "{plans: [{plan_id, plan_type, plan_date, status}]}",
+        "authentication": true,
+        "related_requirement_id": "FR-001"
+      },
+      {
+        "path": "/plans",
+        "method": "POST",
+        "description": "생산계획 생성",
+        "request_body": "{plan_type, plan_date, work_orders: [...]}",
+        "response_body": "{plan_id, status}",
+        "authentication": true,
+        "related_requirement_id": "FR-001"
+      },
+      {
+        "path": "/scheduling/run",
+        "method": "POST",
+        "description": "스케줄링 실행",
+        "request_body": "{plan_id, horizon, constraints, options}",
+        "response_body": "{job_id, status, estimated_completion}",
+        "authentication": true,
+        "related_requirement_id": "FR-002"
+      },
+      {
+        "path": "/scheduling/simulate",
+        "method": "POST",
+        "description": "What-if 시뮬레이션",
+        "request_body": "{plan_id, scenarios: [...]}",
+        "response_body": "{simulation_id, results: [...]}",
+        "authentication": true,
+        "related_requirement_id": "FR-003"
+      },
+      {
+        "path": "/work-orders",
+        "method": "GET",
+        "description": "작업지시 목록 조회",
+        "request_body": null,
+        "response_body": "{work_orders: [...]}",
+        "authentication": true,
+        "related_requirement_id": "FR-005"
+      },
+      {
+        "path": "/work-orders/{woId}/status",
+        "method": "PUT",
+        "description": "작업지시 상태 변경",
+        "request_body": "{status, reason}",
+        "response_body": "{work_order_id, new_status}",
+        "authentication": true,
+        "related_requirement_id": "FR-005"
+      },
+      {
+        "path": "/coils/{coilId}",
+        "method": "GET",
+        "description": "코일 상세 조회 (전 공정 이력 포함)",
+        "request_body": null,
+        "response_body": "{coil_id, dimensions, status, genealogy, process_history}",
+        "authentication": true,
+        "related_requirement_id": "FR-006"
+      },
+      {
+        "path": "/coils/{coilId}/genealogy",
+        "method": "GET",
+        "description": "코일 계보 조회",
+        "request_body": null,
+        "response_body": "{parent_coil, child_coils}",
+        "authentication": true,
+        "related_requirement_id": "FR-006"
+      },
+      {
+        "path": "/quality/spc/{lineId}",
+        "method": "GET",
+        "description": "SPC 관리도 데이터",
+        "request_body": null,
+        "response_body": "{control_chart, ucl, lcl, data_points}",
+        "authentication": true,
+        "related_requirement_id": "FR-008"
+      },
+      {
+        "path": "/quality/claims/{coilId}/trace",
+        "method": "GET",
+        "description": "클레임 역추적",
+        "request_body": null,
+        "response_body": "{process_history, quality_data, roll_history}",
+        "authentication": true,
+        "related_requirement_id": "FR-016"
+      },
+      {
+        "path": "/equipment/{equipId}/oee",
+        "method": "GET",
+        "description": "설비 OEE 조회",
+        "request_body": null,
+        "response_body": "{oee, availability, performance, quality}",
+        "authentication": true,
+        "related_requirement_id": "FR-009"
+      },
+      {
+        "path": "/dashboard/factory",
+        "method": "GET",
+        "description": "공장 전체 현황",
+        "request_body": null,
+        "response_body": "{lines: [...], kpis, alarms}",
+        "authentication": true,
+        "related_requirement_id": "FR-011"
+      },
+      {
+        "path": "/kpi",
+        "method": "GET",
+        "description": "KPI 조회",
+        "request_body": null,
+        "response_body": "{oee, delivery_rate, quality_rate, ...}",
+        "authentication": true,
+        "related_requirement_id": "FR-012"
+      }
+    ],
+    "common_headers": {
+      "Authorization": "Bearer {access_token}",
+      "Content-Type": "application/json",
+      "Accept-Language": "ko-KR | en-US | ja-JP",
+      "X-Request-ID": "{uuid}"
+    },
+    "error_handling": "{error: {code, message, details, timestamp, request_id}}"
+  },
+  "security_requirements": [
+    {
+      "category": "인증",
+      "requirement": "통합 인증 (SSO)",
+      "implementation": "Keycloak + LDAP 연동, OAuth 2.0/OIDC",
+      "priority": "HIGH"
+    },
+    {
+      "category": "인증",
+      "requirement": "다중 인증 (MFA)",
+      "implementation": "TOTP (관리자), SMS (옵션)",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "접근제어",
+      "requirement": "역할 기반 접근제어 (RBAC)",
+      "implementation": "5개 역할 (Admin, Manager, Operator, QC, Viewer)",
+      "priority": "HIGH"
+    },
+    {
+      "category": "네트워크",
+      "requirement": "OT/IT 네트워크 분리",
+      "implementation": "DMZ 구성, 방화벽, 데이터 다이오드",
+      "priority": "HIGH"
+    },
+    {
+      "category": "암호화",
+      "requirement": "전송 데이터 암호화",
+      "implementation": "TLS 1.3 (모든 통신)",
+      "priority": "HIGH"
+    },
+    {
+      "category": "암호화",
+      "requirement": "저장 데이터 암호화",
+      "implementation": "AES-256 (민감 데이터), PostgreSQL pgcrypto",
+      "priority": "HIGH"
+    },
+    {
+      "category": "감사",
+      "requirement": "감사 로그 전수 기록",
+      "implementation": "모든 CUD 작업, API 호출 로깅",
+      "priority": "HIGH"
+    }
+  ],
+  "performance_requirements": [
+    {
+      "metric": "API 응답시간 (p95)",
+      "target_value": "< 3초",
+      "measurement_method": "Prometheus + Grafana",
+      "related_component": "전체 API"
+    },
+    {
+      "metric": "조회 화면 응답시간",
+      "target_value": "< 2초",
+      "measurement_method": "브라우저 성능 측정",
+      "related_component": "Frontend"
+    },
+    {
+      "metric": "데이터 수집 지연",
+      "target_value": "< 2초",
+      "measurement_method": "Edge Gateway 메트릭",
+      "related_component": "Data Collector"
+    },
+    {
+      "metric": "스케줄링 연산시간",
+      "target_value": "< 5분 (1주일 계획)",
+      "measurement_method": "APS Service 로그",
+      "related_component": "APS Service"
+    },
+    {
+      "metric": "동시 사용자",
+      "target_value": "300명+",
+      "measurement_method": "부하 테스트 (k6)",
+      "related_component": "전체 시스템"
+    },
+    {
+      "metric": "일일 트랜잭션",
+      "target_value": "500만 건+",
+      "measurement_method": "Database 메트릭",
+      "related_component": "PostgreSQL"
+    }
+  ],
+  "infrastructure_requirements": [
+    {
+      "category": "Application Server (On-premise)",
+      "specification": "32 vCPU, 64GB RAM, 500GB SSD",
+      "quantity": "6",
+      "purpose": "Kubernetes Worker Node",
+      "estimated_cost": "30억원 (HW 전체)"
+    },
+    {
+      "category": "Database Server (On-premise)",
+      "specification": "32 vCPU, 128GB RAM, 2TB NVMe",
+      "quantity": "3",
+      "purpose": "PostgreSQL + TimescaleDB HA",
+      "estimated_cost": "포함"
+    },
+    {
+      "category": "Kafka Broker (On-premise)",
+      "specification": "16 vCPU, 32GB RAM, 1TB SSD",
+      "quantity": "3",
+      "purpose": "Message Broker",
+      "estimated_cost": "포함"
+    },
+    {
+      "category": "Edge Gateway",
+      "specification": "4 vCPU, 8GB RAM, 100GB SSD",
+      "quantity": "9",
+      "purpose": "라인당 1대 (OPC-UA 수집)",
+      "estimated_cost": "포함"
+    },
+    {
+      "category": "Cloud (AWS)",
+      "specification": "EKS, RDS, MSK, S3",
+      "quantity": "-",
+      "purpose": "Analytics, Report, DR",
+      "estimated_cost": "~$1,500/월"
+    }
+  ],
+  "technical_risks": [
+    {
+      "id": "TR-001",
+      "description": "APS 엔진 냉연 제약조건 성능 미달",
+      "level": "HIGH",
+      "impact": "스케줄링 품질 저하, 프로젝트 지연",
+      "mitigation": "PoC 통한 조기 검증, 휴리스틱 알고리즘 병행 개발",
+      "contingency": "상용 APS 엔진 교체 (Preactor, Asprova)"
+    },
+    {
+      "id": "TR-002",
+      "description": "OPC-UA 대량 태그(7,000+) 수집 지연",
+      "level": "HIGH",
+      "impact": "실시간 데이터 수집 SLA 미달",
+      "mitigation": "라인별 Edge Gateway 분산, 버퍼링",
+      "contingency": "OPC-DA 병행, 히스토리안 직접 연동"
+    },
+    {
+      "id": "TR-003",
+      "description": "SAP RFC/BAPI 연동 복잡도",
+      "level": "MEDIUM",
+      "impact": "ERP 연동 지연",
+      "mitigation": "SAP JCo 전문가 투입, 인터페이스 단순화",
+      "contingency": "IDoc 기반 비동기 연동으로 전환"
+    },
+    {
+      "id": "TR-004",
+      "description": "RFID 고온 환경 내구성 불확실",
+      "level": "MEDIUM",
+      "impact": "코일 추적 정확도 저하",
+      "mitigation": "PoC 통한 검증 (BAF 출측 200℃)",
+      "contingency": "PCM/CAL만 RFID, 나머지 바코드 유지"
+    },
+    {
+      "id": "TR-005",
+      "description": "레거시 히스토리안 데이터 마이그레이션",
+      "level": "MEDIUM",
+      "impact": "데이터 마이그레이션 지연",
+      "mitigation": "5년치 데이터 볼륨 사전 분석, ETL 파이프라인",
+      "contingency": "요약 데이터만 마이그레이션, 원본은 PI 유지"
+    },
+    {
+      "id": "TR-006",
+      "description": "클라우드 하이브리드 네트워크 지연",
+      "level": "MEDIUM",
+      "impact": "클라우드 서비스 응답 지연",
+      "mitigation": "전용선(Direct Connect) 구축, 비동기 처리",
+      "contingency": "클라우드 기능 축소, On-premise 확대"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "status": "draft",
+    "created_at": "2026-02-07T06:42:39+09:00",
+    "source_prd_id": "PRD-20260207-063510",
+    "source_prd_title": "냉연 통합 MES/APS 시스템 구축 프로젝트 (NEXUS)"
+  }
+}

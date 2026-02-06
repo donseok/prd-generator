@@ -268,6 +268,59 @@ class DeleteAllResponse(BaseModel):
     details: dict
 
 
+class OpenPptxResponse(BaseModel):
+    """PPTX 파일 열기 응답"""
+    success: bool
+    message: str
+    file_path: str
+
+
+@router.post("/documents/{doc_id}/open-pptx", response_model=OpenPptxResponse)
+async def open_pptx_file(doc_id: str) -> OpenPptxResponse:
+    """
+    PPTX 파일을 시스템 기본 프로그램(PowerPoint)으로 엽니다.
+    
+    - doc_id: 문서 ID
+    """
+    import subprocess
+    import platform
+    
+    # 모든 폴더에서 PPTX 파일 검색
+    for folder_name in DOCUMENT_FOLDERS.keys():
+        folder_path = WORKSPACE_OUTPUTS_PATH / folder_name
+        
+        if not folder_path.exists():
+            continue
+        
+        pptx_path = folder_path / f"{doc_id}.pptx"
+        
+        if pptx_path.exists():
+            try:
+                # 운영체제에 따라 파일 열기 명령 실행
+                system = platform.system()
+                if system == "Windows":
+                    # Windows: os.startfile() 사용 (가장 안정적)
+                    os.startfile(str(pptx_path))
+                elif system == "Darwin":
+                    # macOS: open 명령 사용
+                    subprocess.Popen(["open", str(pptx_path)])
+                else:
+                    # Linux: xdg-open 명령 사용
+                    subprocess.Popen(["xdg-open", str(pptx_path)])
+                
+                logger.info(f"PPTX 파일 열기: {pptx_path}")
+                return OpenPptxResponse(
+                    success=True,
+                    message=f"PPTX 파일을 열었습니다: {pptx_path.name}",
+                    file_path=str(pptx_path)
+                )
+            except Exception as e:
+                logger.error(f"PPTX 파일 열기 실패: {pptx_path} - {e}")
+                raise HTTPException(status_code=500, detail=f"PPTX 파일을 열 수 없습니다: {str(e)}")
+    
+    raise HTTPException(status_code=404, detail=f"PPTX 파일을 찾을 수 없습니다: {doc_id}")
+
+
 @router.delete("/documents/all", response_model=DeleteAllResponse)
 async def delete_all_documents() -> DeleteAllResponse:
     """
