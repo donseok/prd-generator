@@ -235,3 +235,54 @@ async def get_output_document(doc_id: str) -> dict:
             }
     
     raise HTTPException(status_code=404, detail=f"문서를 찾을 수 없습니다: {doc_id}")
+
+
+class DeleteAllResponse(BaseModel):
+    """문서 삭제 응답"""
+    success: bool
+    message: str
+    deleted_count: int
+    details: dict
+
+
+@router.delete("/documents/all", response_model=DeleteAllResponse)
+async def delete_all_documents() -> DeleteAllResponse:
+    """
+    모든 생성된 문서를 삭제합니다.
+    workspace/outputs/ 폴더 내의 prd, trd, wbs, proposals, ppt 문서를 삭제합니다.
+    .gitkeep 파일은 보존됩니다.
+    """
+    folders = ["prd", "trd", "wbs", "proposals", "ppt"]
+    total_deleted = 0
+    details = {}
+    
+    for folder_name in folders:
+        folder_path = WORKSPACE_OUTPUTS_PATH / folder_name
+        deleted_in_folder = 0
+        
+        if not folder_path.exists():
+            details[folder_name] = 0
+            continue
+        
+        for file_path in folder_path.iterdir():
+            # .gitkeep 파일과 숨김 파일은 제외
+            if file_path.name == ".gitkeep" or file_path.name.startswith("."):
+                continue
+            
+            if file_path.is_file():
+                try:
+                    os.remove(file_path)
+                    deleted_in_folder += 1
+                    logger.info(f"삭제됨: {file_path}")
+                except Exception as e:
+                    logger.error(f"삭제 실패: {file_path} - {e}")
+        
+        details[folder_name] = deleted_in_folder
+        total_deleted += deleted_in_folder
+    
+    return DeleteAllResponse(
+        success=True,
+        message=f"총 {total_deleted}개 파일이 삭제되었습니다.",
+        deleted_count=total_deleted,
+        details=details,
+    )

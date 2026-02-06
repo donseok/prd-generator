@@ -270,6 +270,12 @@ export const api = {
     return response.data;
   },
 
+  // 모든 생성 문서 삭제
+  async deleteAllDocuments(): Promise<DeleteAllResponse> {
+    const response = await client.delete("/outputs/documents/all");
+    return response.data;
+  },
+
   // CLI 생성 문서 상세 조회
   async getOutputDocument(docId: string) {
     const response = await client.get(`/outputs/documents/${docId}`);
@@ -336,6 +342,14 @@ export interface GenerateResponse {
   status: string;
   message: string;
   doc_types: string[];
+}
+
+// 문서 삭제 응답
+export interface DeleteAllResponse {
+  success: boolean;
+  message: string;
+  deleted_count: number;
+  details: Record<string, number>;
 }
 
 export default api;

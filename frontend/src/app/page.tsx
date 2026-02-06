@@ -15,6 +15,7 @@ import {
   Presentation,
   Sun,
   Moon,
+  Trash2,
 } from "lucide-react";
 import { api, OutputDocument, InputFile } from "@/lib/api";
 
@@ -38,6 +39,7 @@ export default function MainPage() {
   const [inputFiles, setInputFiles] = useState<InputFile[]>([]);
   const [loadingInputs, setLoadingInputs] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -87,6 +89,31 @@ export default function MainPage() {
   const openGenerateModal = () => {
     setShowGenerateModal(true);
     fetchInputFiles();
+  };
+
+  const handleDeleteAll = async () => {
+    if (outputs.length === 0) {
+      alert("삭제할 문서가 없습니다.");
+      return;
+    }
+
+    const confirmed = confirm(
+      `정말로 ${outputs.length}개의 생성된 문서를 모두 삭제하시겠습니까?\n\n삭제된 파일은 복구할 수 없습니다.`
+    );
+
+    if (!confirmed) return;
+
+    setDeleting(true);
+    try {
+      const response = await api.deleteAllDocuments();
+      alert(`${response.message}\n\n상세:\n- PRD: ${response.details.prd || 0}개\n- TRD: ${response.details.trd || 0}개\n- WBS: ${response.details.wbs || 0}개\n- 제안서: ${response.details.proposals || 0}개\n- PPT: ${response.details.ppt || 0}개`);
+      refetchOutputs();
+    } catch (error) {
+      console.error("문서 삭제 실패:", error);
+      alert("문서 삭제에 실패했습니다.");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   // CLI 생성 문서 목록 조회
@@ -170,11 +197,24 @@ export default function MainPage() {
                 <span className="hidden sm:inline">새로고침</span>
               </button>
               <button
+                onClick={handleDeleteAll}
+                disabled={deleting || outputs.length === 0}
+                className={`group flex items-center gap-2 px-4 py-2.5 ${isDarkMode ? 'bg-red-500/10 hover:bg-red-500/20 border-red-500/30 hover:border-red-500/50' : 'bg-red-50 hover:bg-red-100 border-red-200 hover:border-red-300'} border rounded-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed`}
+                title="생성된 문서 모두 삭제"
+              >
+                {deleting ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-red-500" />
+                ) : (
+                  <Trash2 className="w-4 h-4 text-red-500" />
+                )}
+                <span className={`hidden sm:inline font-medium ${isDarkMode ? 'text-red-400' : 'text-red-600'}`}>문서 삭제</span>
+              </button>
+              <button
                 onClick={openGenerateModal}
                 className="group flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-violet-600 to-cyan-600 hover:from-violet-500 hover:to-cyan-500 rounded-xl transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-violet-500/25"
               >
                 <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform" />
-                <span className="font-medium">새 PRD 생성</span>
+                <span className="font-medium">새 문서 생성</span>
               </button>
             </div>
           </div>
@@ -284,7 +324,7 @@ export default function MainPage() {
                 <XCircle className="w-5 h-5" />
               </button>
 
-              <h2 className="text-xl font-bold mb-2">새 PRD 생성</h2>
+              <h2 className="text-xl font-bold mb-2">새 문서 생성</h2>
               <p className="text-white/50 text-sm mb-6">
                 workspace/inputs/projects/ 폴더의 파일로 PRD를 생성합니다.
               </p>
