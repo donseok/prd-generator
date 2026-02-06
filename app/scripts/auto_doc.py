@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Auto-doc script for generating all documents.
+"""Auto-doc script for generating all 5 documents.
 
 Usage:
     python -m app.scripts.auto_doc
-    python -m app.scripts.auto_doc --proposal
-    python -m app.scripts.auto_doc --proposal --client "ABC Corporation"
+
+Generates: PRD → TRD → WBS → Proposal → PPT
 """
 
 import asyncio
@@ -25,18 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 async def main():
     parser = argparse.ArgumentParser(
-        description="PRD, TRD, WBS, 제안서 자동 생성"
-    )
-    parser.add_argument(
-        "--proposal",
-        action="store_true",
-        help="제안서까지 생성"
-    )
-    parser.add_argument(
-        "--client",
-        type=str,
-        default="귀사",
-        help="고객사명 (제안서 생성 시 사용)"
+        description="PRD, TRD, WBS, 제안서, PPT 5종 자동 생성"
     )
     parser.add_argument(
         "--input-dir",
@@ -55,22 +44,20 @@ async def main():
         action="store_true",
         help="상세 로그 숨기기"
     )
-    
+
     args = parser.parse_args()
-    
+
     from app.services.document_orchestrator import DocumentOrchestrator
-    
+
     orchestrator = DocumentOrchestrator(
         input_dir=Path(args.input_dir),
         output_base_dir=Path(args.output_dir),
     )
-    
+
     bundle = await orchestrator.generate_all(
-        include_proposal=args.proposal,
-        client_name=args.client,
         verbose=not args.quiet,
     )
-    
+
     # 종료 코드: 에러가 있으면 1
     return 1 if bundle.errors else 0
 

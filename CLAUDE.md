@@ -58,11 +58,8 @@ python test_trd_wbs.py
 
 ### 전체 문서 생성 (@auto-doc)
 ```bash
-# PRD + TRD + WBS 생성
+# PRD + TRD + WBS + 제안서 + PPT 5종 일괄 생성
 python -m app.scripts.auto_doc
-
-# 제안서 포함
-python -m app.scripts.auto_doc --proposal --client "ABC Corporation"
 ```
 
 ### 개별 문서 생성
@@ -87,8 +84,7 @@ python -m app.scripts.ppt_maker    # PPT 생성 (제안서 기반)
 
 ### Custom Agents
 ```bash
-@auto-doc                    # PRD + TRD + WBS 생성
-@auto-doc --proposal         # PRD + TRD + WBS + 제안서 생성
+@auto-doc                    # PRD + TRD + WBS + 제안서 + PPT 5종 일괄 생성
 ```
 
 ## Architecture
@@ -130,7 +126,7 @@ Documents → [Layer 1: Parsing] → [Layer 2: Normalization] → [Layer 3: Vali
 
 ### Scripts
 
-- `app/scripts/auto_doc.py` - CLI for full document generation
+- `app/scripts/auto_doc.py` - CLI for full 5-doc generation (PRD→TRD→WBS→Proposal→PPT)
 - `app/scripts/prd_maker.py` - PRD generation
 - `app/scripts/trd_maker.py` - TRD generation
 - `app/scripts/wbs_maker.py` - WBS generation

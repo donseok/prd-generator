@@ -1,12 +1,13 @@
 """
 문서 생성 통합 오케스트레이터 서비스입니다.
-PRD뿐만 아니라 TRD, WBS, 제안서까지 모든 문서 생성 과정을 순서대로 관리합니다.
+PRD, TRD, WBS, 제안서, PPT 5종 문서 전체 생성 과정을 순서대로 관리합니다.
 
 생성 순서:
 1. PRD (제품 요구사항) 생성
 2. TRD (기술 요구사항) 생성
 3. WBS (작업 분해) 생성
-4. 제안서 생성 (옵션)
+4. 제안서 생성
+5. PPT 생성
 """
 
 import asyncio
@@ -53,13 +54,15 @@ class DocumentBundle:
     trd_path: Optional[Path] = None  # TRD 파일 경로
     wbs_path: Optional[Path] = None  # WBS 파일 경로
     proposal_path: Optional[Path] = None  # 제안서 파일 경로
-    
+    ppt_path: Optional[Path] = None  # PPT 파일 경로
+
     total_time_seconds: float = 0.0  # 총 소요 시간
     errors: List[str] = field(default_factory=list)  # 발생한 에러 목록
-    
+
     def is_complete(self) -> bool:
-        """필수 문서 3종(PRD, TRD, WBS)이 모두 생성되었는지 확인합니다."""
-        return all([self.prd_path, self.trd_path, self.wbs_path])
+        """5종 문서(PRD, TRD, WBS, 제안서, PPT)가 모두 생성되었는지 확인합니다."""
+        return all([self.prd_path, self.trd_path, self.wbs_path,
+                     self.proposal_path, self.ppt_path])
 
 
 class DocumentOrchestrator:
@@ -88,79 +91,90 @@ class DocumentOrchestrator:
         self.trd_dir = self.output_base_dir / "trd"
         self.wbs_dir = self.output_base_dir / "wbs"
         self.proposal_dir = self.output_base_dir / "proposals"
+        self.ppt_dir = self.output_base_dir / "ppt"
     
     async def generate_all(
         self,
-        include_proposal: bool = False,
-        client_name: str = "귀사",
         verbose: bool = True,
     ) -> DocumentBundle:
         """
-        모든 문서를 순서대로 생성하는 메인 함수입니다.
-        
+        5종 문서(PRD, TRD, WBS, 제안서, PPT)를 순서대로 생성하는 메인 함수입니다.
+
         Args:
-            include_proposal: 제안서도 만들지 여부
-            client_name: 제안서에 들어갈 고객사 이름
             verbose: 진행 상황을 화면에 출력할지 여부
-            
+
         Returns:
             생성된 문서들의 정보가 담긴 DocumentBundle 객체
         """
         bundle = DocumentBundle()
         total_start = time.time()
-        
+
         if verbose:
             safe_print("\n" + "=" * 70)
-            safe_print("📋 전체 문서 생성 시작")
+            safe_print("📋 전체 문서 생성 시작 (5종: PRD → TRD → WBS → 제안서 → PPT)")
             safe_print(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             safe_print("=" * 70)
-        
+
         try:
             # 1단계: PRD 생성
             if verbose:
-                safe_print("\n[1/4] PRD (제품 요구사항 정의서) 생성 중...")
+                safe_print("\n[1/5] PRD (제품 요구사항 정의서) 생성 중...")
             bundle.prd_path = await self._generate_prd(verbose)
-            
+
             if not bundle.prd_path:
                 bundle.errors.append("PRD 생성 실패")
                 return bundle  # PRD가 없으면 나머지도 못 만드므로 중단
-            
+
             # 2단계: TRD 생성
             if verbose:
-                safe_print("\n[2/4] TRD (기술 요구사항 정의서) 생성 중...")
+                safe_print("\n[2/5] TRD (기술 요구사항 정의서) 생성 중...")
             bundle.trd_path = await self._generate_trd(bundle.prd_path, verbose)
-            
+
             if not bundle.trd_path:
                 bundle.errors.append("TRD 생성 실패")
-            
+
             # 3단계: WBS 생성
             if verbose:
-                safe_print("\n[3/4] WBS (작업 분해 구조) 생성 중...")
+                safe_print("\n[3/5] WBS (작업 분해 구조) 생성 중...")
             bundle.wbs_path = await self._generate_wbs(bundle.prd_path, verbose)
-            
+
             if not bundle.wbs_path:
                 bundle.errors.append("WBS 생성 실패")
-            
-            # 4단계: 제안서 생성 (선택)
-            if include_proposal:
+
+            # 4단계: 제안서 생성
+            if verbose:
+                safe_print("\n[4/5] 프로젝트 제안서 생성 중...")
+            bundle.proposal_path = await self._generate_proposal(
+                bundle.prd_path, "귀사", verbose
+            )
+
+            if not bundle.proposal_path:
+                bundle.errors.append("제안서 생성 실패")
+
+            # 5단계: PPT 생성
+            if bundle.proposal_path:
                 if verbose:
-                    safe_print("\n[4/4] 프로젝트 제안서 생성 중...")
-                bundle.proposal_path = await self._generate_proposal(
-                    bundle.prd_path, client_name, verbose
+                    safe_print("\n[5/5] PPT 제안서 생성 중...")
+                bundle.ppt_path = await self._generate_ppt(
+                    bundle.proposal_path, verbose
                 )
-                
-                if not bundle.proposal_path:
-                    bundle.errors.append("제안서 생성 실패")
-            
+
+                if not bundle.ppt_path:
+                    bundle.errors.append("PPT 생성 실패")
+            else:
+                if verbose:
+                    safe_print("\n[5/5] PPT 생성 건너뜀 (제안서 없음)")
+                bundle.errors.append("PPT 생성 건너뜀 (제안서 없음)")
+
         except Exception as e:
             logger.error(f"문서 생성 중 오류: {e}", exc_info=True)
             bundle.errors.append(str(e))
-        
+
         bundle.total_time_seconds = time.time() - total_start
-        
+
         if verbose:
-            self._print_summary(bundle, include_proposal)
-        
+            self._print_summary(bundle)
+
         return bundle
     
     async def _generate_prd(self, verbose: bool) -> Optional[Path]:
@@ -362,6 +376,31 @@ class DocumentOrchestrator:
             logger.error(f"제안서 생성 오류: {e}", exc_info=True)
             return None
     
+    async def _generate_ppt(
+        self, proposal_path: Path, verbose: bool
+    ) -> Optional[Path]:
+        """PPT 생성 내부 함수. ppt_maker의 generate_ppt()를 재사용합니다."""
+        from app.scripts.ppt_maker import generate_ppt
+
+        try:
+            self.ppt_dir.mkdir(parents=True, exist_ok=True)
+
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            output_path = self.ppt_dir / f"PPT-{timestamp}.pptx"
+
+            result = generate_ppt(proposal_path, output_path)
+
+            if result and result.exists():
+                if verbose:
+                    safe_print(f"  ✅ PPT 저장 완료: {result.name}")
+                return result
+
+            return None
+
+        except Exception as e:
+            logger.error(f"PPT 생성 오류: {e}", exc_info=True)
+            return None
+
     def _get_input_files(self) -> List[Path]:
         """입력 폴더에서 처리할 파일들을 찾아서 반환합니다."""
         if not self.input_dir.exists():
@@ -396,27 +435,27 @@ class DocumentOrchestrator:
         }
         return type_map.get(suffix, InputType.TEXT)
     
-    def _print_summary(self, bundle: DocumentBundle, include_proposal: bool):
+    def _print_summary(self, bundle: DocumentBundle):
         """작업 결과를 요약해서 출력합니다."""
         safe_print("\n" + "=" * 70)
-        safe_print("📋 문서 생성 작업 완료")
+        safe_print("📋 문서 생성 작업 완료 (5종)")
         safe_print("=" * 70)
-        
+
         docs = [
             ("PRD", bundle.prd_path),
             ("TRD", bundle.trd_path),
             ("WBS", bundle.wbs_path),
+            ("제안서", bundle.proposal_path),
+            ("PPT", bundle.ppt_path),
         ]
-        if include_proposal:
-            docs.append(("제안서", bundle.proposal_path))
-        
+
         for name, path in docs:
             status = "✅" if path else "❌"
             filename = path.name if path else "생성 실패"
             safe_print(f"  {status} {name}: {filename}")
-        
+
         safe_print(f"\n  총 소요시간: {bundle.total_time_seconds:.1f}초 ({bundle.total_time_seconds/60:.1f}분)")
-        
+
         if bundle.errors:
             safe_print(f"\n  ⚠️ 오류: {len(bundle.errors)}건")
             for err in bundle.errors:
