@@ -122,9 +122,9 @@ class PRDContextExtractor:
         # 미해결 사항 변환
         unresolved = [
             {
-                "issue": u.issue,
+                "issue": u.description,
                 "priority": u.priority,
-                "suggested_solution": u.suggested_solution,
+                "suggested_solution": u.suggested_action,
             }
             for u in prd.unresolved_items[:10]
         ]

@@ -77,7 +77,7 @@ export default function ReviewPage() {
     setSubmitting(true);
     try {
       // Submit all decisions
-      for (const decision of decisions.values()) {
+      for (const decision of Array.from(decisions.values())) {
         await submitDecisionMutation.mutateAsync(decision);
       }
       setDecisions(new Map());

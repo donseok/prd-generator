@@ -14,7 +14,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ko">
-      <body className="bg-slate-900 text-white min-h-screen">
+      <body className="min-h-screen">
         <Providers>{children}</Providers>
       </body>
     </html>

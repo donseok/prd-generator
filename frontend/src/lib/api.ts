@@ -97,6 +97,52 @@ export interface PendingReviewsResponse {
 export type PRDListItem = PRDSummary;
 export type ProcessingJob = JobSummary;
 
+// PRD 상세 정보
+export interface PRDOverview {
+  background: string;
+  scope: string;
+  goals: string[];
+  target_users: string[];
+  success_metrics: string[];
+  out_of_scope: string[];
+}
+
+export interface PRDMilestone {
+  id: string;
+  name: string;
+  description: string;
+  order: number;
+  deliverables: string[];
+}
+
+export interface PRDUnresolvedItem {
+  id: string;
+  type: string;
+  description: string;
+  priority: string;
+  suggested_action?: string;
+}
+
+export interface PRDMetadata {
+  version: string;
+  status: string;
+  overall_confidence: number;
+  requires_pm_review: boolean;
+  created_at: string;
+}
+
+export interface PRDDetail {
+  id: string;
+  title: string;
+  overview: PRDOverview;
+  functional_requirements: Requirement[];
+  non_functional_requirements: Requirement[];
+  constraints: Requirement[];
+  milestones: PRDMilestone[];
+  unresolved_items: PRDUnresolvedItem[];
+  metadata: PRDMetadata;
+}
+
 export interface Requirement {
   id: string;
   type: "FR" | "NFR" | "CONSTRAINT";
@@ -128,7 +174,7 @@ export const api = {
   },
 
   // PRD 상세 조회
-  async getPRD(prdId: string) {
+  async getPRD(prdId: string): Promise<PRDDetail> {
     const response = await client.get(`/prd/${prdId}`);
     return response.data;
   },
@@ -277,8 +323,9 @@ export const api = {
   },
 
   // CLI 생성 문서 상세 조회
-  async getOutputDocument(docId: string) {
-    const response = await client.get(`/outputs/documents/${docId}`);
+  async getOutputDocument(docId: string, format?: "json" | "md"): Promise<DocumentContentResponse> {
+    const params = format ? `?format=${format}` : "";
+    const response = await client.get(`/outputs/documents/${docId}${params}`);
     return response.data;
   },
 
@@ -291,7 +338,7 @@ export const api = {
   },
 
   // 문서 생성 시작
-  async generateDocuments(docTypes: string[] = ["prd"]): Promise<GenerateResponse> {
+  async generateDocuments(docTypes: string[] = ["prd", "trd", "wbs", "proposal", "ppt"]): Promise<GenerateResponse> {
     const response = await client.post("/auto-doc/generate", { doc_types: docTypes });
     return response.data;
   },
@@ -319,6 +366,14 @@ export interface OutputDocument {
 export interface OutputDocumentsResponse {
   total: number;
   documents: OutputDocument[];
+}
+
+// 문서 내용 응답
+export interface DocumentContentResponse {
+  id: string;
+  doc_type: string;
+  content_json?: Record<string, unknown>;
+  content_md?: string;
 }
 
 // 입력 파일 정보

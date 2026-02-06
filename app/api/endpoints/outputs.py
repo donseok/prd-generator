@@ -92,7 +92,8 @@ def scan_folder(folder_path: Path, doc_type: str) -> List[OutputDocument]:
             with open(json_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             
-            doc_id = data.get("id", stem)
+            # 파일명(stem)을 ID로 사용 (파일 검색에 사용되므로 일관성 유지)
+            doc_id = stem
             title = data.get("title", stem)
             
             # 타임스탬프 추출
@@ -201,9 +202,11 @@ async def list_output_documents(
 
 
 @router.get("/documents/{doc_id}")
-async def get_output_document(doc_id: str) -> dict:
+async def get_output_document(doc_id: str, format: Optional[str] = None) -> dict:
     """
     특정 문서의 상세 내용을 반환합니다.
+    
+    - format: 'json' 또는 'md'를 지정하면 해당 형식만 반환
     """
     # 모든 폴더에서 문서 검색
     for folder_name, doc_type_label in DOCUMENT_FOLDERS.items():
@@ -212,27 +215,47 @@ async def get_output_document(doc_id: str) -> dict:
         if not folder_path.exists():
             continue
         
-        # JSON 파일 찾기
         json_path = folder_path / f"{doc_id}.json"
-        if json_path.exists():
-            with open(json_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return {
-                "id": doc_id,
-                "doc_type": doc_type_label,
-                "content": data,
-            }
-        
-        # MD 파일 찾기
         md_path = folder_path / f"{doc_id}.md"
-        if md_path.exists():
+        
+        json_exists = json_path.exists()
+        md_exists = md_path.exists()
+        
+        if not json_exists and not md_exists:
+            continue
+        
+        result = {
+            "id": doc_id,
+            "doc_type": doc_type_label,
+        }
+        
+        # format이 지정된 경우 해당 형식만 반환
+        if format == "json":
+            if json_exists:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    result["content_json"] = json.load(f)
+                return result
+            else:
+                raise HTTPException(status_code=404, detail=f"JSON 파일이 없습니다: {doc_id}")
+        
+        elif format == "md":
+            if md_exists:
+                with open(md_path, "r", encoding="utf-8") as f:
+                    result["content_md"] = f.read()
+                return result
+            else:
+                raise HTTPException(status_code=404, detail=f"Markdown 파일이 없습니다: {doc_id}")
+        
+        # format이 없으면 둘 다 반환
+        if json_exists:
+            with open(json_path, "r", encoding="utf-8") as f:
+                result["content_json"] = json.load(f)
+        
+        if md_exists:
             with open(md_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            return {
-                "id": doc_id,
-                "doc_type": doc_type_label,
-                "content_md": content,
-            }
+                result["content_md"] = f.read()
+        
+        return result
     
     raise HTTPException(status_code=404, detail=f"문서를 찾을 수 없습니다: {doc_id}")
 

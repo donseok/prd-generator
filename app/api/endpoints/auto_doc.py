@@ -1,15 +1,13 @@
 """
 Auto-Doc 문서 생성 API입니다.
-로컬 폴더의 파일을 읽어 PRD, TRD, WBS, 제안서를 생성합니다.
+로컬 폴더의 파일을 읽어 PRD, TRD, WBS, 제안서, PPT 5종 문서를 생성합니다.
 """
 
-import asyncio
 import logging
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 
@@ -43,7 +41,7 @@ class InputFilesResponse(BaseModel):
 
 class GenerateRequest(BaseModel):
     """문서 생성 요청"""
-    doc_types: List[str] = ["prd"]  # prd, trd, wbs, proposal
+    doc_types: List[str] = ["prd", "trd", "wbs", "proposal", "ppt"]
 
 
 class GenerateResponse(BaseModel):
@@ -85,101 +83,49 @@ async def list_input_files() -> InputFilesResponse:
     )
 
 
-async def run_prd_maker():
-    """PRD 생성 스크립트 실행"""
-    from app.models import InputType
-    from app.services.claude_client import get_claude_client
-    from app.layers.layer1_parsing import ParserFactory
-    from app.layers.layer2_normalization import Normalizer
-    from app.layers.layer3_validation import Validator
-    from app.layers.layer4_generation import PRDGenerator
-    
-    logger.info("PRD 생성 시작")
-    
-    input_dir = INPUTS_PATH
-    output_dir = OUTPUTS_PATH / "prd"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # 파일 수집
-    files = [f for f in input_dir.iterdir() if f.is_file() and not f.name.startswith('.')]
-    files = sorted(files, key=lambda x: x.name)
-    
-    if not files:
-        raise Exception("입력 파일이 없습니다")
-    
-    client = get_claude_client()
-    factory = ParserFactory(client)
-    normalizer = Normalizer(client)
-    validator = Validator(client)
-    generator = PRDGenerator(client)
-    
-    # Layer 1: 파싱
-    def get_input_type(file_path: Path):
-        from app.models import InputType
-        suffix = file_path.suffix.lower()
-        type_map = {
-            '.txt': InputType.TEXT, '.md': InputType.TEXT, '.json': InputType.TEXT,
-            '.csv': InputType.CSV, '.xlsx': InputType.EXCEL, '.xls': InputType.EXCEL,
-            '.pptx': InputType.POWERPOINT, '.ppt': InputType.POWERPOINT,
-            '.docx': InputType.DOCUMENT, '.doc': InputType.DOCUMENT,
-            '.png': InputType.IMAGE, '.jpg': InputType.IMAGE, '.jpeg': InputType.IMAGE,
-        }
-        return type_map.get(suffix, InputType.TEXT)
-    
-    parsed_contents = []
-    document_ids = []
-    
-    for i, file_path in enumerate(files, 1):
-        input_type = get_input_type(file_path)
-        try:
-            parser = factory.get_parser(input_type)
-            parsed = await parser.parse(file_path)
-            parsed_contents.append(parsed)
-            document_ids.append(f'doc-{i:03d}')
-        except Exception as e:
-            logger.warning(f"파일 파싱 실패: {file_path.name} - {e}")
-    
-    if not parsed_contents:
-        raise Exception("파싱된 콘텐츠가 없습니다")
-    
-    # Layer 2-4: 정규화 → 검증 → 생성
-    requirements = await normalizer.normalize(parsed_contents, document_ids=document_ids)
-    validated, review_items = await validator.validate(requirements, job_id='auto-doc')
-    source_docs = [f.name for f in files]
-    prd = await generator.generate(validated or requirements, source_documents=source_docs)
-    
-    # 저장
-    timestamp = datetime.now().strftime('%Y%m%d-%H%M%S')
-    md_path = output_dir / f'PRD-{timestamp}.md'
-    md_path.write_text(prd.to_markdown(), encoding='utf-8')
-    
-    json_path = output_dir / f'PRD-{timestamp}.json'
-    json_path.write_text(prd.to_json(), encoding='utf-8')
-    
-    logger.info(f"PRD 생성 완료: {prd.id}")
-    return prd.id
-
-
 async def run_generation(job_id: str, doc_types: List[str]):
-    """백그라운드에서 문서 생성 실행"""
+    """백그라운드에서 DocumentOrchestrator를 사용하여 5종 문서 생성 실행"""
+    from app.services.document_orchestrator import DocumentOrchestrator
+
     try:
         generation_jobs[job_id]["status"] = "processing"
         generation_jobs[job_id]["started_at"] = datetime.now().isoformat()
-        
+
+        def on_step(step_name: str, current: int, total: int):
+            """단계별 진행 상황을 job 상태에 업데이트"""
+            generation_jobs[job_id]["current_step"] = step_name
+            generation_jobs[job_id]["current_step_number"] = current
+            generation_jobs[job_id]["total_steps"] = total
+
+        orchestrator = DocumentOrchestrator(
+            input_dir=INPUTS_PATH,
+            output_base_dir=OUTPUTS_PATH,
+        )
+
+        bundle = await orchestrator.generate_all(
+            verbose=True,
+            on_step=on_step,
+        )
+
+        # 결과 정리
         results = []
-        
-        for doc_type in doc_types:
-            generation_jobs[job_id]["current_step"] = doc_type
-            
-            if doc_type == "prd":
-                prd_id = await run_prd_maker()
-                results.append({"type": "prd", "id": prd_id})
-            # trd, wbs, proposal은 추후 구현 가능
-            
+        if bundle.prd_path:
+            results.append({"type": "prd", "path": str(bundle.prd_path)})
+        if bundle.trd_path:
+            results.append({"type": "trd", "path": str(bundle.trd_path)})
+        if bundle.wbs_path:
+            results.append({"type": "wbs", "path": str(bundle.wbs_path)})
+        if bundle.proposal_path:
+            results.append({"type": "proposal", "path": str(bundle.proposal_path)})
+        if bundle.ppt_path:
+            results.append({"type": "ppt", "path": str(bundle.ppt_path)})
+
         generation_jobs[job_id]["status"] = "completed"
         generation_jobs[job_id]["results"] = results
+        generation_jobs[job_id]["errors"] = bundle.errors
+        generation_jobs[job_id]["total_time_seconds"] = bundle.total_time_seconds
         generation_jobs[job_id]["completed_at"] = datetime.now().isoformat()
-        
+
     except Exception as e:
         logger.error(f"문서 생성 실패: {e}")
         generation_jobs[job_id]["status"] = "failed"
@@ -204,7 +150,7 @@ async def generate_documents(
         raise HTTPException(status_code=400, detail="입력 폴더에 파일이 없습니다. workspace/inputs/projects/에 요구사항 파일을 배치해주세요.")
     
     # 지원하는 문서 타입 확인
-    valid_types = ["prd", "trd", "wbs", "proposal"]
+    valid_types = ["prd", "trd", "wbs", "proposal", "ppt"]
     for doc_type in request.doc_types:
         if doc_type not in valid_types:
             raise HTTPException(status_code=400, detail=f"지원하지 않는 문서 타입: {doc_type}")

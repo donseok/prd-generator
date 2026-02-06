@@ -3,6 +3,8 @@ PRD 문서 관리 API입니다.
 생성된 PRD 문서를 조회하거나 다운로드(내보내기)하는 기능을 제공합니다.
 """
 
+import re
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 
@@ -10,6 +12,12 @@ from app.models import PRDDocument
 from app.services import get_file_storage
 
 router = APIRouter()
+
+
+def _sanitize_filename(name: str) -> str:
+    """파일명에 사용할 수 없는 특수문자를 제거합니다."""
+    sanitized = re.sub(r'[\\/:*?"<>|]', '_', name)
+    return sanitized.strip() or "document"
 
 
 @router.get("/{prd_id}")
@@ -49,7 +57,7 @@ async def export_prd(
             content=content,
             media_type="text/markdown",
             headers={
-                "Content-Disposition": f'attachment; filename="{prd.title}.md"'
+                "Content-Disposition": f'attachment; filename="{_sanitize_filename(prd.title)}.md"'
             }
         )
     elif format == "json":
@@ -58,7 +66,7 @@ async def export_prd(
             content=content,
             media_type="application/json",
             headers={
-                "Content-Disposition": f'attachment; filename="{prd.title}.json"'
+                "Content-Disposition": f'attachment; filename="{_sanitize_filename(prd.title)}.json"'
             }
         )
     elif format == "html":
@@ -87,7 +95,7 @@ async def export_prd(
             content=html_content,
             media_type="text/html",
             headers={
-                "Content-Disposition": f'attachment; filename="{prd.title}.html"'
+                "Content-Disposition": f'attachment; filename="{_sanitize_filename(prd.title)}.html"'
             }
         )
     else:

@@ -18,7 +18,7 @@ import sys
 from datetime import datetime, date
 from pathlib import Path
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -96,18 +96,24 @@ class DocumentOrchestrator:
     async def generate_all(
         self,
         verbose: bool = True,
+        on_step: Optional[Callable[[str, int, int], None]] = None,
     ) -> DocumentBundle:
         """
         5종 문서(PRD, TRD, WBS, 제안서, PPT)를 순서대로 생성하는 메인 함수입니다.
 
         Args:
             verbose: 진행 상황을 화면에 출력할지 여부
+            on_step: 단계별 진행 콜백 (step_name, current_step, total_steps)
 
         Returns:
             생성된 문서들의 정보가 담긴 DocumentBundle 객체
         """
         bundle = DocumentBundle()
         total_start = time.time()
+
+        def notify_step(step_name: str, current: int, total: int = 5):
+            if on_step:
+                on_step(step_name, current, total)
 
         if verbose:
             safe_print("\n" + "=" * 70)
@@ -117,6 +123,7 @@ class DocumentOrchestrator:
 
         try:
             # 1단계: PRD 생성
+            notify_step("prd", 1)
             if verbose:
                 safe_print("\n[1/5] PRD (제품 요구사항 정의서) 생성 중...")
             bundle.prd_path = await self._generate_prd(verbose)
@@ -126,6 +133,7 @@ class DocumentOrchestrator:
                 return bundle  # PRD가 없으면 나머지도 못 만드므로 중단
 
             # 2단계: TRD 생성
+            notify_step("trd", 2)
             if verbose:
                 safe_print("\n[2/5] TRD (기술 요구사항 정의서) 생성 중...")
             bundle.trd_path = await self._generate_trd(bundle.prd_path, verbose)
@@ -134,6 +142,7 @@ class DocumentOrchestrator:
                 bundle.errors.append("TRD 생성 실패")
 
             # 3단계: WBS 생성
+            notify_step("wbs", 3)
             if verbose:
                 safe_print("\n[3/5] WBS (작업 분해 구조) 생성 중...")
             bundle.wbs_path = await self._generate_wbs(bundle.prd_path, verbose)
@@ -142,6 +151,7 @@ class DocumentOrchestrator:
                 bundle.errors.append("WBS 생성 실패")
 
             # 4단계: 제안서 생성
+            notify_step("proposal", 4)
             if verbose:
                 safe_print("\n[4/5] 프로젝트 제안서 생성 중...")
             bundle.proposal_path = await self._generate_proposal(
@@ -152,6 +162,7 @@ class DocumentOrchestrator:
                 bundle.errors.append("제안서 생성 실패")
 
             # 5단계: PPT 생성
+            notify_step("ppt", 5)
             if bundle.proposal_path:
                 if verbose:
                     safe_print("\n[5/5] PPT 제안서 생성 중...")
