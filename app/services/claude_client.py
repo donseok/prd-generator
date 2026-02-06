@@ -228,7 +228,7 @@ class ClaudeClient:
                  "--no-session-persistence"],
                 capture_output=True,
                 text=True,
-                timeout=120,  # 2분 제한 (빠른 실패)
+                timeout=240,  # 4분 제한 (대형 프롬프트 대응)
                 env=env,
                 shell=use_shell,
                 encoding='utf-8',
@@ -266,7 +266,7 @@ class ClaudeClient:
             cmd,
             capture_output=True,
             text=True,
-            timeout=120,  # 2분 제한
+            timeout=240,  # 4분 제한 (대형 프롬프트 대응)
             env=env,
             shell=use_shell,
             encoding='utf-8',
