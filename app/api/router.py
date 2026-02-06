@@ -5,7 +5,7 @@ API 라우터 설정 파일입니다.
 
 from fastapi import APIRouter
 
-from app.api.endpoints import health, documents, processing, prd, review
+from app.api.endpoints import health, documents, processing, prd, review, outputs, auto_doc
 
 # 메인 API 라우터 생성
 api_router = APIRouter()
@@ -43,4 +43,18 @@ api_router.include_router(
     review.router,
     prefix="/review",
     tags=["review"]
+)
+
+# 워크스페이스 출력 문서 엔드포인트: CLI 생성 문서 조회 (/outputs)
+api_router.include_router(
+    outputs.router,
+    prefix="/outputs",
+    tags=["outputs"]
+)
+
+# Auto-Doc 문서 생성 엔드포인트: 로컬 폴더 기반 문서 자동 생성 (/auto-doc)
+api_router.include_router(
+    auto_doc.router,
+    prefix="/auto-doc",
+    tags=["auto-doc"]
 )

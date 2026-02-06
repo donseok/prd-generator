@@ -7,6 +7,10 @@ PRD를 바탕으로 구체적인 작업(Task), 일정, 리소스 할당 계획�
 - 작업 패키지(Work Package) 및 세부 작업(Task) 생성
 - 의존성 연결 및 일정 계산 (크리티컬 패스 포함)
 - 필요 인력 및 리소스 추정
+
+개선 사항 (v2):
+- 배치 처리로 AI 호출 최적화 (단계별 1회로 통합)
+- PRDContextExtractor를 통한 풍부한 정보 활용
 """
 
 import asyncio
@@ -17,6 +21,7 @@ from typing import Optional
 from app.models import PRDDocument
 from app.services import ClaudeClient, get_claude_client
 from app.layers.base_generator import BaseGenerator
+from app.layers.prd_context_extractor import get_prd_context_extractor
 
 from .models import (
     WBSDocument,
@@ -88,20 +93,25 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
             phase.work_packages = work_packages
             logger.info(f"[WBSGenerator] {phase.name} 작업 패키지 생성 완료: {len(work_packages)}개")
 
-        # 3. 세부 작업 생성 (AI 병렬 처리)
-        # 작업 패키지별로 세부 작업 목록을 만듭니다. (동시 실행 수 제한)
+        # 3. 세부 작업 생성 (AI 배치 처리로 최적화)
+        # 기존: 작업 패키지마다 개별 AI 호출 → 개선: 단계별로 배치 처리
         all_wps = [(phase, wp) for phase in phases for wp in phase.work_packages]
-        semaphore = asyncio.Semaphore(5)  # 최대 5개까지만 동시 실행
+        total_tasks_count = 0
 
-        async def generate_with_semaphore(wp: WorkPackage) -> list[WBSTask]:
-            async with semaphore:
-                return await self._generate_tasks(prd, wp, context)
+        # 단계별로 그룹화하여 배치 처리 (AI 호출 최소화)
+        for phase in phases:
+            if not phase.work_packages:
+                continue
 
-        task_coroutines = [generate_with_semaphore(wp) for _, wp in all_wps]
-        task_results = await asyncio.gather(*task_coroutines)
-        for (_, wp), tasks in zip(all_wps, task_results):
-            wp.tasks = tasks
-        logger.info(f"[WBSGenerator] 세부 작업 생성 완료: {sum(len(t) for t in task_results)}개 작업")
+            # 한 단계의 모든 작업 패키지를 배치로 처리
+            tasks_by_wp = await self._generate_tasks_batch(prd, phase.work_packages, context)
+
+            # 결과를 각 작업 패키지에 분배
+            for wp in phase.work_packages:
+                wp.tasks = tasks_by_wp.get(wp.id, [])
+                total_tasks_count += len(wp.tasks)
+
+        logger.info(f"[WBSGenerator] 세부 작업 생성 완료: {total_tasks_count}개 작업 (배치 처리)")
 
         # 4. 요구사항 매핑 (로컬 처리)
         # 어떤 작업이 어떤 요구사항을 구현하는 것인지 연결합니다.
@@ -150,21 +160,41 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
     async def _generate_phases(
         self, prd: PRDDocument, context: WBSContext
     ) -> list[WBSPhase]:
-        """프로젝트 개발 방법론에 맞춰 단계(Phase)를 정의합니다."""
-        fr_summary = "\n".join([f"- {r.title}" for r in prd.functional_requirements[:15]])
-        milestone_summary = "\n".join([f"- {m.name}: {m.description}" for m in prd.milestones[:5]])
+        """프로젝트 개발 방법론에 맞춰 단계(Phase)를 정의합니다. (개선: PRD 컨텍스트 활용)"""
+        # PRD 컨텍스트 추출
+        extractor = get_prd_context_extractor()
+        prd_ctx = extractor.extract(prd)
+
+        # 기능 요구사항 (우선순위 표시)
+        fr_lines = []
+        for req in prd_ctx.functional_requirements[:20]:
+            priority_mark = "★" if req.priority == "HIGH" else ""
+            fr_lines.append(f"- [{req.id}] {req.title} {priority_mark}")
+
+        # 마일스톤
+        milestone_lines = []
+        for ms in prd_ctx.milestones[:6]:
+            deliverables = ", ".join(ms.get("deliverables", [])[:3])
+            milestone_lines.append(f"- {ms['name']}: {ms.get('description', '')} (산출물: {deliverables})")
 
         prompt = f"""{PHASE_GENERATION_PROMPT}
 
 프로젝트: {prd.title}
 
-개발 방법론: {context.methodology}
+## 프로젝트 정보
+- 개발 방법론: {context.methodology}
+- 총 요구사항: {prd_ctx.total_requirements}개
+- HIGH 우선순위: {prd_ctx.high_priority_count}개
+- 평균 신뢰도: {prd_ctx.avg_confidence:.0%}
 
-주요 기능 요구사항:
-{fr_summary}
+## 기능 요구사항
+{chr(10).join(fr_lines)}
 
-마일스톤:
-{milestone_summary if milestone_summary else "정의되지 않음"}
+## 비기능 요구사항
+{chr(10).join([f'- {r.title}' for r in prd_ctx.non_functional_requirements[:10]])}
+
+## 마일스톤
+{chr(10).join(milestone_lines) if milestone_lines else "사전 정의된 마일스톤 없음 - 방법론에 따라 생성 필요"}
 """
 
         try:
@@ -219,22 +249,54 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
     async def _generate_work_packages(
         self, prd: PRDDocument, phase: WBSPhase, context: WBSContext
     ) -> list[WorkPackage]:
-        """각 단계별로 수행해야 할 작업 패키지(중간 단위)를 생성합니다."""
-        # 단계에 맞는 요구사항 필터링
-        fr_summary = "\n".join([
-            f"- {r.id}: {r.title}"
-            for r in prd.functional_requirements[:20]
-        ])
+        """각 단계별로 수행해야 할 작업 패키지(중간 단위)를 생성합니다. (개선: PRD 컨텍스트 활용)"""
+        # PRD 컨텍스트 추출
+        extractor = get_prd_context_extractor()
+        prd_ctx = extractor.extract(prd)
+
+        # 요구사항을 우선순위별로 정렬하여 표시
+        sorted_reqs = sorted(
+            prd_ctx.functional_requirements,
+            key=lambda r: (0 if r.priority == "HIGH" else 1 if r.priority == "MEDIUM" else 2, r.id)
+        )
+
+        # 단계에 따라 관련 요구사항 필터링
+        phase_keywords = {
+            "분석": ["분석", "정의", "조사"],
+            "설계": ["설계", "아키텍처", "UI", "UX"],
+            "개발": ["개발", "구현", "기능"],
+            "테스트": ["테스트", "검증", "QA"],
+            "배포": ["배포", "오픈", "운영"],
+        }
+
+        relevant_reqs = sorted_reqs[:25]
+        for keyword_group, keywords in phase_keywords.items():
+            if any(kw in phase.name.lower() for kw in keywords):
+                # 해당 단계와 관련된 요구사항 우선 표시
+                break
+
+        fr_lines = []
+        for req in relevant_reqs:
+            priority_mark = "★" if req.priority == "HIGH" else ""
+            fr_lines.append(f"- [{req.id}] {req.title} {priority_mark}")
 
         prompt = f"""{WORK_PACKAGE_PROMPT}
 
 프로젝트: {prd.title}
 
-현재 단계: {phase.name}
-단계 설명: {phase.description}
+## 현재 단계
+- 단계명: {phase.name}
+- 설명: {phase.description}
+- 산출물: {', '.join(phase.deliverables[:5]) if phase.deliverables else '정의 필요'}
 
-기능 요구사항:
-{fr_summary}
+## 관련 기능 요구사항
+{chr(10).join(fr_lines)}
+
+## 비기능 요구사항 (성능/보안/확장성)
+{chr(10).join([f'- {r.title}' for r in prd_ctx.non_functional_requirements[:8]])}
+
+## 제약사항
+{chr(10).join([f'- {r.title}' for r in prd_ctx.constraints[:5]]) if prd_ctx.constraints else '없음'}
 """
 
         try:
@@ -264,10 +326,120 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
                 ),
             ]
 
+    async def _generate_tasks_batch(
+        self, prd: PRDDocument, work_packages: list[WorkPackage], context: WBSContext
+    ) -> dict[str, list[WBSTask]]:
+        """
+        여러 작업 패키지의 세부 작업(Task)을 한 번의 AI 호출로 배치 생성합니다.
+        이전 방식: N개 작업 패키지 × 1 AI 호출 = N번
+        개선 방식: N개 작업 패키지 → 1 AI 호출 (배치)
+        """
+        if not work_packages:
+            return {}
+
+        # 작업 패키지 목록을 프롬프트로 구성
+        wp_list_text = "\n".join([
+            f"{i+1}. {wp.id}: {wp.name} - {wp.description}"
+            for i, wp in enumerate(work_packages)
+        ])
+
+        prompt = f"""{TASK_GENERATION_PROMPT}
+
+프로젝트: {prd.title}
+
+작업 패키지 목록:
+{wp_list_text}
+
+리소스 유형: {', '.join(context.resource_types)}
+
+각 작업 패키지별로 세부 작업을 생성하고 work_package_id 필드에 해당 패키지 ID를 명시해주세요.
+"""
+
+        try:
+            result = await self.claude_client.complete_json(
+                system_prompt="프로젝트 관리 전문가로서 응답하세요.",
+                user_prompt=prompt,
+                temperature=0.3,
+            )
+
+            # 결과를 작업 패키지별로 분류
+            tasks_by_wp: dict[str, list[WBSTask]] = {wp.id: [] for wp in work_packages}
+            task_counter: dict[str, int] = {wp.id: 1 for wp in work_packages}
+
+            for task_data in result.get("tasks", []):
+                wp_id = task_data.get("work_package_id", "")
+
+                # 작업 패키지 ID가 없거나 잘못된 경우 첫 번째 패키지에 할당
+                if wp_id not in tasks_by_wp:
+                    wp_id = work_packages[0].id if work_packages else ""
+                    if not wp_id:
+                        continue
+
+                counter = task_counter[wp_id]
+                task_id = task_data.get("id", f"{wp_id}-T-{counter:03d}")
+                task_counter[wp_id] = counter + 1
+
+                resources = []
+                resource_type = task_data.get("resource_type", "개발자")
+                if resource_type:
+                    resources.append(ResourceAllocation(
+                        resource_type=resource_type,
+                        allocation_percentage=100.0,
+                        person_count=1,
+                    ))
+
+                dependencies = []
+                for pred_id in task_data.get("predecessor_ids", []):
+                    dependencies.append(TaskDependency(
+                        predecessor_id=pred_id,
+                        dependency_type=DependencyType.FINISH_TO_START,
+                    ))
+
+                tasks_by_wp[wp_id].append(WBSTask(
+                    id=task_id,
+                    name=task_data.get("name", f"Task {counter}"),
+                    description=task_data.get("description", ""),
+                    estimated_hours=float(task_data.get("estimated_hours", 8)),
+                    resources=resources,
+                    dependencies=dependencies,
+                    deliverables=task_data.get("deliverables", []),
+                ))
+
+            # 작업이 하나도 없는 패키지에 기본 작업 추가
+            for wp in work_packages:
+                if not tasks_by_wp[wp.id]:
+                    tasks_by_wp[wp.id].append(WBSTask(
+                        id=f"{wp.id}-T-001",
+                        name=f"{wp.name} 수행",
+                        description="작업 패키지 주요 작업 수행",
+                        estimated_hours=16.0,
+                        resources=[ResourceAllocation(resource_type="개발자", allocation_percentage=100.0, person_count=1)],
+                    ))
+
+            logger.info(f"[WBSGenerator] 배치 처리 완료: {len(work_packages)}개 패키지 → {sum(len(t) for t in tasks_by_wp.values())}개 작업")
+            return tasks_by_wp
+
+        except Exception as e:
+            logger.warning(f"[WBSGenerator] 배치 작업 생성 실패: {e}")
+            # 실패 시 각 패키지에 기본 작업 할당
+            return {
+                wp.id: [WBSTask(
+                    id=f"{wp.id}-T-001",
+                    name=f"{wp.name} 수행",
+                    description="작업 패키지 주요 작업 수행",
+                    estimated_hours=16.0,
+                    resources=[ResourceAllocation(resource_type="개발자", allocation_percentage=100.0, person_count=1)],
+                )]
+                for wp in work_packages
+            }
+
     async def _generate_tasks(
         self, prd: PRDDocument, work_package: WorkPackage, context: WBSContext
     ) -> list[WBSTask]:
-        """작업 패키지 내의 세부 작업(Task)을 생성합니다."""
+        """
+        작업 패키지 내의 세부 작업(Task)을 생성합니다.
+        (단일 패키지용 - 레거시/폴백용으로 유지)
+        """
         prompt = f"""{TASK_GENERATION_PROMPT}
 
 프로젝트: {prd.title}

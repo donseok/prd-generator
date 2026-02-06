@@ -1,0 +1,181 @@
+{
+  "id": "PROP-20260206-100000",
+  "title": "냉연 통합 MES/APS 시스템 구축 제안서 (Project NEXUS)",
+  "client_name": "○○제철 냉연사업부",
+  "project_name": "냉연 통합 MES/APS 시스템 구축 (Project NEXUS)",
+  "executive_summary": {
+    "key_message": "MES와 APS를 단일 통합 플랫폼으로 재구축하여 실시간 의사결정(15분→2초), 지능형 스케줄링(준수율 72%→90%), 코일 완전 추적(정확도 85%→99%), 통합 품질 관리(불량률 1.2%→0.7%)를 실현. ROI 146%, 연간 효과 123억원.",
+    "project_overview": {
+      "duration": "18개월 (2026.07 ~ 2027.12)",
+      "budget": "150억원",
+      "team_size": "40명 (사내 15 + 외부 25)",
+      "scope": "냉연 전 공정 9개 라인 (PCM, BAF, CAL, EGL, CGL, SPM, RCL, SL, CCL)"
+    }
+  },
+  "current_situation": {
+    "problems": [
+      {"id": 1, "title": "MES-APS 연동 지연", "as_is": "15분 배치", "impact": "계획-실적 일치율 68%"},
+      {"id": 2, "title": "APS 제약조건 미반영", "as_is": "15개 중 0개 반영", "impact": "스케줄 준수율 72%"},
+      {"id": 3, "title": "코일 추적 불가", "as_is": "수동 대장, 야드맨 무전 25분", "impact": "코일 분실 월 2~3건"},
+      {"id": 4, "title": "품질 역추적 지연", "as_is": "수작업 16시간", "impact": "고객 클레임 대응 지연"},
+      {"id": 5, "title": "수작업 과다", "as_is": "계획 4시간, 일보 2시간, 보정 340건/월", "impact": "생산성 저하"},
+      {"id": 6, "title": "MES 노후화", "as_is": "14년 운영", "impact": "연 8억 유지보수, 기술 부채"}
+    ],
+    "risk_of_inaction": "글로벌 경쟁사 대비 OEE 격차 확대(10%p→15%p), 주요 고객 Dual Source 검토 중, 유지보수 비용 매년 10% 증가"
+  },
+  "solution": {
+    "before_after": [
+      {"item": "MES-APS 연동", "before": "15분 배치", "after": "2초 실시간", "improvement": "99.8%"},
+      {"item": "스케줄 준수율", "before": "72%", "after": "90%", "improvement": "+18%p"},
+      {"item": "OEE", "before": "78%", "after": "83%", "improvement": "+5%p"},
+      {"item": "납기 준수율", "before": "92%", "after": "97%", "improvement": "+5%p"},
+      {"item": "품질 불량률", "before": "1.2%", "after": "0.7%", "improvement": "-0.5%p"},
+      {"item": "코일 위치 정확도", "before": "85%", "after": "99%", "improvement": "+14%p"},
+      {"item": "계획 수립 시간", "before": "4시간", "after": "30분", "improvement": "-87.5%"},
+      {"item": "클레임 원인분석", "before": "16시간", "after": "2시간", "improvement": "-87.5%"},
+      {"item": "생산일보 작성", "before": "2시간", "after": "15분", "improvement": "-87.5%"},
+      {"item": "수작업 보정", "before": "340건/월", "after": "50건/월", "improvement": "-85%"}
+    ],
+    "key_differentiators": [
+      "냉연 특화 APS: 15개 제약조건 커스텀 플러그인",
+      "실시간 통합: MES↔APS 2초 연동, 7,200태그 1초 수집",
+      "하이브리드 코일 추적: RFID(PCM/CAL) + 바코드(나머지)",
+      "통합 품질: SPC 실시간, 클레임 30분 역추적, 전자 성적서",
+      "MSA 아키텍처: Kafka EDA, 모듈 독립 확장, 무중단 배포"
+    ]
+  },
+  "scope_of_work": {
+    "in_scope": [
+      {"area": "APS", "features": "통합 생산계획, 15개 제약조건, 시뮬레이션, 재스케줄링, 수주-생산 연계", "priority": "HIGH"},
+      {"area": "MES", "features": "작업지시, 코일 추적(RFID+바코드), 데이터 수집(OPC-UA), WIP, 비상 운영", "priority": "HIGH"},
+      {"area": "품질", "features": "15개 항목, SPC, 합부 판정, 역추적, 표면검사, 성적서", "priority": "HIGH"},
+      {"area": "설비", "features": "상태 모니터링, OEE, 정비-APS 연동, 롤 관리", "priority": "HIGH"},
+      {"area": "통합", "features": "대시보드, KPI, 생산일보, BI 데이터 마트, 모바일 PWA", "priority": "MEDIUM"},
+      {"area": "연동", "features": "ERP(SAP), Level 2(OPC-UA), LIMS, WMS, EMS", "priority": "HIGH"},
+      {"area": "인프라", "features": "K8s, Kafka, DB, 보안(DMZ, Data Diode)", "priority": "HIGH"},
+      {"area": "변화관리", "features": "4단계 교육, 슈퍼유저 18명, 병행 운영 3개월", "priority": "HIGH"}
+    ],
+    "out_of_scope": [
+      "AI/ML 품질 예측 모델 (2차 범위)",
+      "모바일 승인/설비 점검 (2차 범위)",
+      "열연/후판 확대 적용 (아키텍처만 고려)",
+      "원가 분석 연동 (P3 선택)"
+    ]
+  },
+  "technology_stack": [
+    {"layer": "Backend (MES)", "technology": "Java 17 + Spring Boot 3.2"},
+    {"layer": "Backend (APS)", "technology": "Python 3.11 + FastAPI"},
+    {"layer": "Frontend", "technology": "React 18 + TypeScript 5.x + Ant Design 5.x"},
+    {"layer": "Message Broker", "technology": "Apache Kafka 3.6"},
+    {"layer": "API Gateway", "technology": "Kong 3.5"},
+    {"layer": "DB (트랜잭션)", "technology": "PostgreSQL 16"},
+    {"layer": "DB (시계열)", "technology": "TimescaleDB 2.x"},
+    {"layer": "캐시", "technology": "Redis 7.x"},
+    {"layer": "인증", "technology": "Keycloak 23.x (OAuth 2.0)"},
+    {"layer": "Container", "technology": "Kubernetes 1.29 + Rancher 2.8 / AWS EKS"},
+    {"layer": "CI/CD", "technology": "GitLab CI + ArgoCD"},
+    {"layer": "OPC-UA", "technology": "Eclipse Milo 0.6.x"}
+  ],
+  "timeline": {
+    "total_duration": "18개월",
+    "phases": [
+      {"id": "M1", "name": "분석/설계", "duration": "3개월", "period": "2026.07~09", "effort_md": 547, "key_deliverables": ["SRS", "아키텍처 설계서", "PoC 결과", "UI/UX 프로토타입"]},
+      {"id": "M2", "name": "기반 구축", "duration": "3개월", "period": "2026.10~12", "effort_md": 375, "key_deliverables": ["K8s 환경", "공통 프레임워크", "DB 스키마", "OPC-UA 전환"]},
+      {"id": "M3", "name": "핵심 개발", "duration": "6개월", "period": "2027.01~06", "effort_md": 1045, "key_deliverables": ["APS 엔진+제약조건", "MES 핵심 모듈", "연동 완료", "대시보드/KPI"]},
+      {"id": "M4", "name": "통합 테스트", "duration": "3개월", "period": "2027.07~09", "effort_md": 545, "key_deliverables": ["테스트 보고서", "성능/보안 검증", "마이그레이션"]},
+      {"id": "M5", "name": "시범 운영", "duration": "2개월", "period": "2027.10~11", "effort_md": 255, "key_deliverables": ["PCM+CAL 시범", "전체 사용자 교육"]},
+      {"id": "M6", "name": "전체 오픈", "duration": "1개월", "period": "2027.12", "effort_md": 115, "key_deliverables": ["9라인 Go-Live", "운영 매뉴얼"]}
+    ],
+    "total_effort_md": 2882,
+    "total_man_months": 131
+  },
+  "resource_plan": {
+    "total_team_size": 40,
+    "internal": 15,
+    "external": 25,
+    "roles": [
+      {"role": "PM", "count": 2, "source": "사내 1 + 외부 1"},
+      {"role": "BA", "count": 3, "source": "사내 2 + 외부 1"},
+      {"role": "SA", "count": 2, "source": "외부 2"},
+      {"role": "APS 개발", "count": 5, "source": "외부 5"},
+      {"role": "MES BE 개발", "count": 6, "source": "사내 2 + 외부 4"},
+      {"role": "품질/설비 개발", "count": 5, "source": "사내 1 + 외부 4"},
+      {"role": "FE 개발", "count": 4, "source": "외부 4"},
+      {"role": "연동 개발", "count": 3, "source": "사내 1 + 외부 2"},
+      {"role": "Infra/DevOps", "count": 3, "source": "사내 2 + 외부 1"},
+      {"role": "DBA", "count": 2, "source": "사내 1 + 외부 1"},
+      {"role": "UX 디자인", "count": 2, "source": "외부 2"},
+      {"role": "QA/보안", "count": 3, "source": "사내 2 + 외부 1"}
+    ]
+  },
+  "investment_analysis": {
+    "budget": {
+      "total": "150억원",
+      "breakdown": [
+        {"item": "SW 개발", "amount": 80, "percent": 53},
+        {"item": "HW/인프라", "amount": 30, "percent": 20},
+        {"item": "컨설팅/PM", "amount": 25, "percent": 17},
+        {"item": "예비비", "amount": 15, "percent": 10}
+      ]
+    },
+    "expected_benefits": {
+      "annual_total": "123억원",
+      "items": [
+        {"item": "OEE 향상 (+5%p) → 생산량 증대", "annual_amount": 45},
+        {"item": "납기 준수율 향상 → 페널티/고객", "annual_amount": 25},
+        {"item": "불량률 감소 → 품질 비용 절감", "annual_amount": 20},
+        {"item": "재공 재고 절감 (-15%)", "annual_amount": 15},
+        {"item": "에너지 비용 절감 (-8%)", "annual_amount": 8},
+        {"item": "수작업 자동화 → 인건비", "annual_amount": 5},
+        {"item": "유지보수 비용 절감", "annual_amount": 5}
+      ]
+    },
+    "roi": {
+      "roi_percent": 146,
+      "payback_period": "약 1.2년",
+      "npv_5year": "316억원 (할인율 10%)",
+      "irr": "78%"
+    }
+  },
+  "risks": [
+    {"id": 1, "description": "APS 엔진 커스텀 제약조건 구현 불가", "impact": "HIGH", "probability": "MEDIUM", "mitigation": "PoC 우선 검증. 대안: 자체 엔진 개발"},
+    {"id": 2, "description": "RFID 내열 태그 환경 부적합", "impact": "HIGH", "probability": "MEDIUM", "mitigation": "벤더 3사 PoC. 대안: AI 카메라 인식"},
+    {"id": 3, "description": "OPC-UA 전환 지연", "impact": "HIGH", "probability": "HIGH", "mitigation": "조기 협의. 대안: OPC-DA Wrapper"},
+    {"id": 4, "description": "마스터 데이터 클렌징 지연", "impact": "MEDIUM", "probability": "HIGH", "mitigation": "2개월 조기 착수. 범위 축소 대안"},
+    {"id": 5, "description": "현장 변화 저항", "impact": "MEDIUM", "probability": "MEDIUM", "mitigation": "슈퍼유저 18명, 4단계 교육, 병행 운영"},
+    {"id": 6, "description": "18개월 일정 지연", "impact": "HIGH", "probability": "MEDIUM", "mitigation": "Phase-Gate, 크리티컬 패스 관리"},
+    {"id": 7, "description": "성능 목표 미달", "impact": "MEDIUM", "probability": "LOW", "mitigation": "MSA 독립 확장, 부하 테스트 사전 수행"},
+    {"id": 8, "description": "ISMS-P 인증 미통과", "impact": "MEDIUM", "probability": "LOW", "mitigation": "설계 단계부터 보안 내재화"}
+  ],
+  "expected_effects": {
+    "quantitative": [
+      {"kpi": "OEE", "as_is": "78%", "to_be": "83%", "improvement": "+5%p"},
+      {"kpi": "납기 준수율", "as_is": "92%", "to_be": "97%", "improvement": "+5%p"},
+      {"kpi": "품질 불량률", "as_is": "1.2%", "to_be": "0.7%", "improvement": "-0.5%p"},
+      {"kpi": "스케줄 준수율", "as_is": "72%", "to_be": "90%", "improvement": "+18%p"},
+      {"kpi": "코일 위치 정확도", "as_is": "85%", "to_be": "99%", "improvement": "+14%p"},
+      {"kpi": "계획 수립 시간", "as_is": "4시간", "to_be": "30분", "improvement": "-87.5%"},
+      {"kpi": "연간 절감 효과", "as_is": "-", "to_be": "123억원/년", "improvement": "ROI 146%"}
+    ],
+    "qualitative": [
+      "글로벌 경쟁력 강화 (Smart Factory Tier 3→Tier 2)",
+      "데이터 기반 의사결정 체계 구축",
+      "업무 프로세스 혁신 (수작업 85% 감소)",
+      "MSA 아키텍처로 열연/후판 확대 기반 마련",
+      "시스템 기반 표준화로 속인화 문제 해결"
+    ]
+  },
+  "next_steps": [
+    {"step": 1, "action": "제안서 검토", "timeline": "2026.06 W3", "description": "경영진 보고 및 승인"},
+    {"step": 2, "action": "계약 체결", "timeline": "2026.06 W4", "description": "상세 계약 조건 협의"},
+    {"step": 3, "action": "프로젝트 킥오프", "timeline": "2026.07 W1", "description": "전체 킥오프 + PM 체계 수립"},
+    {"step": 4, "action": "M1 착수", "timeline": "2026.07 W1", "description": "현장 인터뷰, PoC, 아키텍처 설계 동시 착수"}
+  ],
+  "metadata": {
+    "version": "1.0",
+    "status": "draft",
+    "created_at": "2026-02-06T10:00:00+09:00",
+    "source_prd_id": "PRD-20260206-093046",
+    "source_prd_title": "냉연 통합 MES/APS 시스템 구축 (Project NEXUS)"
+  }
+}

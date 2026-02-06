@@ -7,6 +7,10 @@ Layer 5: 제안서(Proposal) 생성기입니다.
 - 솔루션 접근법 및 아키텍처 제안
 - 일정 및 인력 계획 수립
 - 기대 효과 및 리스크 분석
+
+개선 사항 (v2):
+- PRDContextExtractor를 통한 풍부한 PRD 정보 활용
+- 리스크 지표 자동 추출 및 반영
 """
 
 import logging
@@ -16,6 +20,7 @@ from typing import Optional
 from app.models import PRDDocument, RequirementType
 from app.services import ClaudeClient, get_claude_client
 from app.layers.base_generator import BaseGenerator
+from app.layers.prd_context_extractor import get_prd_context_extractor
 
 from .models import (
     ProposalDocument,
@@ -197,29 +202,36 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         )
 
     async def _generate_solution_approach(self, prd: PRDDocument) -> SolutionApproach:
-        """AI를 사용하여 어떻게 개발할지(솔루션 접근법)를 작성합니다."""
+        """AI를 사용하여 어떻게 개발할지(솔루션 접근법)를 작성합니다. (개선: PRD 컨텍스트 활용)"""
+        # PRD 컨텍스트 추출기 활용
+        extractor = get_prd_context_extractor()
+        prd_text = extractor.to_prompt_text(prd, include_details=False)
+        risk_indicators = extractor.get_risk_indicators(prd)
+
         # 기술 제약조건이 있으면 기술 스택 힌트로 사용
         tech_stack = []
         for constraint in prd.constraints:
             if any(kw in constraint.title.lower() for kw in ["기술", "스택", "프레임워크", "언어"]):
                 tech_stack.append(constraint.title)
 
-        # 요구사항 요약
-        fr_summary = "\n".join([f"- {r.title}" for r in prd.functional_requirements[:10]])
-        nfr_summary = "\n".join([f"- {r.title}" for r in prd.non_functional_requirements[:5]])
+        # 아키텍처 결정에 영향을 주는 특수 요구사항
+        special_considerations = []
+        if risk_indicators["real_time_requirements"]:
+            special_considerations.append("실시간 데이터 처리 필요 - WebSocket/이벤트 기반 아키텍처 고려")
+        if risk_indicators["integration_requirements"]:
+            special_considerations.append("외부 시스템 연동 필요 - API Gateway/어댑터 패턴 고려")
+        if len(prd.functional_requirements) > 20:
+            special_considerations.append("대규모 기능 - 마이크로서비스/모듈러 아키텍처 고려")
 
         prompt = f"""{SOLUTION_APPROACH_PROMPT}
 
-프로젝트: {prd.title}
+{prd_text}
 
-주요 기능 요구사항:
-{fr_summary}
+## 기술 제약사항
+{chr(10).join([f'- {c.title}: {c.description[:100]}' for c in prd.constraints[:8]]) if prd.constraints else '특별한 제약 없음'}
 
-비기능 요구사항:
-{nfr_summary}
-
-기술 제약사항:
-{chr(10).join([f'- {c.title}' for c in prd.constraints[:5]])}
+## 아키텍처 고려사항
+{chr(10).join([f'- {s}' for s in special_considerations]) if special_considerations else '일반적인 웹 애플리케이션 아키텍처 적용'}
 """
 
         try:
@@ -336,51 +348,77 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
         )
 
     def _assess_risks(self, prd: PRDDocument) -> list[Risk]:
-        """프로젝트의 잠재적 위험 요소를 분석합니다."""
+        """프로젝트의 잠재적 위험 요소를 분석합니다. (개선: PRD 컨텍스트 활용)"""
         risks = []
 
-        # 1. 요구사항이 불명확한 경우
-        low_confidence_reqs = [
-            r for r in prd.functional_requirements + prd.non_functional_requirements
-            if r.confidence_score < 0.7
-        ]
+        # PRD 컨텍스트에서 리스크 지표 추출
+        extractor = get_prd_context_extractor()
+        risk_indicators = extractor.get_risk_indicators(prd)
 
-        if low_confidence_reqs:
+        # 1. 신뢰도 낮은 요구사항 (불명확성 리스크)
+        low_conf_reqs = risk_indicators["low_confidence_requirements"]
+        if low_conf_reqs:
+            sample_titles = ", ".join([r["title"][:20] for r in low_conf_reqs[:3]])
             risks.append(Risk(
-                description="요구사항 명확성 부족",
-                level=RiskLevel.MEDIUM,
+                description=f"요구사항 명확성 부족 ({len(low_conf_reqs)}건)",
+                level=RiskLevel.MEDIUM if len(low_conf_reqs) < 5 else RiskLevel.HIGH,
                 impact="요구사항 변경으로 인한 일정 지연 가능",
                 mitigation="요구사항 확정 미팅 및 문서화 강화",
-                source_requirement_id=low_confidence_reqs[0].id if low_confidence_reqs else None,
+                source_requirement_id=low_conf_reqs[0]["id"] if low_conf_reqs else None,
             ))
 
-        # 2. 미확정 사항이 있는 경우
-        if prd.unresolved_items:
-            high_priority_unresolved = [
-                u for u in prd.unresolved_items if u.priority == "HIGH"
-            ]
-            if high_priority_unresolved:
-                risks.append(Risk(
-                    description="미확정 의사결정 사항 존재",
-                    level=RiskLevel.HIGH,
-                    impact="프로젝트 방향성 및 일정에 영향",
-                    mitigation="착수 전 주요 사항 의사결정 완료",
-                ))
-
-        # 3. 외부 연동이 필요한 경우 (기술적 난이도)
-        integration_reqs = [
-            r for r in prd.functional_requirements + prd.constraints
-            if any(kw in r.title.lower() for kw in ["연동", "통합", "인터페이스", "api"])
-        ]
-        if integration_reqs:
+        # 2. 불명확 정보 존재 (정보 부족 리스크)
+        missing_info = risk_indicators["missing_info_items"]
+        if missing_info:
             risks.append(Risk(
-                description="외부 시스템 연동 복잡성",
+                description=f"불명확한 정보 존재 ({len(missing_info)}건)",
+                level=RiskLevel.MEDIUM,
+                impact="추가 분석 및 확인 작업으로 일정 지연 가능",
+                mitigation=f"착수 전 확인 필요: {', '.join(missing_info[:3])}",
+            ))
+
+        # 3. 미해결 사항 (의사결정 리스크)
+        unresolved = risk_indicators["unresolved_items"]
+        high_priority_unresolved = [u for u in unresolved if u.get("priority") == "HIGH"]
+        if high_priority_unresolved:
+            risks.append(Risk(
+                description=f"미확정 의사결정 사항 ({len(high_priority_unresolved)}건)",
+                level=RiskLevel.HIGH,
+                impact="프로젝트 방향성 및 일정에 영향",
+                mitigation="착수 전 주요 사항 의사결정 완료 필요",
+            ))
+
+        # 4. 외부 연동 (기술적 복잡성 리스크)
+        integration_ids = risk_indicators["integration_requirements"]
+        if integration_ids:
+            risks.append(Risk(
+                description=f"외부 시스템 연동 복잡성 ({len(integration_ids)}건)",
                 level=RiskLevel.MEDIUM,
                 impact="연동 인터페이스 변경 시 추가 개발 필요",
                 mitigation="사전 인터페이스 정의 및 테스트 환경 확보",
             ))
 
-        # 4. 일정이 복잡한 경우
+        # 5. 실시간 처리 (기술적 난이도 리스크)
+        realtime_ids = risk_indicators["real_time_requirements"]
+        if realtime_ids:
+            risks.append(Risk(
+                description=f"실시간 처리 요구사항 ({len(realtime_ids)}건)",
+                level=RiskLevel.MEDIUM,
+                impact="실시간 아키텍처 구현 복잡성",
+                mitigation="WebSocket/SSE 기반 아키텍처 PoC 선행",
+            ))
+
+        # 6. 보안 요구사항 (컴플라이언스 리스크)
+        security_ids = risk_indicators["security_requirements"]
+        if security_ids:
+            risks.append(Risk(
+                description=f"보안 요구사항 ({len(security_ids)}건)",
+                level=RiskLevel.MEDIUM,
+                impact="보안 검토 및 테스트로 일정 영향 가능",
+                mitigation="보안 전문가 참여 및 보안 테스트 계획 수립",
+            ))
+
+        # 7. 일정 복잡성
         if prd.milestones and len(prd.milestones) > 3:
             risks.append(Risk(
                 description="다단계 프로젝트 일정 관리",

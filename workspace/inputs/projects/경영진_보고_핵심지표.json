@@ -1,0 +1,91 @@
+{
+  "report_title": "냉연 통합 MES/APS 투자 타당성 분석",
+  "report_date": "2026-06-01",
+  "prepared_by": "전략기획팀",
+  "executive_summary": "현행 냉연 MES(2012년)/APS(2015년) 노후화로 인한 생산성 손실이 연간 약 120억원으로 추산되며, 150억원 투자 시 3년 내 ROI 달성 가능",
+  "investment": {
+    "total_budget": "150억원",
+    "breakdown": {
+      "software_development": {"amount": "80억원", "ratio": "53%"},
+      "hardware_infrastructure": {"amount": "30억원", "ratio": "20%"},
+      "consulting_pm": {"amount": "25억원", "ratio": "17%"},
+      "contingency": {"amount": "15억원", "ratio": "10%"}
+    },
+    "annual_maintenance": "12억원/년 (현행 8억원 대비 4억원 증가, 단 기능 대폭 확대)"
+  },
+  "expected_benefits": {
+    "quantitative": [
+      {
+        "category": "생산성 향상 (OEE +5%p)",
+        "annual_value": "50억원",
+        "calculation": "냉연 연간 생산량 300만톤 × 톤당 마진 × OEE 개선분"
+      },
+      {
+        "category": "납기 준수율 향상 (92%→97%)",
+        "annual_value": "20억원",
+        "calculation": "납기 지연 패널티 감소 + 고객 이탈 방지"
+      },
+      {
+        "category": "품질 불량 감소 (1.2%→0.7%)",
+        "annual_value": "30억원",
+        "calculation": "불량 코일 감소 × 톤당 단가 + 클레임 비용 절감"
+      },
+      {
+        "category": "재공 재고 감소 (-15%)",
+        "annual_value": "10억원",
+        "calculation": "재공 재고 운전자금 절감 + 야드 공간 효율화"
+      },
+      {
+        "category": "에너지 비용 절감 (-8%)",
+        "annual_value": "8억원",
+        "calculation": "피크 시간대 회피 스케줄링 + 에너지 원단위 개선"
+      },
+      {
+        "category": "관리 업무 효율화",
+        "annual_value": "5억원",
+        "calculation": "수작업 감소 (계획수립, 일보작성, 품질분석) 인력 재배치"
+      }
+    ],
+    "total_annual_benefit": "123억원/년",
+    "payback_period": "1.5년",
+    "roi_3year": "146%"
+  },
+  "risk_assessment": [
+    {
+      "risk": "APS 알고리즘 성능 미달",
+      "probability": "중",
+      "impact": "상",
+      "mitigation": "PoC 선행, 대안 엔진 확보, 단계적 제약조건 추가"
+    },
+    {
+      "risk": "현장 사용자 저항",
+      "probability": "상",
+      "impact": "상",
+      "mitigation": "변화관리 전담팀 운영, 현업 참여형 개발, 단계적 교육"
+    },
+    {
+      "risk": "기존 시스템 연동 복잡도",
+      "probability": "중",
+      "impact": "중",
+      "mitigation": "API Gateway 기반 표준화, Level2 OPC-UA 전환 선행"
+    },
+    {
+      "risk": "프로젝트 일정 지연",
+      "probability": "중",
+      "impact": "상",
+      "mitigation": "단계별 Go-Live, 10% 예비비 확보, 정기 수리 활용 테스트"
+    }
+  ],
+  "competitive_benchmark": {
+    "company_current_oee": "78%",
+    "global_top_tier": "88%",
+    "target_oee": "83%",
+    "gap_analysis": "글로벌 Top Tier 대비 10%p 격차 → 1차 5%p 개선으로 중위권 진입"
+  },
+  "decision_required": [
+    "클라우드 하이브리드 vs 전면 On-premise 결정",
+    "BI 도구 선정 (Tableau vs Power BI)",
+    "RFID 도입 범위 (전 공정 vs PCM/CAL 우선)",
+    "모바일 앱 개발 포함 여부 (1차 범위)"
+  ]
+}

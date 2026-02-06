@@ -7,6 +7,10 @@ PRD 내용을 바탕으로 구체적인 기술 스택, 아키텍처, DB 설계 �
 - 시스템 아키텍처 설계
 - 데이터베이스 모델링 및 API 명세
 - 보안 및 인프라 요구사항 정의
+
+개선 사항 (v2):
+- PRDContextExtractor를 통한 풍부한 PRD 정보 활용
+- 인수조건, 가정사항 등 상세 정보 반영
 """
 
 import logging
@@ -17,6 +21,7 @@ from app.models import PRDDocument, RequirementType
 from app.models.common import RiskLevel
 from app.services import ClaudeClient, get_claude_client
 from app.layers.base_generator import BaseGenerator
+from app.layers.prd_context_extractor import get_prd_context_extractor
 
 from .models import (
     TRDDocument,
@@ -156,10 +161,19 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
         self, prd: PRDDocument, context: TRDContext
     ) -> list[TechnologyStack]:
         """AI에게 적절한 기술 스택(언어, 프레임워크 등) 추천을 요청합니다."""
-        # AI에게 줄 정보 요약
-        fr_summary = "\n".join([f"- {r.title}: {r.description[:100]}" for r in prd.functional_requirements[:15]])
-        nfr_summary = "\n".join([f"- {r.title}" for r in prd.non_functional_requirements[:10]])
-        constraints_summary = "\n".join([f"- {c.title}" for c in prd.constraints[:5]])
+        # PRD 컨텍스트 추출기를 통한 풍부한 정보 수집
+        extractor = get_prd_context_extractor()
+        prd_text = extractor.to_prompt_text(prd, include_details=True)
+        risk_indicators = extractor.get_risk_indicators(prd)
+
+        # 기술 선정에 영향을 주는 특수 요구사항 파악
+        special_requirements = []
+        if risk_indicators["real_time_requirements"]:
+            special_requirements.append("실시간 처리 필요 (WebSocket/SSE 고려)")
+        if risk_indicators["integration_requirements"]:
+            special_requirements.append("외부 시스템 연동 필요 (API Gateway 고려)")
+        if risk_indicators["security_requirements"]:
+            special_requirements.append("보안 요구사항 있음 (인증/암호화 필수)")
 
         preferred_stack = ""
         if context.preferred_stack:
@@ -167,20 +181,15 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
 
         prompt = f"""{TECHNOLOGY_STACK_PROMPT}
 
-프로젝트: {prd.title}
+{prd_text}
 
-기능 요구사항:
-{fr_summary}
+## 특수 요구사항
+{chr(10).join([f'- {s}' for s in special_requirements]) if special_requirements else '없음'}
 
-비기능 요구사항:
-{nfr_summary}
-
-제약사항:
-{constraints_summary}
-
-배포 환경: {context.target_environment}
-확장성 요구수준: {context.scalability_requirement}
-보안 수준: {context.security_level}
+## 환경 정보
+- 배포 환경: {context.target_environment}
+- 확장성 요구수준: {context.scalability_requirement}
+- 보안 수준: {context.security_level}
 {preferred_stack}
 """
 
@@ -299,14 +308,36 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
 
     async def _generate_database_design(self, prd: PRDDocument) -> DatabaseDesign:
         """데이터베이스 구조(테이블)를 설계합니다."""
-        fr_summary = "\n".join([f"- {r.title}: {r.description[:150]}" for r in prd.functional_requirements[:15]])
+        # 더 풍부한 컨텍스트로 DB 설계
+        extractor = get_prd_context_extractor()
+
+        # 기능 요구사항 상세 (엔티티 추출에 유용)
+        fr_details = []
+        for req in prd.functional_requirements[:25]:
+            detail = f"- [{req.id}] {req.title}: {req.description[:200]}"
+            if req.acceptance_criteria:
+                detail += f"\n  인수조건: {'; '.join(req.acceptance_criteria[:3])}"
+            fr_details.append(detail)
+
+        # 데이터 관련 제약사항
+        data_constraints = [
+            c for c in prd.constraints
+            if any(kw in c.title.lower() or kw in c.description.lower()
+                   for kw in ["데이터", "db", "database", "저장", "보관", "백업"])
+        ]
 
         prompt = f"""{DATABASE_DESIGN_PROMPT}
 
 프로젝트: {prd.title}
 
-기능 요구사항:
-{fr_summary}
+## 기능 요구사항 (엔티티 및 관계 추출용)
+{chr(10).join(fr_details)}
+
+## 데이터 관련 제약사항
+{chr(10).join([f'- {c.title}: {c.description[:100]}' for c in data_constraints]) if data_constraints else '특별한 제약 없음'}
+
+## 비기능 요구사항 (성능/보안 관련)
+{chr(10).join([f'- {r.title}' for r in prd.non_functional_requirements[:10]])}
 """
 
         try:
@@ -344,17 +375,36 @@ class TRDGenerator(BaseGenerator[PRDDocument, TRDDocument, TRDContext]):
 
     async def _generate_api_specification(self, prd: PRDDocument) -> APISpecification:
         """주요 API 명세를 설계합니다."""
-        fr_summary = "\n".join([
-            f"- {r.id}: {r.title} - {r.description[:100]}"
-            for r in prd.functional_requirements[:20]
-        ])
+        # API 설계에 인수조건 포함 (엔드포인트 동작 정의에 유용)
+        fr_details = []
+        for req in prd.functional_requirements[:25]:
+            detail = f"- [{req.id}] {req.title}"
+            if req.user_story:
+                detail += f"\n  사용자 스토리: {req.user_story[:100]}"
+            if req.acceptance_criteria:
+                criteria_text = "; ".join(req.acceptance_criteria[:3])
+                detail += f"\n  인수조건: {criteria_text}"
+            fr_details.append(detail)
+
+        # 인증/권한 관련 요구사항 별도 표시
+        auth_reqs = [
+            r for r in prd.functional_requirements + prd.non_functional_requirements
+            if any(kw in r.title.lower() or kw in r.description.lower()
+                   for kw in ["인증", "로그인", "권한", "auth", "login", "permission"])
+        ]
 
         prompt = f"""{API_SPECIFICATION_PROMPT}
 
 프로젝트: {prd.title}
 
-기능 요구사항:
-{fr_summary}
+## 기능 요구사항 (API 엔드포인트 도출용)
+{chr(10).join(fr_details)}
+
+## 인증/권한 관련 요구사항
+{chr(10).join([f'- {r.title}' for r in auth_reqs[:5]]) if auth_reqs else '기본 JWT 인증 적용'}
+
+## 비기능 요구사항 (API 성능/보안)
+{chr(10).join([f'- {r.title}: {r.description[:80]}' for r in prd.non_functional_requirements[:8]])}
 """
 
         try:

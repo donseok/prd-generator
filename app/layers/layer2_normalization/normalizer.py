@@ -5,6 +5,7 @@
 1. AI에게 문서 내용을 주고 요구사항 추출 요청
 2. 여러 문서를 동시에 처리하여 속도 향상 (병렬 처리)
 3. 추출된 요구사항을 표준 형식(NormalizedRequirement)으로 변환
+4. 다층 신뢰도 계산 (출처/명확성/완전성/AI 신뢰도 종합)
 """
 
 import asyncio
@@ -26,6 +27,7 @@ from .prompts.normalization_prompts import (
     USER_STORY_CONVERSION_PROMPT,
     CONFIDENCE_SCORING_PROMPT,
 )
+from .confidence_calculator import get_confidence_calculator, ConfidenceBreakdown
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +36,13 @@ class Normalizer:
     """
     정규화 담당 클래스입니다.
     최적화된 방식(한 번의 AI 호출로 모든 정보 추출)을 사용합니다.
+    다층 신뢰도 계산을 통해 요구사항 품질을 정밀하게 평가합니다.
     """
 
     def __init__(self, claude_client: Optional[ClaudeClient] = None):
-        """AI 클라이언트 초기화"""
+        """AI 클라이언트 및 신뢰도 계산기 초기화"""
         self.claude_client = claude_client or get_claude_client()
+        self.confidence_calculator = get_confidence_calculator()
 
     async def normalize(
         self,
@@ -49,14 +53,24 @@ class Normalizer:
         """
         여러 문서를 한꺼번에 처리하여 요구사항 목록을 만듭니다.
         문서가 많을 경우 3개씩 동시에 처리하여 시간을 단축합니다.
+
+        Args:
+            parsed_contents: 파싱된 문서 목록
+            context: 추가 컨텍스트 정보
+                - source_types: 문서별 출처 유형 리스트 (text, email, chat 등)
+            document_ids: 문서 ID 목록
         """
-        logger.info(f"[Normalizer] ===== 정규화 시작 (병렬 처리 버전) =====")
+        logger.info(f"[Normalizer] ===== 정규화 시작 (병렬 처리 + 다층 신뢰도) =====")
         logger.info(f"[Normalizer] 처리할 문서 수: {len(parsed_contents)}")
         start_time = datetime.now()
 
         # 문서 ID가 없으면 임의로 생성
         if document_ids is None:
             document_ids = [f"doc-{i}" for i in range(len(parsed_contents))]
+
+        # context에서 source_types 추출 (없으면 파일명에서 추론)
+        context = context or {}
+        source_types = context.get("source_types", [])
 
         # 동시에 실행할 AI 요청 수 제한 (최대 3개)
         # 너무 많이 동시에 요청하면 API 제한에 걸릴 수 있음
@@ -66,19 +80,21 @@ class Normalizer:
             idx: int,
             parsed_content: ParsedContent,
             doc_id: str,
-            start_counter: int
+            start_counter: int,
+            source_type: str
         ) -> tuple[List[NormalizedRequirement], int]:
             """내부 함수: 하나의 문서를 처리"""
             async with semaphore:
                 filename = parsed_content.metadata.filename or "unknown"
-                logger.info(f"[Normalizer] [{idx}] 문서 처리 시작: {filename}")
+                logger.info(f"[Normalizer] [{idx}] 문서 처리 시작: {filename} (출처: {source_type})")
 
-                # AI를 통해 요구사항 추출 실행
+                # AI를 통해 요구사항 추출 실행 (다층 신뢰도 계산 포함)
                 requirements = await self._extract_and_normalize_all(
                     parsed_content,
                     start_counter,
                     filename,
-                    doc_id
+                    doc_id,
+                    source_type
                 )
 
                 logger.info(f"[Normalizer] [{idx}] {len(requirements)}개 요구사항 추출 완료")
@@ -93,7 +109,14 @@ class Normalizer:
         ):
             # ID가 겹치지 않게 시작 번호를 다르게 설정
             start_counter = 1 + (idx - 1) * estimated_reqs_per_doc
-            tasks.append(process_document(idx, parsed_content, doc_id, start_counter))
+
+            # source_type 결정 (context에서 가져오거나 파일명에서 추론)
+            if idx - 1 < len(source_types):
+                source_type = source_types[idx - 1]
+            else:
+                source_type = self._infer_source_type(parsed_content)
+
+            tasks.append(process_document(idx, parsed_content, doc_id, start_counter, source_type))
 
         # 모든 태스크 동시 실행
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -120,16 +143,56 @@ class Normalizer:
 
         return all_requirements
 
+    def _infer_source_type(self, parsed_content: ParsedContent) -> str:
+        """
+        파일명이나 메타데이터에서 문서 유형을 추론합니다.
+        """
+        filename = (parsed_content.metadata.filename or "").lower()
+
+        # 확장자 기반 추론
+        if filename.endswith(('.docx', '.doc', '.pdf')):
+            return "document"
+        elif filename.endswith(('.xlsx', '.xls')):
+            return "excel"
+        elif filename.endswith('.csv'):
+            return "csv"
+        elif filename.endswith(('.pptx', '.ppt')):
+            return "ppt"
+        elif filename.endswith(('.png', '.jpg', '.jpeg', '.gif', '.bmp')):
+            return "image"
+        elif filename.endswith(('.eml', '.msg')) or 'email' in filename:
+            return "email"
+        elif 'chat' in filename or 'slack' in filename or 'kakao' in filename:
+            return "chat"
+        elif filename.endswith(('.txt', '.md')):
+            return "text"
+
+        # 메타데이터 기반 추론
+        if parsed_content.metadata.subject:  # 이메일 제목이 있으면
+            return "email"
+        if parsed_content.metadata.slide_count:  # 슬라이드 수가 있으면
+            return "ppt"
+        if parsed_content.metadata.sheet_names:  # 시트 이름이 있으면
+            return "excel"
+        if parsed_content.metadata.participants:  # 참여자가 있으면
+            return "chat"
+        if parsed_content.metadata.image_dimensions:  # 이미지 크기가 있으면
+            return "image"
+
+        return "text"  # 기본값
+
     async def _extract_and_normalize_all(
         self,
         parsed_content: ParsedContent,
         start_counter: int,
         source_file: str,
-        document_id: str
+        document_id: str,
+        source_type: str = "text"
     ) -> List[NormalizedRequirement]:
         """
         AI(Claude)에게 문서 전체 내용을 주고 요구사항을 뽑아달라고 요청하는 함수입니다.
         JSON 형식으로 결과를 받아서 프로그램에서 쓸 수 있는 객체로 변환합니다.
+        다층 신뢰도 계산을 적용합니다.
         """
         filename = parsed_content.metadata.filename or "unknown"
         logger.info(f"[extract_all] 통합 추출 시작: {filename}")
@@ -184,7 +247,7 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
                 logger.warning(f"[extract_all] 예상치 못한 결과 타입: {type(result)}")
                 raw_reqs = self._extract_from_content(parsed_content)
 
-            # 추출된 데이터를 정규화된 객체로 변환
+            # 추출된 데이터를 정규화된 객체로 변환 (다층 신뢰도 적용)
             requirements = []
             for idx, raw in enumerate(raw_reqs):
                 try:
@@ -192,7 +255,8 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
                         raw,
                         start_counter + idx,
                         source_file,
-                        document_id
+                        document_id,
+                        source_type
                     )
                     if req:
                         requirements.append(req)
@@ -205,18 +269,19 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
         except Exception as e:
             logger.error(f"[extract_all] 추출 실패: {type(e).__name__}: {e}", exc_info=True)
             # 예외 발생 시에도 문서 내용에서 직접 추출 시도
-            return self._extract_from_parsed_content(parsed_content, start_counter, source_file, document_id)
+            return self._extract_from_parsed_content(parsed_content, start_counter, source_file, document_id, source_type)
 
     def _convert_to_requirement(
         self,
         raw: dict,
         counter: int,
         source_file: str,
-        document_id: str
+        document_id: str,
+        source_type: str = "text"
     ) -> Optional[NormalizedRequirement]:
         """
         AI가 준 딕셔너리 데이터를 NormalizedRequirement 객체로 변환하는 함수입니다.
-        데이터 타입을 맞추고 기본값을 채워넣습니다.
+        다층 신뢰도 계산을 적용하여 정밀한 품질 평가를 수행합니다.
         """
         try:
             # 요구사항 타입 결정 (FR/NFR/CONSTRAINT)
@@ -237,12 +302,23 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
             else:
                 priority = Priority.MEDIUM
 
-            # 신뢰도 점수 변환 (0~1 사이 값)
-            score = raw.get("confidence_score", 0.7)
+            # AI 신뢰도 추출 (기본값 0.7)
+            ai_confidence = raw.get("confidence_score", 0.7)
             try:
-                score = max(0.0, min(1.0, float(score)))
+                ai_confidence = max(0.0, min(1.0, float(ai_confidence)))
             except (ValueError, TypeError):
-                score = 0.7
+                ai_confidence = 0.7
+
+            # 다층 신뢰도 계산
+            confidence_breakdown = self.confidence_calculator.calculate(
+                raw_requirement=raw,
+                source_type=source_type,
+                ai_confidence=ai_confidence
+            )
+
+            # 최종 신뢰도와 상세 사유
+            final_score = confidence_breakdown.final_score
+            confidence_reason = self._build_confidence_reason(confidence_breakdown, raw)
 
             # 출처 정보 생성
             source_info = SourceReference(
@@ -267,8 +343,8 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
                 user_story=raw.get("user_story") if req_type != RequirementType.CONSTRAINT else None,
                 acceptance_criteria=raw.get("acceptance_criteria", []),
                 priority=priority,
-                confidence_score=score,
-                confidence_reason=raw.get("confidence_reason", ""),
+                confidence_score=final_score,
+                confidence_reason=confidence_reason,
                 source_reference=legacy_source,
                 source_info=source_info,
                 assumptions=raw.get("assumptions", []),
@@ -278,6 +354,34 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
         except Exception as e:
             logger.error(f"[convert] 변환 실패: {e}")
             return None
+
+    def _build_confidence_reason(self, breakdown: ConfidenceBreakdown, raw: dict) -> str:
+        """
+        신뢰도 계산 결과를 사람이 읽기 좋은 문자열로 변환합니다.
+        """
+        parts = []
+
+        # 점수 요약 (높은 신뢰도면 간략히, 낮으면 상세히)
+        if breakdown.final_score >= 0.8:
+            parts.append(f"신뢰도 양호 ({breakdown.final_score:.0%})")
+        else:
+            # 상세 점수 표시
+            parts.append(
+                f"출처:{breakdown.source_credibility:.0%} "
+                f"명확성:{breakdown.clarity_score:.0%} "
+                f"완전성:{breakdown.completeness_score:.0%}"
+            )
+
+        # 감점 사유 추가
+        if breakdown.deduction_reasons:
+            parts.append(breakdown.to_reason_string())
+
+        # AI가 제공한 원본 사유도 포함 (있으면)
+        ai_reason = raw.get("confidence_reason", "")
+        if ai_reason and len(ai_reason) > 5:
+            parts.append(f"AI: {ai_reason[:50]}")
+
+        return " | ".join(parts)
 
     def _extract_from_content(self, parsed_content: ParsedContent) -> List[dict]:
         """
@@ -353,7 +457,8 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
         parsed_content: ParsedContent,
         start_counter: int,
         source_file: str,
-        document_id: str
+        document_id: str,
+        source_type: str = "text"
     ) -> List[NormalizedRequirement]:
         """
         파싱된 콘텐츠에서 직접 요구사항 객체를 생성합니다.
@@ -368,7 +473,8 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
                     raw,
                     start_counter + idx,
                     source_file,
-                    document_id
+                    document_id,
+                    source_type
                 )
                 if req:
                     requirements.append(req)

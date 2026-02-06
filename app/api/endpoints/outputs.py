@@ -1,0 +1,237 @@
+"""
+워크스페이스 출력 문서 조회 API입니다.
+/workspace/outputs/ 폴더에 저장된 CLI 생성 문서를 조회합니다.
+"""
+
+import os
+import json
+import logging
+from datetime import datetime
+from pathlib import Path
+from typing import List, Optional
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter()
+
+# 워크스페이스 출력 폴더 경로
+WORKSPACE_OUTPUTS_PATH = Path(__file__).parent.parent.parent.parent / "workspace" / "outputs"
+
+# 문서 타입별 폴더 매핑
+DOCUMENT_FOLDERS = {
+    "prd": "PRD",
+    "trd": "TRD", 
+    "wbs": "WBS",
+    "proposals": "Proposal",
+    "ppt": "PPT",
+}
+
+
+class OutputDocument(BaseModel):
+    """출력 문서 정보"""
+    id: str
+    title: str
+    doc_type: str  # PRD, TRD, WBS, Proposal, PPT
+    file_path: str
+    created_at: str
+    has_json: bool
+    has_md: bool
+    has_pptx: bool
+
+
+class OutputDocumentsResponse(BaseModel):
+    """문서 목록 응답"""
+    total: int
+    documents: List[OutputDocument]
+
+
+def parse_document_id_timestamp(doc_id: str) -> Optional[datetime]:
+    """문서 ID에서 타임스탬프 추출 (예: PRD-20260206-093046)"""
+    try:
+        parts = doc_id.split("-")
+        if len(parts) >= 3:
+            date_str = parts[1]
+            time_str = parts[2]
+            return datetime.strptime(f"{date_str}{time_str}", "%Y%m%d%H%M%S")
+    except (ValueError, IndexError):
+        pass
+    return None
+
+
+def scan_folder(folder_path: Path, doc_type: str) -> List[OutputDocument]:
+    """폴더를 스캔하여 문서 목록 반환"""
+    documents = []
+    
+    if not folder_path.exists():
+        return documents
+    
+    # JSON 파일 먼저 스캔 (메타데이터 소스)
+    json_files = {}
+    md_files = set()
+    pptx_files = set()
+    
+    for file_path in folder_path.iterdir():
+        if file_path.name.startswith("."):
+            continue
+            
+        stem = file_path.stem
+        suffix = file_path.suffix.lower()
+        
+        if suffix == ".json":
+            json_files[stem] = file_path
+        elif suffix == ".md":
+            md_files.add(stem)
+        elif suffix == ".pptx":
+            pptx_files.add(stem)
+    
+    # JSON 파일에서 문서 정보 추출
+    for stem, json_path in json_files.items():
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            doc_id = data.get("id", stem)
+            title = data.get("title", stem)
+            
+            # 타임스탬프 추출
+            created_at = None
+            if "metadata" in data and "created_at" in data["metadata"]:
+                created_at = data["metadata"]["created_at"]
+            elif "created_at" in data:
+                created_at = data["created_at"]
+            else:
+                ts = parse_document_id_timestamp(doc_id)
+                if ts:
+                    created_at = ts.isoformat()
+                else:
+                    # 파일 수정 시간 사용
+                    created_at = datetime.fromtimestamp(json_path.stat().st_mtime).isoformat()
+            
+            documents.append(OutputDocument(
+                id=doc_id,
+                title=title,
+                doc_type=doc_type,
+                file_path=str(json_path),
+                created_at=created_at,
+                has_json=True,
+                has_md=stem in md_files,
+                has_pptx=stem in pptx_files,
+            ))
+            
+        except Exception as e:
+            logger.warning(f"Failed to parse {json_path}: {e}")
+            continue
+    
+    # JSON 없이 MD만 있는 경우도 처리
+    for stem in md_files:
+        if stem not in json_files:
+            md_path = folder_path / f"{stem}.md"
+            ts = parse_document_id_timestamp(stem)
+            created_at = ts.isoformat() if ts else datetime.fromtimestamp(md_path.stat().st_mtime).isoformat()
+            
+            documents.append(OutputDocument(
+                id=stem,
+                title=stem,
+                doc_type=doc_type,
+                file_path=str(md_path),
+                created_at=created_at,
+                has_json=False,
+                has_md=True,
+                has_pptx=stem in pptx_files,
+            ))
+    
+    # PPTX만 있는 경우도 처리
+    for stem in pptx_files:
+        if stem not in json_files and stem not in md_files:
+            pptx_path = folder_path / f"{stem}.pptx"
+            ts = parse_document_id_timestamp(stem)
+            created_at = ts.isoformat() if ts else datetime.fromtimestamp(pptx_path.stat().st_mtime).isoformat()
+            
+            documents.append(OutputDocument(
+                id=stem,
+                title=stem,
+                doc_type=doc_type,
+                file_path=str(pptx_path),
+                created_at=created_at,
+                has_json=False,
+                has_md=False,
+                has_pptx=True,
+            ))
+    
+    return documents
+
+
+@router.get("/documents", response_model=OutputDocumentsResponse)
+async def list_output_documents(
+    doc_type: Optional[str] = None,
+    limit: int = 50,
+) -> OutputDocumentsResponse:
+    """
+    워크스페이스 출력 폴더의 문서 목록을 반환합니다.
+    
+    - doc_type: 특정 문서 타입만 필터링 (prd, trd, wbs, proposals, ppt)
+    - limit: 반환할 최대 문서 수
+    """
+    all_documents = []
+    
+    # 지정된 타입만 또는 전체 스캔
+    folders_to_scan = {}
+    if doc_type and doc_type.lower() in DOCUMENT_FOLDERS:
+        folders_to_scan[doc_type.lower()] = DOCUMENT_FOLDERS[doc_type.lower()]
+    else:
+        folders_to_scan = DOCUMENT_FOLDERS
+    
+    for folder_name, doc_type_label in folders_to_scan.items():
+        folder_path = WORKSPACE_OUTPUTS_PATH / folder_name
+        documents = scan_folder(folder_path, doc_type_label)
+        all_documents.extend(documents)
+    
+    # 날짜순 정렬 (최신순)
+    all_documents.sort(key=lambda d: d.created_at, reverse=True)
+    
+    # 제한 적용
+    limited_documents = all_documents[:limit]
+    
+    return OutputDocumentsResponse(
+        total=len(all_documents),
+        documents=limited_documents,
+    )
+
+
+@router.get("/documents/{doc_id}")
+async def get_output_document(doc_id: str) -> dict:
+    """
+    특정 문서의 상세 내용을 반환합니다.
+    """
+    # 모든 폴더에서 문서 검색
+    for folder_name, doc_type_label in DOCUMENT_FOLDERS.items():
+        folder_path = WORKSPACE_OUTPUTS_PATH / folder_name
+        
+        if not folder_path.exists():
+            continue
+        
+        # JSON 파일 찾기
+        json_path = folder_path / f"{doc_id}.json"
+        if json_path.exists():
+            with open(json_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            return {
+                "id": doc_id,
+                "doc_type": doc_type_label,
+                "content": data,
+            }
+        
+        # MD 파일 찾기
+        md_path = folder_path / f"{doc_id}.md"
+        if md_path.exists():
+            with open(md_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return {
+                "id": doc_id,
+                "doc_type": doc_type_label,
+                "content_md": content,
+            }
+    
+    raise HTTPException(status_code=404, detail=f"문서를 찾을 수 없습니다: {doc_id}")

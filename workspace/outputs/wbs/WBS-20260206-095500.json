@@ -1,0 +1,396 @@
+{
+  "id": "WBS-20260206-095500",
+  "title": "냉연 통합 MES/APS 시스템 (Project NEXUS) WBS",
+  "project_info": {
+    "name": "냉연 통합 MES/APS 시스템 구축 (Project NEXUS)",
+    "start_date": "2026-07-01",
+    "end_date": "2027-12-31",
+    "duration_months": 18,
+    "team_size": 40,
+    "budget": "150억원",
+    "methodology": "Agile + Waterfall 하이브리드 (Phase-Gate + 2주 Sprint)"
+  },
+  "phases": [
+    {
+      "id": "M1",
+      "name": "분석/설계",
+      "start_date": "2026-07-01",
+      "end_date": "2026-09-30",
+      "duration_weeks": 13,
+      "work_packages": [
+        {
+          "id": "WP-1.1",
+          "name": "프로젝트 관리 체계 수립",
+          "tasks": [
+            {"id": "T-1.1.1", "name": "프로젝트 관리 계획서 수립", "assignee": "PM", "duration": "W1-W2", "effort_md": 20, "dependencies": [], "related_fr": []},
+            {"id": "T-1.1.2", "name": "개발 환경 및 도구 표준 정의", "assignee": "PM, TA", "duration": "W1-W2", "effort_md": 10, "dependencies": [], "related_fr": []},
+            {"id": "T-1.1.3", "name": "코딩 표준 및 코드리뷰 프로세스 수립", "assignee": "TA", "duration": "W2", "effort_md": 5, "dependencies": ["T-1.1.2"], "related_fr": []},
+            {"id": "T-1.1.4", "name": "프로젝트 킥오프", "assignee": "PM", "duration": "W1", "effort_md": 2, "dependencies": [], "related_fr": []}
+          ]
+        },
+        {
+          "id": "WP-1.2",
+          "name": "요구사항 확정",
+          "tasks": [
+            {"id": "T-1.2.1", "name": "현장 인터뷰 추가 수행 (라인별 상세)", "assignee": "BA", "duration": "W1-W3", "effort_md": 30, "dependencies": [], "related_fr": ["전체"]},
+            {"id": "T-1.2.2", "name": "AS-IS 프로세스 분석 완료", "assignee": "BA", "duration": "W2-W4", "effort_md": 20, "dependencies": ["T-1.2.1"], "related_fr": ["전체"]},
+            {"id": "T-1.2.3", "name": "TO-BE 프로세스 설계", "assignee": "BA, 현업", "duration": "W3-W6", "effort_md": 40, "dependencies": ["T-1.2.2"], "related_fr": ["전체"]},
+            {"id": "T-1.2.4", "name": "요구사항 명세서(SRS) 작성", "assignee": "BA", "duration": "W5-W8", "effort_md": 30, "dependencies": ["T-1.2.3"], "related_fr": ["전체"]},
+            {"id": "T-1.2.5", "name": "SRS 검토 및 확정", "assignee": "PM, BA", "duration": "W8-W9", "effort_md": 10, "dependencies": ["T-1.2.4"], "related_fr": ["전체"]},
+            {"id": "T-1.2.6", "name": "품질 성적서 양식 표준화 (10개 고객)", "assignee": "품질팀", "duration": "W1-W6", "effort_md": 15, "dependencies": [], "related_fr": ["FR-016"]}
+          ]
+        },
+        {
+          "id": "WP-1.3",
+          "name": "아키텍처 설계",
+          "tasks": [
+            {"id": "T-1.3.1", "name": "시스템 아키텍처 설계 (MSA, EDA, 하이브리드 클라우드)", "assignee": "SA", "duration": "W3-W7", "effort_md": 30, "dependencies": ["T-1.2.3"], "related_fr": ["NFR-012"]},
+            {"id": "T-1.3.2", "name": "데이터 아키텍처 설계", "assignee": "DBA", "duration": "W4-W7", "effort_md": 20, "dependencies": ["T-1.3.1"], "related_fr": ["NFR-005", "NFR-015"]},
+            {"id": "T-1.3.3", "name": "네트워크/보안 아키텍처 설계", "assignee": "Infra", "duration": "W4-W8", "effort_md": 20, "dependencies": ["T-1.3.1"], "related_fr": ["NFR-009", "CON-004"]},
+            {"id": "T-1.3.4", "name": "API 명세 설계", "assignee": "SA, Dev", "duration": "W5-W8", "effort_md": 15, "dependencies": ["T-1.3.1"], "related_fr": ["FR-014"]},
+            {"id": "T-1.3.5", "name": "인터페이스 상세 설계 (ERP, L2, LIMS, WMS, EMS)", "assignee": "SA, Integ", "duration": "W6-W9", "effort_md": 25, "dependencies": ["T-1.3.4"], "related_fr": ["FR-014"]},
+            {"id": "T-1.3.6", "name": "아키텍처 설계서 검토 및 확정", "assignee": "PM, SA", "duration": "W9-W10", "effort_md": 10, "dependencies": ["T-1.3.5"], "related_fr": []}
+          ]
+        },
+        {
+          "id": "WP-1.4",
+          "name": "PoC (Proof of Concept)",
+          "tasks": [
+            {"id": "T-1.4.1", "name": "APS 엔진 벤치마크 (상용 2종)", "assignee": "컨설팅사", "duration": "W3-W8", "effort_md": 40, "dependencies": [], "related_fr": ["FR-002"]},
+            {"id": "T-1.4.2", "name": "APS 핵심 제약조건 PoC (3개)", "assignee": "컨설팅사", "duration": "W5-W10", "effort_md": 40, "dependencies": ["T-1.4.1"], "related_fr": ["FR-002"]},
+            {"id": "T-1.4.3", "name": "RFID 내열 태그 PoC (PCM/CAL)", "assignee": "설비팀", "duration": "W3-W8", "effort_md": 20, "dependencies": [], "related_fr": ["FR-006"]},
+            {"id": "T-1.4.4", "name": "RFID 축소안 비용 재산출", "assignee": "설비팀", "duration": "W1-W4", "effort_md": 10, "dependencies": [], "related_fr": ["FR-006"]},
+            {"id": "T-1.4.5", "name": "OPC-UA 프로토콜 전환 PoC (PCM)", "assignee": "Infra, L2", "duration": "W4-W8", "effort_md": 20, "dependencies": [], "related_fr": ["FR-007", "CON-002"]},
+            {"id": "T-1.4.6", "name": "PoC 결과 종합 보고 및 의사결정", "assignee": "PM", "duration": "W10-W11", "effort_md": 10, "dependencies": ["T-1.4.2", "T-1.4.3", "T-1.4.5"], "related_fr": []}
+          ]
+        },
+        {
+          "id": "WP-1.5",
+          "name": "UI/UX 설계",
+          "tasks": [
+            {"id": "T-1.5.1", "name": "사용자 페르소나 정의 (4개 그룹)", "assignee": "UX", "duration": "W3-W4", "effort_md": 8, "dependencies": ["T-1.2.1"], "related_fr": []},
+            {"id": "T-1.5.2", "name": "현장 터치스크린 와이어프레임", "assignee": "UX", "duration": "W5-W8", "effort_md": 20, "dependencies": ["T-1.5.1"], "related_fr": ["NFR-014"]},
+            {"id": "T-1.5.3", "name": "사무실 듀얼 모니터 와이어프레임", "assignee": "UX", "duration": "W5-W8", "effort_md": 15, "dependencies": ["T-1.5.1"], "related_fr": ["NFR-013"]},
+            {"id": "T-1.5.4", "name": "55인치 현황판 레이아웃 설계", "assignee": "UX", "duration": "W6-W8", "effort_md": 8, "dependencies": ["T-1.5.1"], "related_fr": ["FR-011", "NFR-014"]},
+            {"id": "T-1.5.5", "name": "UI/UX 프로토타입 (Figma)", "assignee": "UX", "duration": "W7-W10", "effort_md": 15, "dependencies": ["T-1.5.2", "T-1.5.3"], "related_fr": []},
+            {"id": "T-1.5.6", "name": "현업 유저빌리티 테스트", "assignee": "UX, 현업", "duration": "W10-W11", "effort_md": 8, "dependencies": ["T-1.5.5"], "related_fr": []},
+            {"id": "T-1.5.7", "name": "디자인 시스템 가이드 (Ant Design 기반)", "assignee": "UX, FE", "duration": "W9-W12", "effort_md": 10, "dependencies": ["T-1.5.5"], "related_fr": ["NFR-013"]}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M2",
+      "name": "기반 구축",
+      "start_date": "2026-10-01",
+      "end_date": "2026-12-31",
+      "duration_weeks": 13,
+      "work_packages": [
+        {
+          "id": "WP-2.1",
+          "name": "인프라 구축",
+          "tasks": [
+            {"id": "T-2.1.1", "name": "On-premise 서버 도입 및 설치", "assignee": "Infra", "duration": "W1-W4", "effort_md": 30, "dependencies": ["M1"], "related_fr": ["CON-009"]},
+            {"id": "T-2.1.2", "name": "Kubernetes/Rancher 클러스터 구성", "assignee": "Infra", "duration": "W3-W6", "effort_md": 20, "dependencies": ["T-2.1.1"], "related_fr": ["CON-009"]},
+            {"id": "T-2.1.3", "name": "네트워크 구성 (OT/IT/DMZ)", "assignee": "Infra", "duration": "W2-W6", "effort_md": 25, "dependencies": ["T-2.1.1"], "related_fr": ["NFR-009"]},
+            {"id": "T-2.1.4", "name": "AWS 환경 구축 (EKS, RDS, S3, DC)", "assignee": "Infra", "duration": "W3-W6", "effort_md": 15, "dependencies": [], "related_fr": ["NFR-012"]},
+            {"id": "T-2.1.5", "name": "CI/CD 파이프라인 구축", "assignee": "DevOps", "duration": "W4-W6", "effort_md": 15, "dependencies": ["T-2.1.2"], "related_fr": ["CON-009"]},
+            {"id": "T-2.1.6", "name": "모니터링 스택 구축", "assignee": "DevOps", "duration": "W5-W7", "effort_md": 15, "dependencies": ["T-2.1.2"], "related_fr": ["CON-009"]},
+            {"id": "T-2.1.7", "name": "보안 인프라 구축 (Keycloak, Vault, Harbor)", "assignee": "Infra", "duration": "W5-W8", "effort_md": 20, "dependencies": ["T-2.1.2"], "related_fr": ["NFR-008", "NFR-010"]},
+            {"id": "T-2.1.8", "name": "RFID 리더기 설치 (PCM/CAL)", "assignee": "설비팀", "duration": "W4-W10", "effort_md": 30, "dependencies": ["M1 PoC"], "related_fr": ["FR-006"]}
+          ]
+        },
+        {
+          "id": "WP-2.2",
+          "name": "공통 프레임워크 개발",
+          "tasks": [
+            {"id": "T-2.2.1", "name": "Spring Boot 공통 모듈", "assignee": "BE", "duration": "W3-W6", "effort_md": 20, "dependencies": ["T-2.1.2"], "related_fr": []},
+            {"id": "T-2.2.2", "name": "React 공통 컴포넌트 (디자인 시스템)", "assignee": "FE", "duration": "W3-W6", "effort_md": 20, "dependencies": ["T-2.1.2"], "related_fr": ["NFR-013", "NFR-014"]},
+            {"id": "T-2.2.3", "name": "Kafka 이벤트 버스 구축", "assignee": "BE", "duration": "W4-W6", "effort_md": 15, "dependencies": ["T-2.1.2"], "related_fr": []},
+            {"id": "T-2.2.4", "name": "Kong API Gateway 설정", "assignee": "BE", "duration": "W5-W7", "effort_md": 10, "dependencies": ["T-2.1.7"], "related_fr": ["FR-014"]},
+            {"id": "T-2.2.5", "name": "WebSocket Gateway 구축", "assignee": "BE", "duration": "W6-W8", "effort_md": 10, "dependencies": ["T-2.2.3"], "related_fr": ["FR-007", "FR-011"]}
+          ]
+        },
+        {
+          "id": "WP-2.3",
+          "name": "데이터베이스 구축",
+          "tasks": [
+            {"id": "T-2.3.1", "name": "PostgreSQL 클러스터 구축", "assignee": "DBA", "duration": "W3-W5", "effort_md": 10, "dependencies": ["T-2.1.1"], "related_fr": []},
+            {"id": "T-2.3.2", "name": "TimescaleDB 클러스터 구축", "assignee": "DBA", "duration": "W3-W5", "effort_md": 10, "dependencies": ["T-2.1.1"], "related_fr": ["FR-007"]},
+            {"id": "T-2.3.3", "name": "DB 스키마 생성 및 마스터 데이터 구조", "assignee": "DBA", "duration": "W4-W7", "effort_md": 15, "dependencies": ["T-2.3.1"], "related_fr": []},
+            {"id": "T-2.3.4", "name": "Redis Sentinel 구축", "assignee": "DBA", "duration": "W5-W6", "effort_md": 5, "dependencies": ["T-2.1.1"], "related_fr": []},
+            {"id": "T-2.3.5", "name": "Elasticsearch 클러스터 구축", "assignee": "DBA", "duration": "W5-W6", "effort_md": 5, "dependencies": ["T-2.1.1"], "related_fr": []},
+            {"id": "T-2.3.6", "name": "마스터 데이터 클렌징", "assignee": "DBA, 현업", "duration": "W1-W10", "effort_md": 40, "dependencies": [], "related_fr": ["CON-003"]}
+          ]
+        },
+        {
+          "id": "WP-2.4",
+          "name": "OPC-UA 전환",
+          "tasks": [
+            {"id": "T-2.4.1", "name": "OPC-UA 전환 (PCM, CAL)", "assignee": "L2, Infra", "duration": "W2-W8", "effort_md": 30, "dependencies": ["M1 PoC"], "related_fr": ["FR-007", "CON-002"]},
+            {"id": "T-2.4.2", "name": "OPC-UA 전환 (EGL, CGL, SPM)", "assignee": "L2, Infra", "duration": "W6-W12", "effort_md": 30, "dependencies": ["T-2.4.1"], "related_fr": ["FR-007"]},
+            {"id": "T-2.4.3", "name": "OPC-UA 전환 (BAF, RCL, SL, CCL)", "assignee": "L2, Infra", "duration": "W8-W13", "effort_md": 20, "dependencies": ["T-2.4.1"], "related_fr": ["FR-007"]},
+            {"id": "T-2.4.4", "name": "OPC-UA Gateway 개발 (Eclipse Milo)", "assignee": "BE", "duration": "W5-W10", "effort_md": 25, "dependencies": ["T-2.4.1"], "related_fr": ["FR-007"]}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M3",
+      "name": "핵심 개발",
+      "start_date": "2027-01-01",
+      "end_date": "2027-06-30",
+      "duration_weeks": 26,
+      "work_packages": [
+        {
+          "id": "WP-3.1",
+          "name": "APS 서비스 개발",
+          "tasks": [
+            {"id": "T-3.1.1", "name": "APS 엔진 통합", "assignee": "APS팀", "duration": "W1-W4", "effort_md": 40, "dependencies": ["M2"], "related_fr": ["FR-002"]},
+            {"id": "T-3.1.2", "name": "제약조건 플러그인 P1 (CR-001~005)", "assignee": "APS팀", "duration": "W3-W8", "effort_md": 40, "dependencies": ["T-3.1.1"], "related_fr": ["FR-002"]},
+            {"id": "T-3.1.3", "name": "제약조건 플러그인 P1 (CR-007~012)", "assignee": "APS팀", "duration": "W5-W12", "effort_md": 50, "dependencies": ["T-3.1.1"], "related_fr": ["FR-002"]},
+            {"id": "T-3.1.4", "name": "제약조건 플러그인 P2 (CR-006, 013~015)", "assignee": "APS팀", "duration": "W10-W16", "effort_md": 30, "dependencies": ["T-3.1.2"], "related_fr": ["FR-002", "FR-015"]},
+            {"id": "T-3.1.5", "name": "스케줄 생성/조회/수정 API", "assignee": "APS팀", "duration": "W3-W8", "effort_md": 20, "dependencies": ["T-3.1.1"], "related_fr": ["FR-001"]},
+            {"id": "T-3.1.6", "name": "What-if 시뮬레이션 엔진", "assignee": "APS팀", "duration": "W8-W14", "effort_md": 30, "dependencies": ["T-3.1.2"], "related_fr": ["FR-003"]},
+            {"id": "T-3.1.7", "name": "자동 재스케줄링 이벤트 처리", "assignee": "APS팀", "duration": "W10-W16", "effort_md": 20, "dependencies": ["T-3.1.5"], "related_fr": ["FR-003"]},
+            {"id": "T-3.1.8", "name": "수주-생산 연계 (ERP 연동)", "assignee": "APS팀, Integ", "duration": "W6-W12", "effort_md": 25, "dependencies": ["T-3.1.5"], "related_fr": ["FR-004"]}
+          ]
+        },
+        {
+          "id": "WP-3.2",
+          "name": "MES 서비스 개발",
+          "tasks": [
+            {"id": "T-3.2.1", "name": "작업지시 관리", "assignee": "MES팀", "duration": "W1-W8", "effort_md": 40, "dependencies": ["M2"], "related_fr": ["FR-005"]},
+            {"id": "T-3.2.2", "name": "코일 추적 RFID (PCM/CAL)", "assignee": "MES팀", "duration": "W3-W10", "effort_md": 30, "dependencies": ["T-2.1.8"], "related_fr": ["FR-006"]},
+            {"id": "T-3.2.3", "name": "코일 추적 바코드 (나머지 라인)", "assignee": "MES팀", "duration": "W5-W10", "effort_md": 15, "dependencies": ["T-3.2.1"], "related_fr": ["FR-006"]},
+            {"id": "T-3.2.4", "name": "코일 계보 관리", "assignee": "MES팀", "duration": "W6-W10", "effort_md": 15, "dependencies": ["T-3.2.2"], "related_fr": ["FR-006"]},
+            {"id": "T-3.2.5", "name": "실시간 데이터 수집 (OPC-UA→Kafka→TSDB)", "assignee": "MES팀", "duration": "W2-W8", "effort_md": 30, "dependencies": ["T-2.4.4"], "related_fr": ["FR-007"]},
+            {"id": "T-3.2.6", "name": "이상치 감지 및 알람", "assignee": "MES팀", "duration": "W8-W12", "effort_md": 15, "dependencies": ["T-3.2.5"], "related_fr": ["FR-007"]},
+            {"id": "T-3.2.7", "name": "WIP 관리", "assignee": "MES팀", "duration": "W8-W14", "effort_md": 25, "dependencies": ["T-3.2.1"], "related_fr": ["FR-010"]},
+            {"id": "T-3.2.8", "name": "비상 운영 모드", "assignee": "MES팀", "duration": "W16-W22", "effort_md": 25, "dependencies": ["T-3.2.1"], "related_fr": ["FR-018"]}
+          ]
+        },
+        {
+          "id": "WP-3.3",
+          "name": "품질 서비스 개발",
+          "tasks": [
+            {"id": "T-3.3.1", "name": "품질 검사 관리 (15개 항목)", "assignee": "QM팀", "duration": "W3-W10", "effort_md": 30, "dependencies": ["M2"], "related_fr": ["FR-008"]},
+            {"id": "T-3.3.2", "name": "SPC 관리도 + 자동 Hold", "assignee": "QM팀", "duration": "W6-W12", "effort_md": 25, "dependencies": ["T-3.3.1"], "related_fr": ["FR-008"]},
+            {"id": "T-3.3.3", "name": "클레임 역추적 (30분)", "assignee": "QM팀", "duration": "W10-W16", "effort_md": 25, "dependencies": ["T-3.3.1", "T-3.2.5"], "related_fr": ["FR-008"]},
+            {"id": "T-3.3.4", "name": "표면검사(SIS) 이미지 연동", "assignee": "QM팀", "duration": "W12-W16", "effort_md": 15, "dependencies": ["T-3.3.1"], "related_fr": ["FR-008"]},
+            {"id": "T-3.3.5", "name": "LIMS 연동", "assignee": "QM팀, Integ", "duration": "W10-W14", "effort_md": 15, "dependencies": ["T-3.3.1"], "related_fr": ["FR-008"]},
+            {"id": "T-3.3.6", "name": "전자 품질 성적서 자동 생성", "assignee": "QM팀", "duration": "W14-W20", "effort_md": 25, "dependencies": ["T-3.3.1"], "related_fr": ["FR-016"]}
+          ]
+        },
+        {
+          "id": "WP-3.4",
+          "name": "설비 서비스 개발",
+          "tasks": [
+            {"id": "T-3.4.1", "name": "설비 상태 모니터링 (13개)", "assignee": "EQ팀", "duration": "W3-W8", "effort_md": 20, "dependencies": ["M2"], "related_fr": ["FR-009"]},
+            {"id": "T-3.4.2", "name": "OEE 자동 산출", "assignee": "EQ팀", "duration": "W6-W10", "effort_md": 15, "dependencies": ["T-3.4.1"], "related_fr": ["FR-009"]},
+            {"id": "T-3.4.3", "name": "고장→APS 재스케줄링 연동", "assignee": "EQ팀, APS팀", "duration": "W10-W14", "effort_md": 15, "dependencies": ["T-3.4.1", "T-3.1.7"], "related_fr": ["FR-009"]},
+            {"id": "T-3.4.4", "name": "롤/다이 교체 이력 + 품질 연계", "assignee": "EQ팀", "duration": "W8-W14", "effort_md": 15, "dependencies": ["T-3.4.1"], "related_fr": ["FR-009"]},
+            {"id": "T-3.4.5", "name": "정비 일정 APS 반영", "assignee": "EQ팀, APS팀", "duration": "W12-W16", "effort_md": 10, "dependencies": ["T-3.4.1"], "related_fr": ["FR-009"]}
+          ]
+        },
+        {
+          "id": "WP-3.5",
+          "name": "시스템 연동 개발",
+          "tasks": [
+            {"id": "T-3.5.1", "name": "ERP(SAP) 연동 어댑터", "assignee": "Integ팀", "duration": "W1-W8", "effort_md": 30, "dependencies": ["M2"], "related_fr": ["FR-004", "FR-014"]},
+            {"id": "T-3.5.2", "name": "LIMS 연동 어댑터", "assignee": "Integ팀", "duration": "W6-W10", "effort_md": 15, "dependencies": ["T-2.2.4"], "related_fr": ["FR-014"]},
+            {"id": "T-3.5.3", "name": "WMS 연동 어댑터", "assignee": "Integ팀", "duration": "W8-W12", "effort_md": 15, "dependencies": ["T-2.2.4"], "related_fr": ["FR-014"]},
+            {"id": "T-3.5.4", "name": "EMS 연동 어댑터", "assignee": "Integ팀", "duration": "W10-W14", "effort_md": 10, "dependencies": ["T-2.2.4"], "related_fr": ["FR-014", "FR-015"]},
+            {"id": "T-3.5.5", "name": "에러 처리 (재시도 + DLQ)", "assignee": "Integ팀", "duration": "W8-W12", "effort_md": 10, "dependencies": ["T-3.5.1"], "related_fr": ["FR-014"]},
+            {"id": "T-3.5.6", "name": "BI 데이터 마트 ETL", "assignee": "Integ팀, DBA", "duration": "W14-W20", "effort_md": 20, "dependencies": ["T-3.5.1"], "related_fr": ["FR-013"]}
+          ]
+        },
+        {
+          "id": "WP-3.6",
+          "name": "대시보드 및 KPI",
+          "tasks": [
+            {"id": "T-3.6.1", "name": "공장 전체 대시보드", "assignee": "FE, BE", "duration": "W6-W14", "effort_md": 35, "dependencies": ["T-3.2.5", "T-2.2.5"], "related_fr": ["FR-011"]},
+            {"id": "T-3.6.2", "name": "55인치 현황판 레이아웃", "assignee": "FE", "duration": "W10-W14", "effort_md": 10, "dependencies": ["T-3.6.1"], "related_fr": ["FR-011", "NFR-014"]},
+            {"id": "T-3.6.3", "name": "Gantt Chart (DHTMLX)", "assignee": "FE", "duration": "W4-W10", "effort_md": 25, "dependencies": ["M2"], "related_fr": ["FR-003"]},
+            {"id": "T-3.6.4", "name": "KPI 자동 산출", "assignee": "BE", "duration": "W10-W16", "effort_md": 20, "dependencies": ["T-3.2.5"], "related_fr": ["FR-012"]},
+            {"id": "T-3.6.5", "name": "생산일보/월보 자동 생성", "assignee": "BE", "duration": "W14-W18", "effort_md": 15, "dependencies": ["T-3.6.4"], "related_fr": ["FR-013"]},
+            {"id": "T-3.6.6", "name": "데이터 그리드 (AG Grid)", "assignee": "FE", "duration": "W8-W14", "effort_md": 15, "dependencies": ["M2"], "related_fr": ["FR-013"]},
+            {"id": "T-3.6.7", "name": "모바일 PWA (KPI + 알림)", "assignee": "FE", "duration": "W16-W22", "effort_md": 20, "dependencies": ["T-3.6.4"], "related_fr": ["FR-017"]},
+            {"id": "T-3.6.8", "name": "에너지 대시보드", "assignee": "FE, BE", "duration": "W14-W18", "effort_md": 15, "dependencies": ["T-3.5.4"], "related_fr": ["FR-015"]}
+          ]
+        },
+        {
+          "id": "WP-3.7",
+          "name": "알림 및 공통 기능",
+          "tasks": [
+            {"id": "T-3.7.1", "name": "알림 서비스", "assignee": "BE", "duration": "W6-W12", "effort_md": 20, "dependencies": ["T-2.2.3"], "related_fr": ["FR-017"]},
+            {"id": "T-3.7.2", "name": "사용자 관리 (RBAC)", "assignee": "BE", "duration": "W3-W6", "effort_md": 10, "dependencies": ["T-2.1.7"], "related_fr": ["NFR-008"]},
+            {"id": "T-3.7.3", "name": "감사 로그 시스템", "assignee": "BE", "duration": "W4-W8", "effort_md": 10, "dependencies": ["T-2.2.3", "T-2.3.5"], "related_fr": ["NFR-011"]},
+            {"id": "T-3.7.4", "name": "다국어 지원", "assignee": "FE", "duration": "W12-W16", "effort_md": 10, "dependencies": ["T-2.2.2"], "related_fr": ["NFR-013"]},
+            {"id": "T-3.7.5", "name": "다크 모드 / 라이트 모드", "assignee": "FE", "duration": "W10-W12", "effort_md": 5, "dependencies": ["T-2.2.2"], "related_fr": ["NFR-013"]},
+            {"id": "T-3.7.6", "name": "접근성 (WCAG 2.1 AA)", "assignee": "FE", "duration": "W14-W18", "effort_md": 10, "dependencies": ["T-2.2.2"], "related_fr": ["NFR-013", "NFR-014"]}
+          ]
+        },
+        {
+          "id": "WP-3.8",
+          "name": "슈퍼유저 교육",
+          "tasks": [
+            {"id": "T-3.8.1", "name": "교육 커리큘럼 개발", "assignee": "PM, BA", "duration": "W18-W22", "effort_md": 15, "dependencies": [], "related_fr": []},
+            {"id": "T-3.8.2", "name": "슈퍼유저 교육 실시 (18명)", "assignee": "PM, BA", "duration": "W22-W26", "effort_md": 20, "dependencies": ["T-3.8.1"], "related_fr": []}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M4",
+      "name": "통합 테스트",
+      "start_date": "2027-07-01",
+      "end_date": "2027-09-30",
+      "duration_weeks": 13,
+      "work_packages": [
+        {
+          "id": "WP-4.1",
+          "name": "통합 테스트",
+          "tasks": [
+            {"id": "T-4.1.1", "name": "단위 테스트 보완 (커버리지 80%+)", "assignee": "Dev전체", "duration": "W1-W3", "effort_md": 30, "dependencies": ["M3"], "related_fr": ["전체"]},
+            {"id": "T-4.1.2", "name": "통합 테스트 (E2E)", "assignee": "QA", "duration": "W2-W6", "effort_md": 40, "dependencies": ["T-4.1.1"], "related_fr": ["전체"]},
+            {"id": "T-4.1.3", "name": "인터페이스 연동 테스트", "assignee": "QA, Integ", "duration": "W3-W6", "effort_md": 25, "dependencies": ["T-4.1.1"], "related_fr": ["FR-014"]},
+            {"id": "T-4.1.4", "name": "APS 제약조건 검증 (15개)", "assignee": "QA, APS팀", "duration": "W3-W8", "effort_md": 30, "dependencies": ["T-4.1.1"], "related_fr": ["FR-002"]},
+            {"id": "T-4.1.5", "name": "UAT (현업 참여)", "assignee": "QA, 현업", "duration": "W6-W10", "effort_md": 40, "dependencies": ["T-4.1.2"], "related_fr": ["전체"]}
+          ]
+        },
+        {
+          "id": "WP-4.2",
+          "name": "성능 테스트",
+          "tasks": [
+            {"id": "T-4.2.1", "name": "부하 테스트 (300명, k6)", "assignee": "QA, Infra", "duration": "W4-W7", "effort_md": 20, "dependencies": ["T-4.1.2"], "related_fr": ["NFR-004"]},
+            {"id": "T-4.2.2", "name": "데이터 수집 성능 (7,200태그 1초)", "assignee": "QA, Infra", "duration": "W4-W7", "effort_md": 15, "dependencies": ["T-4.1.2"], "related_fr": ["NFR-002"]},
+            {"id": "T-4.2.3", "name": "APS 스케줄링 성능 (5분)", "assignee": "QA, APS팀", "duration": "W5-W7", "effort_md": 10, "dependencies": ["T-4.1.4"], "related_fr": ["NFR-003"]},
+            {"id": "T-4.2.4", "name": "성능 튜닝 및 최적화", "assignee": "Dev전체", "duration": "W7-W10", "effort_md": 25, "dependencies": ["T-4.2.1", "T-4.2.2"], "related_fr": ["전체 NFR"]}
+          ]
+        },
+        {
+          "id": "WP-4.3",
+          "name": "보안 테스트",
+          "tasks": [
+            {"id": "T-4.3.1", "name": "보안 취약점 스캔 (OWASP)", "assignee": "보안팀", "duration": "W5-W7", "effort_md": 10, "dependencies": ["T-4.1.2"], "related_fr": ["NFR-008~011"]},
+            {"id": "T-4.3.2", "name": "침투 테스트 (외부 업체)", "assignee": "보안팀", "duration": "W7-W9", "effort_md": 15, "dependencies": ["T-4.3.1"], "related_fr": ["NFR-008~011"]},
+            {"id": "T-4.3.3", "name": "ISMS-P 기준 점검", "assignee": "보안팀", "duration": "W8-W12", "effort_md": 15, "dependencies": ["T-4.3.2"], "related_fr": ["CON-004"]}
+          ]
+        },
+        {
+          "id": "WP-4.4",
+          "name": "데이터 마이그레이션",
+          "tasks": [
+            {"id": "T-4.4.1", "name": "마이그레이션 스크립트 (MES 3년)", "assignee": "DBA", "duration": "W1-W4", "effort_md": 20, "dependencies": ["M3"], "related_fr": ["CON-003"]},
+            {"id": "T-4.4.2", "name": "마이그레이션 스크립트 (히스토리안 5년)", "assignee": "DBA", "duration": "W2-W5", "effort_md": 20, "dependencies": ["M3"], "related_fr": ["CON-003"]},
+            {"id": "T-4.4.3", "name": "마이그레이션 리허설 (1차)", "assignee": "DBA", "duration": "W5-W6", "effort_md": 10, "dependencies": ["T-4.4.1", "T-4.4.2"], "related_fr": ["CON-003"]},
+            {"id": "T-4.4.4", "name": "데이터 정합성 검증", "assignee": "DBA, QA", "duration": "W6-W8", "effort_md": 15, "dependencies": ["T-4.4.3"], "related_fr": ["CON-003"]},
+            {"id": "T-4.4.5", "name": "마이그레이션 리허설 (2차) + 최종 검증", "assignee": "DBA", "duration": "W9-W10", "effort_md": 10, "dependencies": ["T-4.4.4"], "related_fr": ["CON-003"]}
+          ]
+        },
+        {
+          "id": "WP-4.5",
+          "name": "관리자 교육",
+          "tasks": [
+            {"id": "T-4.5.1", "name": "관리자 교육 (65명)", "assignee": "PM, BA", "duration": "W8-W12", "effort_md": 25, "dependencies": ["M3"], "related_fr": []},
+            {"id": "T-4.5.2", "name": "교육 자료 작성", "assignee": "BA", "duration": "W6-W10", "effort_md": 15, "dependencies": [], "related_fr": []}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M5",
+      "name": "시범 운영",
+      "start_date": "2027-10-01",
+      "end_date": "2027-11-30",
+      "duration_weeks": 9,
+      "work_packages": [
+        {
+          "id": "WP-5.1",
+          "name": "시범 운영 (PCM + CAL)",
+          "tasks": [
+            {"id": "T-5.1.1", "name": "PCM 라인 시범 가동", "assignee": "전체", "duration": "W1-W4", "effort_md": 30, "dependencies": ["M4"], "related_fr": ["전체"]},
+            {"id": "T-5.1.2", "name": "CAL 라인 시범 가동", "assignee": "전체", "duration": "W1-W4", "effort_md": 30, "dependencies": ["M4"], "related_fr": ["전체"]},
+            {"id": "T-5.1.3", "name": "실데이터 기반 APS 스케줄 검증", "assignee": "APS팀, 현업", "duration": "W1-W6", "effort_md": 20, "dependencies": ["T-5.1.1"], "related_fr": ["FR-002"]},
+            {"id": "T-5.1.4", "name": "이슈 수집 및 긴급 조치", "assignee": "Dev전체", "duration": "W1-W9", "effort_md": 40, "dependencies": ["T-5.1.1"], "related_fr": ["전체"]},
+            {"id": "T-5.1.5", "name": "데이터 정합성 비교 (일일)", "assignee": "QA, DBA", "duration": "W1-W9", "effort_md": 20, "dependencies": ["T-5.1.1"], "related_fr": ["CON-006"]}
+          ]
+        },
+        {
+          "id": "WP-5.2",
+          "name": "전체 사용자 교육",
+          "tasks": [
+            {"id": "T-5.2.1", "name": "전체 사용자 기본 교육 (12회)", "assignee": "PM, BA, 슈퍼유저", "duration": "W2-W6", "effort_md": 30, "dependencies": ["T-3.8.2"], "related_fr": []},
+            {"id": "T-5.2.2", "name": "OJT 현장 실습", "assignee": "슈퍼유저", "duration": "W4-W9", "effort_md": 20, "dependencies": ["T-5.2.1"], "related_fr": []},
+            {"id": "T-5.2.3", "name": "동영상 매뉴얼 제작", "assignee": "BA", "duration": "W1-W6", "effort_md": 15, "dependencies": [], "related_fr": []}
+          ]
+        },
+        {
+          "id": "WP-5.3",
+          "name": "나머지 라인 확대 준비",
+          "tasks": [
+            {"id": "T-5.3.1", "name": "나머지 7개 라인 설정", "assignee": "BA, DBA", "duration": "W3-W7", "effort_md": 25, "dependencies": ["T-5.1.3"], "related_fr": ["전체"]},
+            {"id": "T-5.3.2", "name": "나머지 라인 연동 검증", "assignee": "MES팀", "duration": "W5-W8", "effort_md": 15, "dependencies": ["T-5.3.1"], "related_fr": ["FR-006"]}
+          ]
+        }
+      ]
+    },
+    {
+      "id": "M6",
+      "name": "전체 오픈",
+      "start_date": "2027-12-01",
+      "end_date": "2027-12-31",
+      "duration_weeks": 4,
+      "work_packages": [
+        {
+          "id": "WP-6.1",
+          "name": "전체 오픈",
+          "tasks": [
+            {"id": "T-6.1.1", "name": "최종 데이터 마이그레이션", "assignee": "DBA", "duration": "W1", "effort_md": 10, "dependencies": ["M5"], "related_fr": ["CON-003"]},
+            {"id": "T-6.1.2", "name": "9개 라인 Go-Live", "assignee": "전체", "duration": "W1-W2", "effort_md": 40, "dependencies": ["T-6.1.1"], "related_fr": ["전체"]},
+            {"id": "T-6.1.3", "name": "기존 MES 전환", "assignee": "PM, Infra", "duration": "W2", "effort_md": 10, "dependencies": ["T-6.1.2"], "related_fr": ["CON-006"]},
+            {"id": "T-6.1.4", "name": "병행 운영 시작 (3개월)", "assignee": "전체", "duration": "W2-W4", "effort_md": 20, "dependencies": ["T-6.1.3"], "related_fr": ["CON-006"]}
+          ]
+        },
+        {
+          "id": "WP-6.2",
+          "name": "안정화 및 인수",
+          "tasks": [
+            {"id": "T-6.2.1", "name": "안정화 지원 (현장 상주)", "assignee": "Dev전체", "duration": "W1-W4", "effort_md": 40, "dependencies": ["T-6.1.2"], "related_fr": ["전체"]},
+            {"id": "T-6.2.2", "name": "운영 매뉴얼 작성", "assignee": "BA, Dev", "duration": "W1-W3", "effort_md": 15, "dependencies": [], "related_fr": []},
+            {"id": "T-6.2.3", "name": "운영팀 인수인계", "assignee": "PM, Dev", "duration": "W3-W4", "effort_md": 10, "dependencies": ["T-6.2.2"], "related_fr": []},
+            {"id": "T-6.2.4", "name": "프로젝트 종료 보고", "assignee": "PM", "duration": "W4", "effort_md": 5, "dependencies": ["T-6.2.3"], "related_fr": []}
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_tasks": 107,
+    "total_work_packages": 27,
+    "total_effort_md": 2882,
+    "total_man_months": 131,
+    "effort_by_phase": {
+      "M1_분석설계": {"md": 547, "percent": 19.0},
+      "M2_기반구축": {"md": 375, "percent": 13.0},
+      "M3_핵심개발": {"md": 1045, "percent": 36.3},
+      "M4_통합테스트": {"md": 545, "percent": 18.9},
+      "M5_시범운영": {"md": 255, "percent": 8.8},
+      "M6_전체오픈": {"md": 115, "percent": 4.0}
+    },
+    "critical_path": [
+      "T-1.2.3", "T-1.3.1", "T-1.3.5", "T-2.1.2", "T-2.2.3",
+      "T-3.1.1", "T-3.1.2", "T-3.1.6", "T-4.1.4", "T-4.2.3",
+      "T-5.1.3", "T-6.1.2"
+    ],
+    "critical_path_description": "TO-BE 설계 → 아키텍처 → 인터페이스 상세 → K8s → Kafka → APS 엔진 → 제약조건 P1 → 시뮬레이션 → APS 검증 → APS 성능 → 실데이터 검증 → Go-Live"
+  },
+  "metadata": {
+    "version": "1.0",
+    "status": "draft",
+    "created_at": "2026-02-06T09:55:00+09:00",
+    "source_prd_id": "PRD-20260206-093046",
+    "source_prd_title": "냉연 통합 MES/APS 시스템 구축 (Project NEXUS)"
+  }
+}

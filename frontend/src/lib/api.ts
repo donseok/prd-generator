@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // API 서버 주소 (환경변수 또는 기본값)
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8001/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
 
 // Axios 클라이언트 설정
 const client = axios.create({
@@ -118,7 +118,7 @@ export interface Requirement {
  */
 export const api = {
   // === PRD 관련 API ===
-  
+
   // PRD 목록 조회
   async listPRDs(skip = 0, limit = 20, status?: string): Promise<PRDListResponse> {
     const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
@@ -259,6 +259,83 @@ export const api = {
     const response = await client.get("/health");
     return response.data;
   },
+
+  // === 워크스페이스 출력 문서 API ===
+
+  // CLI 생성 문서 목록 조회
+  async listOutputDocuments(docType?: string, limit: number = 50): Promise<OutputDocumentsResponse> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (docType) params.append("doc_type", docType);
+    const response = await client.get(`/outputs/documents?${params}`);
+    return response.data;
+  },
+
+  // CLI 생성 문서 상세 조회
+  async getOutputDocument(docId: string) {
+    const response = await client.get(`/outputs/documents/${docId}`);
+    return response.data;
+  },
+
+  // === Auto-Doc 문서 생성 API ===
+
+  // 입력 파일 목록 조회
+  async listInputFiles(): Promise<InputFilesResponse> {
+    const response = await client.get("/auto-doc/inputs");
+    return response.data;
+  },
+
+  // 문서 생성 시작
+  async generateDocuments(docTypes: string[] = ["prd"]): Promise<GenerateResponse> {
+    const response = await client.post("/auto-doc/generate", { doc_types: docTypes });
+    return response.data;
+  },
+
+  // 문서 생성 상태 조회
+  async getGenerationStatus(jobId: string) {
+    const response = await client.get(`/auto-doc/status/${jobId}`);
+    return response.data;
+  },
 };
+
+// 출력 문서 정보
+export interface OutputDocument {
+  id: string;
+  title: string;
+  doc_type: string;
+  file_path: string;
+  created_at: string;
+  has_json: boolean;
+  has_md: boolean;
+  has_pptx: boolean;
+}
+
+// 출력 문서 목록 응답
+export interface OutputDocumentsResponse {
+  total: number;
+  documents: OutputDocument[];
+}
+
+// 입력 파일 정보
+export interface InputFile {
+  name: string;
+  path: string;
+  size: number;
+  extension: string;
+}
+
+// 입력 파일 목록 응답
+export interface InputFilesResponse {
+  total: number;
+  folder_path: string;
+  files: InputFile[];
+}
+
+// 문서 생성 응답
+export interface GenerateResponse {
+  job_id: string;
+  status: string;
+  message: string;
+  doc_types: string[];
+}
 
 export default api;

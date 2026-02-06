@@ -1,0 +1,113 @@
+{
+  "project": "냉연 통합 MES/APS (NEXUS)",
+  "version": "1.0",
+  "last_updated": "2026-05-25",
+  "interfaces": [
+    {
+      "id": "IF-001",
+      "name": "ERP-MES 수주 연동",
+      "source": "SAP S/4HANA",
+      "target": "통합 MES/APS",
+      "protocol": "SAP RFC/BAPI",
+      "direction": "양방향",
+      "frequency": "실시간 + 배치(일 2회)",
+      "data_items": [
+        {"name": "수주 데이터", "direction": "ERP→MES", "fields": ["수주번호", "고객코드", "강종", "규격(두께/폭/길이)", "수량", "납기일", "우선순위"]},
+        {"name": "생산실적", "direction": "MES→ERP", "fields": ["작업지시번호", "코일ID", "생산수량", "품질등급", "완료시각"]},
+        {"name": "출하지시", "direction": "ERP→MES", "fields": ["출하번호", "코일ID목록", "출하일자", "차량정보"]},
+        {"name": "자재소요", "direction": "MES→ERP", "fields": ["모코일ID", "소요량", "투입일자"]},
+        {"name": "원가정보", "direction": "ERP→MES", "fields": ["강종별 표준원가", "에너지단가", "롤단가"]}
+      ],
+      "sla": {"response_time": "3초 이내", "availability": "99.9%"},
+      "error_handling": "재시도 3회 후 Dead Letter Queue 이동, 알람 발생"
+    },
+    {
+      "id": "IF-002",
+      "name": "Level2-MES 공정 데이터",
+      "source": "Level 2 (PLC/HMI)",
+      "target": "통합 MES/APS",
+      "protocol": "OPC-UA",
+      "direction": "양방향",
+      "frequency": "실시간 (1초 주기)",
+      "data_items": [
+        {"name": "설정값 전송", "direction": "MES→L2", "fields": ["코일ID", "목표두께", "목표폭", "압연속도", "장력설정값", "소둔온도패턴"]},
+        {"name": "실적 수신", "direction": "L2→MES", "fields": ["실적두께", "실적폭", "압연속도", "장력", "온도", "결함정보"]},
+        {"name": "설비 상태", "direction": "L2→MES", "fields": ["설비ID", "가동상태", "알람코드", "롤마모도"]}
+      ],
+      "tags": {
+        "PCM": {"count": 2500, "key_tags": ["압연속도(m/min)", "장력(kN)", "두께(mm)", "폭(mm)", "압연하중(ton)", "롤갭(mm)"]},
+        "CAL": {"count": 1800, "key_tags": ["소둔온도(℃)", "라인속도(m/min)", "분위기가스(%)", "냉각속도(℃/s)"]},
+        "EGL": {"count": 1200, "key_tags": ["도금전류(A)", "도금량(g/m²)", "라인속도(m/min)", "용액온도(℃)"]},
+        "CGL": {"count": 1500, "key_tags": ["도금욕온도(℃)", "에어나이프압(kPa)", "도금량(g/m²)", "라인속도(m/min)"]}
+      },
+      "sla": {"latency": "2초 이내", "data_loss_rate": "0.01% 미만"},
+      "network": "OT 네트워크 (DMZ 경유)"
+    },
+    {
+      "id": "IF-003",
+      "name": "MES-LIMS 품질 연동",
+      "source": "통합 MES/APS",
+      "target": "LIMS",
+      "protocol": "REST API (JSON)",
+      "direction": "양방향",
+      "frequency": "이벤트 기반",
+      "data_items": [
+        {"name": "시험의뢰", "direction": "MES→LIMS", "fields": ["코일ID", "시험항목", "시료위치", "의뢰일시"]},
+        {"name": "시험결과", "direction": "LIMS→MES", "fields": ["코일ID", "인장강도(MPa)", "항복강도(MPa)", "연신율(%)", "경도(HV)", "판정결과"]}
+      ],
+      "sla": {"response_time": "5초 이내"},
+      "authentication": "OAuth 2.0 + API Key"
+    },
+    {
+      "id": "IF-004",
+      "name": "MES-WMS 창고 연동",
+      "source": "통합 MES/APS",
+      "target": "WMS",
+      "protocol": "REST API (JSON)",
+      "direction": "양방향",
+      "frequency": "실시간",
+      "data_items": [
+        {"name": "입고요청", "direction": "MES→WMS", "fields": ["코일ID", "중량", "규격", "품질등급", "입고위치"]},
+        {"name": "출고요청", "direction": "MES→WMS", "fields": ["코일ID", "출고목적", "목적지"]},
+        {"name": "재고현황", "direction": "WMS→MES", "fields": ["코일ID", "위치", "적치일시", "상태"]}
+      ],
+      "sla": {"response_time": "3초 이내"}
+    },
+    {
+      "id": "IF-005",
+      "name": "MES-EMS 에너지 연동",
+      "source": "EMS",
+      "target": "통합 MES/APS",
+      "protocol": "REST API (JSON)",
+      "direction": "EMS→MES",
+      "frequency": "5분 주기",
+      "data_items": [
+        {"name": "에너지 사용량", "fields": ["라인ID", "전력사용량(kWh)", "가스사용량(Nm³)", "시간대구분(피크/비피크)", "단가(원/kWh)"]}
+      ]
+    },
+    {
+      "id": "IF-006",
+      "name": "MES-BI 분석 데이터",
+      "source": "통합 MES/APS",
+      "target": "BI (Tableau/Power BI)",
+      "protocol": "ETL (데이터 마트)",
+      "direction": "MES→BI",
+      "frequency": "배치 (일 1회, 야간)",
+      "data_items": [
+        {"name": "생산실적 요약", "fields": ["일자", "라인", "강종", "생산량(톤)", "수율(%)", "OEE(%)"]},
+        {"name": "품질 요약", "fields": ["일자", "라인", "불량유형", "불량률(%)", "클레임건수"]},
+        {"name": "설비 요약", "fields": ["일자", "설비", "가동시간", "정지시간", "고장횟수", "MTBF", "MTTR"]},
+        {"name": "에너지 요약", "fields": ["일자", "라인", "전력사용량", "가스사용량", "원단위"]}
+      ],
+      "database": "PostgreSQL (데이터 마트)"
+    }
+  ],
+  "common_requirements": {
+    "authentication": "OAuth 2.0 기반 통합 인증",
+    "encryption": "TLS 1.3 (전송), AES-256 (저장)",
+    "logging": "모든 API 호출 감사 로그 기록",
+    "monitoring": "API 응답시간/오류율 실시간 모니터링 (Grafana)",
+    "retry_policy": "지수 백오프(1s, 2s, 4s), 최대 3회 재시도",
+    "circuit_breaker": "연속 5회 실패 시 차단, 30초 후 Half-Open"
+  }
+}
