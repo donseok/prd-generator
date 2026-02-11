@@ -86,6 +86,9 @@ class NormalizedRequirement(BaseModel):
     missing_info: list[str] = Field(
         default_factory=list, description="부족하거나 불명확한 정보"
     )
+    feature_module: Optional[str] = Field(
+        default=None, description="기능 모듈/도메인 분류 (예: 인증, 결제, 대시보드)"
+    )
     related_requirements: list[str] = Field(
         default_factory=list, description="관련된 다른 요구사항들의 ID"
     )

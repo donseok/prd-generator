@@ -54,6 +54,14 @@ class PRDGenerator(BaseGenerator[List[NormalizedRequirement], PRDDocument, PRDCo
         non_functional = [r for r in requirements if r.type == RequirementType.NON_FUNCTIONAL]
         constraints = [r for r in requirements if r.type == RequirementType.CONSTRAINT]
 
+        # 모듈이 없는 요구사항에 "기타" 할당 후 모듈별 정렬
+        for req in requirements:
+            if not req.feature_module:
+                req.feature_module = "기타"
+
+        functional.sort(key=lambda r: (r.feature_module or "기타", r.id))
+        non_functional.sort(key=lambda r: (r.feature_module or "기타", r.id))
+
         # 2. AI를 사용하여 프로젝트 개요(Overview) 작성
         overview = await self._generate_overview(requirements, context)
 

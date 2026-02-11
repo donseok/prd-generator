@@ -212,16 +212,26 @@ class Normalizer:
             for s in parsed_content.sections[:8]
         ]) if parsed_content.sections else ""
 
-        # AI에게 보낼 프롬프트(명령어) 구성 - 간결하게
-        prompt = f"""문서에서 요구사항 추출. JSON배열만 반환:
+        # 문서 유형 힌트 생성
+        doc_type_hint = self._get_doc_type_hint(source_type, content_text)
 
-문서 내용:
-{content_text[:4000]}
+        # AI에게 보낼 프롬프트(명령어) 구성
+        prompt = f"""다음 문서에서 **실제 소프트웨어 요구사항만** 추출하세요. JSON으로 반환.
 
-{f"섹션: {sections_text[:1000]}" if sections_text else ""}
+## 문서 유형: {doc_type_hint}
 
-형식: [{{"title":"제목","description":"설명","type":"FR|NFR|CONSTRAINT","priority":"HIGH|MEDIUM|LOW","confidence_score":0.8}}]
-FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
+## ⛔ 필터링 규칙
+참석자/서기/장소/날짜/인사말/목차/섹션제목만 있는 항목/소개글은 절대 추출하지 마세요.
+
+## 문서 내용:
+{content_text[:6000]}
+
+{f"## 섹션 구조:{chr(10)}{sections_text[:1500]}" if sections_text else ""}
+
+## 출력 형식:
+{{"requirements": [{{"title":"동사형 제목","description":"상세 설명","type":"FR|NFR|CONSTRAINT","module":"기능 모듈명","priority":"HIGH|MEDIUM|LOW","confidence_score":0.0~1.0,"confidence_reason":"근거","user_story":"As a [역할], I want [기능], so that [가치]","acceptance_criteria":["Given ..., When ..., Then ..."],"section_name":"출처","original_text":"원문","assumptions":[],"missing_info":[]}}]}}
+
+FR=기능, NFR=비기능(수치 정량화 필수), CONSTRAINT=제약. JSON만 반환."""
 
         try:
             start = datetime.now()
@@ -334,6 +344,9 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
             if section_name:
                 legacy_source += f" [{section_name}]"
 
+            # 모듈 정보 추출
+            feature_module = raw.get("module") or raw.get("feature_module")
+
             # 객체 생성 및 반환
             return NormalizedRequirement(
                 id=f"REQ-{counter:03d}",
@@ -349,6 +362,7 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
                 source_info=source_info,
                 assumptions=raw.get("assumptions", []),
                 missing_info=raw.get("missing_info", []),
+                feature_module=feature_module,
             )
 
         except Exception as e:
@@ -383,32 +397,98 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
 
         return " | ".join(parts)
 
+    def _get_doc_type_hint(self, source_type: str, content_text: str) -> str:
+        """문서 유형에 따른 추출 전략 힌트를 생성합니다."""
+        content_lower = content_text[:2000].lower()
+
+        # 내용 기반 자동 감지 (source_type보다 우선)
+        meeting_keywords = ["회의록", "참석자", "서기", "결정사항", "action item", "합의", "논의"]
+        interview_keywords = ["인터뷰", "면담", "현장", "불편", "pain point"]
+        rfp_keywords = ["rfp", "제안요청", "요구사항정의", "요구사항 명세"]
+
+        meeting_score = sum(1 for kw in meeting_keywords if kw in content_lower)
+        interview_score = sum(1 for kw in interview_keywords if kw in content_lower)
+        rfp_score = sum(1 for kw in rfp_keywords if kw in content_lower)
+
+        if meeting_score >= 2:
+            return "회의록/회의 기록 → 결정사항, Action Item, 합의된 요구사항에 집중. 참석자/장소/인사말 제외"
+        elif interview_score >= 2:
+            return "인터뷰/현장 메모 → Pain Point에서 요구사항 도출. 사용자 발언에서 핵심 니즈 추출"
+        elif rfp_score >= 1:
+            return "정형 문서(RFP/요구사항정의서) → 항목별 체계적 추출"
+        elif source_type == "email":
+            return "이메일 → 요청사항, 결정사항, 작업 지시에 집중"
+        elif source_type == "chat":
+            return "채팅/메시지 → 요청, 합의, 결정에 해당하는 내용만 추출"
+        elif source_type in ("ppt", "excel"):
+            return f"{source_type.upper()} 문서 → 슬라이드/시트별 핵심 요구사항 추출. 장식적 텍스트 제외"
+        else:
+            return "일반 문서 → 시스템 기능, 성능, 제약사항에 해당하는 내용 추출"
+
+    # 폴백 시 필터링할 비-요구사항 키워드
+    _SKIP_TITLES = {
+        "introduction", "서론", "개요", "목차", "배경", "참석자", "서기",
+        "agenda", "table of contents", "appendix", "부록", "약어",
+        "용어 정의", "감사합니다", "다음 회의", "next meeting",
+        "참고 자료", "references", "회의 정보", "meeting info",
+    }
+
+    _SKIP_CONTENT_PATTERNS = [
+        "참석자:", "서기:", "장소:", "일시:", "작성자:", "작성일:",
+        "발표자:", "회의 일시", "회의 장소", "date:", "location:",
+        "attendees:", "minutes by:", "감사합니다",
+    ]
+
+    def _is_non_requirement(self, title: str, content: str) -> bool:
+        """섹션이 비-요구사항인지 판별합니다."""
+        title_lower = title.lower().strip()
+
+        # 제목 기반 필터링
+        for skip in self._SKIP_TITLES:
+            if skip in title_lower:
+                return True
+
+        # 내용 기반 필터링
+        content_lower = content.lower().strip() if content else ""
+        for pattern in self._SKIP_CONTENT_PATTERNS:
+            if content_lower.startswith(pattern.lower()):
+                return True
+
+        # 내용이 너무 짧으면 의미 없는 섹션
+        if len(content.strip()) < 15:
+            return True
+
+        return False
+
     def _extract_from_content(self, parsed_content: ParsedContent) -> List[dict]:
         """
         AI 응답이 없을 때 문서 내용에서 직접 요구사항을 추출합니다.
-        섹션별로 분석하여 기본적인 요구사항 구조를 생성합니다.
+        비-요구사항 필터링을 적용하여 품질을 보장합니다.
         """
         raw_reqs = []
 
         # 섹션이 있으면 섹션 기반으로 추출
         if parsed_content.sections:
-            for idx, section in enumerate(parsed_content.sections[:20]):  # 최대 20개
+            for idx, section in enumerate(parsed_content.sections[:20]):
                 title = section.get('title', f'요구사항 {idx + 1}')
                 content = section.get('content', '')
                 if isinstance(content, list):
                     content = "\n".join(str(c) for c in content)
 
-                # 제목이 슬라이드 번호만 있으면 스킵
-                if content and len(content.strip()) > 10:
+                # 비-요구사항 필터링
+                if self._is_non_requirement(title, content):
+                    logger.debug(f"[extract_from_content] 비-요구사항 스킵: {title}")
+                    continue
+
+                if content and len(content.strip()) > 15:
                     raw_reqs.append({
                         "title": title[:50] if title else f"요구사항 {idx + 1}",
                         "description": content[:500] if content else title,
                         "type": "FR",
                         "priority": "MEDIUM",
-                        "user_story": f"사용자로서, {title}을(를) 원합니다.",
-                        "acceptance_criteria": [f"{title} 기능이 정상 동작해야 한다"],
-                        "confidence_score": 0.6,
-                        "confidence_reason": "문서 내용에서 직접 추출됨",
+                        "acceptance_criteria": [],
+                        "confidence_score": 0.4,
+                        "confidence_reason": "AI 실패, 문서에서 직접 추출 (낮은 품질)",
                         "section_name": title,
                         "original_text": content[:200] if content else "",
                     })
@@ -427,13 +507,16 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
                 # 제목 패턴 감지 (===, ---, # 등)
                 if line.startswith('===') or line.startswith('---') or line.startswith('#'):
                     if current_title and current_content:
-                        raw_reqs.append({
-                            "title": current_title[:50],
-                            "description": "\n".join(current_content)[:500],
-                            "type": "FR",
-                            "priority": "MEDIUM",
-                            "confidence_score": 0.5,
-                        })
+                        content_text = "\n".join(current_content)
+                        if not self._is_non_requirement(current_title, content_text):
+                            raw_reqs.append({
+                                "title": current_title[:50],
+                                "description": content_text[:500],
+                                "type": "FR",
+                                "priority": "MEDIUM",
+                                "confidence_score": 0.4,
+                                "confidence_reason": "AI 실패, 문서에서 직접 추출 (낮은 품질)",
+                            })
                     current_title = line.strip('=- #')
                     current_content = []
                 else:
@@ -441,13 +524,16 @@ FR=기능, NFR=비기능, CONSTRAINT=제약. JSON만."""
 
             # 마지막 섹션 처리
             if current_title and current_content:
-                raw_reqs.append({
-                    "title": current_title[:50],
-                    "description": "\n".join(current_content)[:500],
-                    "type": "FR",
-                    "priority": "MEDIUM",
-                    "confidence_score": 0.5,
-                })
+                content_text = "\n".join(current_content)
+                if not self._is_non_requirement(current_title, content_text):
+                    raw_reqs.append({
+                        "title": current_title[:50],
+                        "description": content_text[:500],
+                        "type": "FR",
+                        "priority": "MEDIUM",
+                        "confidence_score": 0.4,
+                        "confidence_reason": "AI 실패, 문서에서 직접 추출 (낮은 품질)",
+                    })
 
         logger.info(f"[extract_from_content] 직접 추출된 요구사항: {len(raw_reqs)}개")
         return raw_reqs

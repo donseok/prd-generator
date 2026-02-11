@@ -107,25 +107,34 @@ class TestConvertToRequirementPriorityMapping:
 # ===================================================================
 
 class TestConvertToRequirementConfidenceScore:
-    def test_normal_score_preserved(self, normalizer):
+    """다층 신뢰도 계산기(confidence_calculator) 적용 후,
+    최종 점수는 가중 평균으로 계산됩니다:
+    source(15%) + clarity(30%) + completeness(35%) + ai(20%)
+    """
+
+    def test_normal_score_produces_weighted_average(self, normalizer):
         raw = _make_raw_requirement(confidence_score=0.75)
         req = normalizer._convert_to_requirement(raw, 1, "test.txt", "doc-001")
-        assert req.confidence_score == pytest.approx(0.75)
+        # 가중 평균: 0.85*0.15 + 1.0*0.30 + 0.955*0.35 + 0.75*0.20 ≈ 0.91175
+        assert req.confidence_score == pytest.approx(0.91175, abs=0.01)
 
-    def test_score_above_1_clamped(self, normalizer):
+    def test_score_above_1_clamped_then_weighted(self, normalizer):
         raw = _make_raw_requirement(confidence_score=1.5)
         req = normalizer._convert_to_requirement(raw, 2, "test.txt", "doc-001")
-        assert req.confidence_score == pytest.approx(1.0)
+        # ai_confidence는 1.0으로 클램핑 후 가중 평균 계산
+        assert req.confidence_score == pytest.approx(0.96175, abs=0.01)
 
-    def test_score_below_0_clamped(self, normalizer):
+    def test_score_below_0_clamped_then_weighted(self, normalizer):
         raw = _make_raw_requirement(confidence_score=-0.5)
         req = normalizer._convert_to_requirement(raw, 3, "test.txt", "doc-001")
-        assert req.confidence_score == pytest.approx(0.0)
+        # ai_confidence는 0.0으로 클램핑 후 가중 평균 계산
+        assert req.confidence_score == pytest.approx(0.76175, abs=0.01)
 
     def test_invalid_score_string_defaults_to_0_7(self, normalizer):
         raw = _make_raw_requirement(confidence_score="invalid")
         req = normalizer._convert_to_requirement(raw, 4, "test.txt", "doc-001")
-        assert req.confidence_score == pytest.approx(0.7)
+        # invalid → 0.7 기본값 후 가중 평균
+        assert req.confidence_score == pytest.approx(0.90175, abs=0.01)
 
 
 # ===================================================================
@@ -157,7 +166,8 @@ class TestConvertToRequirementFields:
         assert req is not None
         assert req.type == RequirementType.FUNCTIONAL
         assert req.priority == Priority.MEDIUM
-        assert req.confidence_score == pytest.approx(0.7)
+        # 다층 신뢰도: 0.85*0.15 + 1.0*0.30 + 0.275*0.35 + 0.7*0.20 ≈ 0.66375
+        assert req.confidence_score == pytest.approx(0.66375, abs=0.01)
         assert req.acceptance_criteria == []
         assert req.assumptions == []
         assert req.missing_info == []

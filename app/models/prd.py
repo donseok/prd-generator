@@ -72,6 +72,98 @@ class PRDDocument(BaseModel):
     unresolved_items: list[UnresolvedItem] = Field(default_factory=list) # 미해결 항목
     metadata: PRDMetadata = Field(default_factory=PRDMetadata) # 메타데이터
 
+    def _group_by_module(self, requirements: list[NormalizedRequirement]) -> dict[str, list[NormalizedRequirement]]:
+        """요구사항을 feature_module 기준으로 그룹핑합니다."""
+        groups: dict[str, list[NormalizedRequirement]] = {}
+        for req in requirements:
+            module = req.feature_module or "기타"
+            if module not in groups:
+                groups[module] = []
+            groups[module].append(req)
+        return groups
+
+    def _render_summary_table(self, requirements: list[NormalizedRequirement]) -> list[str]:
+        """요구사항 요약 테이블을 생성합니다."""
+        lines = []
+        lines.append("| ID | 모듈 | 제목 | 우선순위 | 신뢰도 |")
+        lines.append("|----|------|------|----------|--------|")
+        for req in requirements:
+            module = req.feature_module or "-"
+            lines.append(
+                f"| {req.id} | {module} | {req.title} | {req.priority.value} | {req.confidence_score:.0%} |"
+            )
+        lines.append("")
+        return lines
+
+    def _render_requirement_detail(self, req: NormalizedRequirement) -> list[str]:
+        """개별 요구사항의 상세 내용을 렌더링합니다."""
+        lines = []
+
+        # 출처 표시 문자열 생성
+        source_display = ""
+        if req.source_info:
+            source_display = req.source_info.to_display_string()
+        elif req.source_reference:
+            source_display = req.source_reference
+
+        lines.append(f"**우선순위**: {req.priority.value} | **신뢰도**: {req.confidence_score:.0%}")
+        if source_display:
+            lines.append(f"**출처**: {source_display}")
+        lines.append("")
+        lines.append(req.description)
+        lines.append("")
+
+        if req.user_story:
+            lines.append(f"**User Story**: {req.user_story}")
+            lines.append("")
+
+        if req.acceptance_criteria:
+            lines.append("**Acceptance Criteria**:")
+            for ac in req.acceptance_criteria:
+                lines.append(f"- [ ] {ac}")
+            lines.append("")
+
+        # 원문 발췌
+        if req.source_info and req.source_info.excerpt:
+            lines.append(f"> **원문**: \"{req.source_info.excerpt}\"")
+            lines.append("")
+
+        # 가정사항
+        if req.assumptions:
+            lines.append("**가정사항**: " + " / ".join(req.assumptions))
+            lines.append("")
+
+        # 누락 정보
+        if req.missing_info:
+            lines.append("**누락 정보**: " + " / ".join(req.missing_info))
+            lines.append("")
+
+        return lines
+
+    def _render_grouped_requirements(
+        self, requirements: list[NormalizedRequirement], heading_level: str = "###"
+    ) -> list[str]:
+        """모듈별로 그룹핑된 요구사항을 렌더링합니다."""
+        lines = []
+        groups = self._group_by_module(requirements)
+
+        if len(groups) <= 1 and "기타" in groups:
+            # 모듈 정보가 없으면 기존처럼 플랫 렌더링
+            for req in requirements:
+                lines.append(f"{heading_level} {req.id}: {req.title}")
+                lines.extend(self._render_requirement_detail(req))
+        else:
+            # 모듈별 그룹핑 렌더링
+            for module_name, reqs in groups.items():
+                lines.append(f"{heading_level} {module_name}")
+                lines.append("")
+                for req in reqs:
+                    next_level = heading_level + "#"
+                    lines.append(f"{next_level} {req.id}: {req.title}")
+                    lines.extend(self._render_requirement_detail(req))
+
+        return lines
+
     def to_markdown(self) -> str:
         """PRD 내용을 마크다운(Markdown) 텍스트로 변환하는 함수"""
         lines = []
@@ -121,61 +213,27 @@ class PRDDocument(BaseModel):
         if self.functional_requirements:
             lines.append("## 2. 기능 요구사항 (FR)")
             lines.append("")
-            for req in self.functional_requirements:
-                lines.append(f"### {req.id}: {req.title}")
-                
-                # 출처 표시 문자열 생성
-                source_display = ""
-                if req.source_info:
-                    source_display = req.source_info.to_display_string()
-                elif req.source_reference:
-                    source_display = req.source_reference
-
-                lines.append(f"**우선순위**: {req.priority.value} | **신뢰도**: {req.confidence_score:.0%}")
-                if source_display:
-                    lines.append(f"**출처**: {source_display}")
-                lines.append("")
-                lines.append(req.description)
-                lines.append("")
-                if req.user_story:
-                    lines.append(f"**User Story**: {req.user_story}")
-                    lines.append("")
-                if req.acceptance_criteria:
-                    lines.append("**Acceptance Criteria**:")
-                    for ac in req.acceptance_criteria:
-                        lines.append(f"- [ ] {ac}")
-                    lines.append("")
-                # 원문 발췌가 있으면 표시
-                if req.source_info and req.source_info.excerpt:
-                    lines.append(f"> 원문: \"{req.source_info.excerpt}\"")
-                    lines.append("")
+            # 요약 테이블
+            lines.extend(self._render_summary_table(self.functional_requirements))
+            # 모듈별 그룹핑 상세
+            lines.extend(self._render_grouped_requirements(self.functional_requirements, "###"))
 
         # 3. 비기능 요구사항 (NFR)
         if self.non_functional_requirements:
             lines.append("## 3. 비기능 요구사항 (NFR)")
             lines.append("")
-            for req in self.non_functional_requirements:
-                lines.append(f"### {req.id}: {req.title}")
-                source_display = ""
-                if req.source_info:
-                    source_display = req.source_info.to_display_string()
-                elif req.source_reference:
-                    source_display = req.source_reference
-
-                lines.append(f"**우선순위**: {req.priority.value} | **신뢰도**: {req.confidence_score:.0%}")
-                if source_display:
-                    lines.append(f"**출처**: {source_display}")
-                lines.append("")
-                lines.append(req.description)
-                lines.append("")
-                if req.source_info and req.source_info.excerpt:
-                    lines.append(f"> 원문: \"{req.source_info.excerpt}\"")
-                    lines.append("")
+            # 요약 테이블
+            lines.extend(self._render_summary_table(self.non_functional_requirements))
+            # 모듈별 그룹핑 상세
+            lines.extend(self._render_grouped_requirements(self.non_functional_requirements, "###"))
 
         # 4. 제약조건
         if self.constraints:
             lines.append("## 4. 제약조건")
             lines.append("")
+            # 요약 테이블
+            lines.extend(self._render_summary_table(self.constraints))
+            # 상세 (제약조건은 보통 적으므로 그룹핑 없이)
             for req in self.constraints:
                 lines.append(f"### {req.id}: {req.title}")
                 source_display = ""
@@ -188,8 +246,13 @@ class PRDDocument(BaseModel):
                     lines.append(f"**출처**: {source_display}")
                 lines.append(req.description)
                 lines.append("")
+                if req.acceptance_criteria:
+                    lines.append("**Acceptance Criteria**:")
+                    for ac in req.acceptance_criteria:
+                        lines.append(f"- [ ] {ac}")
+                    lines.append("")
                 if req.source_info and req.source_info.excerpt:
-                    lines.append(f"> 원문: \"{req.source_info.excerpt}\"")
+                    lines.append(f"> **원문**: \"{req.source_info.excerpt}\"")
                     lines.append("")
 
         # 5. 마일스톤
