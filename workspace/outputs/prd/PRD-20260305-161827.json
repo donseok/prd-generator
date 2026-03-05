@@ -1,0 +1,446 @@
+{
+  "id": "PRD-20260305-161827",
+  "title": "시스템 모니터링 웹 대시보드",
+  "overview": {
+    "background": "현대 IT 운영 환경에서 서버 및 시스템 리소스의 실시간 모니터링은 안정적인 서비스 운영의 핵심 요소이다. 시스템 장애를 사전에 감지하고 리소스 병목 현상을 파악하기 위해 CPU, 메모리, 디스크, 네트워크 등 주요 지표를 실시간으로 시각화하는 경량 웹 대시보드를 개발한다.",
+    "goals": [
+      "4가지 핵심 시스템 리소스(CPU, 메모리, 디스크, 네트워크)를 실시간으로 모니터링하는 웹 대시보드 구축",
+      "3초 간격의 실시간 데이터 갱신으로 시스템 상태의 즉각적 파악 지원",
+      "다크 테마 기반의 직관적이고 반응형 UI 제공"
+    ],
+    "scope": "CPU 사용률 라인 차트, 메모리 사용률 라인 차트, 디스크 사용량 파이 차트(드라이브별), 네트워크 IN/OUT 트래픽 실시간 차트, 3초 간격 자동 갱신, 다크 테마 UI, 반응형 대시보드 그리드 레이아웃, Python 백엔드 API(psutil 기반), React 프론트엔드(Recharts 기반)",
+    "out_of_scope": [
+      "사용자 인증 및 권한 관리",
+      "다중 서버 모니터링 (원격 서버)",
+      "알림/경고 시스템 (이메일, Slack 등)",
+      "히스토리 데이터 저장 및 조회",
+      "프로세스별 상세 모니터링",
+      "로그 수집 및 분석"
+    ],
+    "target_users": [
+      "시스템 관리자",
+      "개발자",
+      "DevOps 엔지니어"
+    ],
+    "success_metrics": [
+      "대시보드 페이지 로딩 시간 2초 이내",
+      "데이터 갱신 주기 3초 이내 달성률 99% 이상",
+      "차트 렌더링 지연 500ms 이내",
+      "시스템 리소스(CPU, 메모리, 디스크, 네트워크) 4개 항목 모두 시각화 완료"
+    ]
+  },
+  "functional_requirements": [
+    {
+      "id": "FR-001",
+      "type": "FUNCTIONAL",
+      "title": "CPU 사용률 실시간 모니터링",
+      "description": "CPU 사용률(%)을 실시간 라인 차트로 표시한다. 시간축 기반으로 트렌드를 시각화하여 사용자가 CPU 부하 변화를 직관적으로 파악할 수 있도록 한다.",
+      "user_story": "시스템 관리자로서, 나는 CPU 사용률을 실시간 라인 차트로 확인하고 싶다, 시스템 부하 추이를 빠르게 파악하기 위해서.",
+      "acceptance_criteria": [
+        "CPU 사용률(%)이 라인 차트로 표시된다",
+        "시간축(X축) 기반으로 트렌드가 시각화된다",
+        "3초 간격으로 새로운 데이터 포인트가 추가된다",
+        "차트에 현재 CPU 사용률 수치가 표시된다"
+      ],
+      "priority": "HIGH",
+      "confidence_score": 0.95,
+      "confidence_reason": "요구사항이 명확하게 기술되어 있음",
+      "source_reference": "요청사항.md:8-10",
+      "source_info": {
+        "document_id": "요청사항",
+        "filename": "요청사항.md",
+        "section": "1. CPU 사용량"
+      },
+      "assumptions": [],
+      "missing_info": [],
+      "related_requirements": ["FR-005", "FR-006"]
+    },
+    {
+      "id": "FR-002",
+      "type": "FUNCTIONAL",
+      "title": "메모리 사용률 실시간 모니터링",
+      "description": "메모리 사용률(%)을 실시간 라인 차트로 표시한다. 전체 메모리 대비 현재 사용량을 함께 표시하여 메모리 상태를 명확하게 전달한다.",
+      "user_story": "시스템 관리자로서, 나는 메모리 사용률과 전체 대비 사용량을 실시간으로 확인하고 싶다, 메모리 부족 상황을 사전에 감지하기 위해서.",
+      "acceptance_criteria": [
+        "메모리 사용률(%)이 라인 차트로 표시된다",
+        "전체 메모리 용량 대비 현재 사용량이 표시된다",
+        "3초 간격으로 데이터가 갱신된다",
+        "사용 중/가용 메모리 수치가 표시된다"
+      ],
+      "priority": "HIGH",
+      "confidence_score": 0.95,
+      "confidence_reason": "요구사항이 명확하게 기술되어 있음",
+      "source_reference": "요청사항.md:12-14",
+      "source_info": {
+        "document_id": "요청사항",
+        "filename": "요청사항.md",
+        "section": "2. 메모리 사용량"
+      },
+      "assumptions": [],
+      "missing_info": [],
+      "related_requirements": ["FR-005", "FR-006"]
+    },
+    {
+      "id": "FR-003",
+      "type": "FUNCTIONAL",
+      "title": "디스크 사용량 시각화",
+      "description": "디스크 사용량과 잔여 공간을 파이 차트로 시각화한다. 시스템에 연결된 각 드라이브별로 사용량을 구분하여 표시한다.",
+      "user_story": "시스템 관리자로서, 나는 각 드라이브의 디스크 사용/잔여 공간을 파이 차트로 확인하고 싶다, 디스크 공간 부족을 예방하기 위해서.",
+      "acceptance_criteria": [
+        "디스크 사용/잔여 공간이 파이 차트로 표시된다",
+        "각 드라이브(파티션)별 사용량이 구분 표시된다",
+        "사용량(GB/TB)과 비율(%)이 함께 표시된다",
+        "데이터가 주기적으로 갱신된다"
+      ],
+      "priority": "HIGH",
+      "confidence_score": 0.90,
+      "confidence_reason": "차트 유형(파이 차트)과 드라이브별 표시가 명시되어 있음",
+      "source_reference": "요청사항.md:16-18",
+      "source_info": {
+        "document_id": "요청사항",
+        "filename": "요청사항.md",
+        "section": "3. 디스크 사용량"
+      },
+      "assumptions": [],
+      "missing_info": [],
+      "related_requirements": ["FR-006"]
+    },
+    {
+      "id": "FR-004",
+      "type": "FUNCTIONAL",
+      "title": "네트워크 트래픽 실시간 모니터링",
+      "description": "네트워크 IN/OUT 트래픽을 실시간 차트로 표시한다. 수신(Bytes In)과 송신(Bytes Out)을 구분하여 시각화하여 네트워크 활동을 모니터링할 수 있도록 한다.",
+      "user_story": "시스템 관리자로서, 나는 네트워크 수신/송신 트래픽을 실시간 차트로 확인하고 싶다, 비정상적인 네트워크 활동을 감지하기 위해서.",
+      "acceptance_criteria": [
+        "네트워크 수신(Bytes In) 트래픽이 차트로 표시된다",
+        "네트워크 송신(Bytes Out) 트래픽이 차트로 표시된다",
+        "IN/OUT이 시각적으로 구분된다 (색상 등)",
+        "3초 간격으로 데이터가 갱신된다"
+      ],
+      "priority": "HIGH",
+      "confidence_score": 0.85,
+      "confidence_reason": "차트 유형이 명시되지 않음 (라인 차트 추정)",
+      "source_reference": "요청사항.md:20-22",
+      "source_info": {
+        "document_id": "요청사항",
+        "filename": "요청사항.md",
+        "section": "4. 네트워크 트래픽"
+      },
+      "assumptions": ["차트 유형은 라인 차트로 추정"],
+      "missing_info": ["네트워크 트래픽 차트의 정확한 유형"],
+      "related_requirements": ["FR-005", "FR-006"]
+    },
+    {
+      "id": "FR-005",
+      "type": "FUNCTIONAL",
+      "title": "실시간 데이터 자동 갱신",
+      "description": "백엔드 API를 통해 3초 간격으로 시스템 정보를 자동 수집하고 프론트엔드에 전달한다. 사용자 개입 없이 대시보드가 자동으로 최신 데이터를 표시한다.",
+      "user_story": "사용자로서, 나는 별도 조작 없이 대시보드가 자동으로 갱신되기를 원한다, 항상 최신 시스템 상태를 확인하기 위해서.",
+      "acceptance_criteria": [
+        "3초 간격으로 백엔드 API가 호출된다",
+        "API 응답 데이터가 차트에 자동 반영된다",
+        "갱신 중에도 UI가 끊김 없이 동작한다",
+        "API 호출 실패 시 이전 데이터가 유지된다"
+      ],
+      "priority": "HIGH",
+      "confidence_score": 0.95,
+      "confidence_reason": "갱신 주기(3초)와 방식이 명확하게 기술되어 있음",
+      "source_reference": "요청사항.md:36-38",
+      "source_info": {
+        "document_id": "요청사항",
+        "filename": "요청사항.md",
+        "section": "실시간 업데이트"
+      },
+      "assumptions": [],
+      "missing_info": [],
+      "related_requirements": ["FR-001", "FR-002", "FR-003", "FR-004", "FR-006"]
+    },
+    {
+      "id": "FR-006",
+      "type": "FUNCTIONAL",
+      "title": "백엔드 시스템 정보 수집 API",
+      "description": "Python과 psutil 라이브러리를 활용하여 시스템 리소스 정보(CPU, 메모리, 디스크, 네트워크)를 수집하고 REST API로 제공한다.",
+      "user_story": "프론트엔드 개발자로서, 나는 표준화된 API를 통해 시스템 정보를 받고 싶다, 차트 데이터를 안정적으로 렌더링하기 위해서.",
+      "acceptance_criteria": [
+        "GET 엔드포인트로 CPU 사용률을 조회할 수 있다",
+        "GET 엔드포인트로 메모리 사용률 및 전체 용량을 조회할 수 있다",
+        "GET 엔드포인트로 디스크 사용량(드라이브별)을 조회할 수 있다",
+        "GET 엔드포인트로 네트워크 트래픽(IN/OUT)을 조회할 수 있다",
+        "응답 형식은 JSON이다"
+      ],
+      "priority": "HIGH",
+      "confidence_score": 0.85,
+      "confidence_reason": "기술 스택은 명시되어 있으나 API 프레임워크는 미정",
+      "source_reference": "요청사항.md:24-32",
+      "source_info": {
+        "document_id": "요청사항",
+        "filename": "요청사항.md",
+        "section": "기술 스택"
+      },
+      "assumptions": ["REST API 형태로 구현"],
+      "missing_info": ["API 프레임워크 (FastAPI vs Flask)"],
+      "related_requirements": ["FR-001", "FR-002", "FR-003", "FR-004", "FR-005"]
+    },
+    {
+      "id": "FR-007",
+      "type": "FUNCTIONAL",
+      "title": "다크 테마 UI",
+      "description": "대시보드 전체에 다크 테마를 적용한다. 어두운 배경에 밝은 텍스트와 차트 색상을 사용하여 장시간 모니터링 시 눈의 피로를 줄인다.",
+      "user_story": "사용자로서, 나는 다크 테마가 적용된 대시보드를 사용하고 싶다, 장시간 모니터링 시 눈의 피로를 줄이기 위해서.",
+      "acceptance_criteria": [
+        "대시보드 배경이 어두운 색상으로 표시된다",
+        "텍스트와 차트 요소가 다크 배경에서 명확하게 보인다",
+        "차트 색상이 다크 테마에 맞게 최적화되어 있다"
+      ],
+      "priority": "MEDIUM",
+      "confidence_score": 0.90,
+      "confidence_reason": "다크 테마 요구가 명확하나 구체적 색상 스펙은 미정",
+      "source_reference": "요청사항.md:41",
+      "source_info": {
+        "document_id": "요청사항",
+        "filename": "요청사항.md",
+        "section": "UI/UX"
+      },
+      "assumptions": [],
+      "missing_info": ["구체적 색상 팔레트"],
+      "related_requirements": ["FR-008"]
+    },
+    {
+      "id": "FR-008",
+      "type": "FUNCTIONAL",
+      "title": "반응형 대시보드 레이아웃",
+      "description": "대시보드를 그리드 기반 반응형 레이아웃으로 구성한다. 다양한 화면 크기에서 차트들이 적절하게 배치되어 가독성을 유지한다.",
+      "user_story": "사용자로서, 나는 다양한 화면 크기에서 대시보드가 잘 표시되기를 원한다, 데스크톱과 태블릿에서 모두 활용하기 위해서.",
+      "acceptance_criteria": [
+        "4개 차트가 그리드 형태로 배치된다",
+        "브라우저 창 크기 변경 시 레이아웃이 자동 조정된다",
+        "최소 1024px 너비에서 모든 차트가 정상 표시된다",
+        "각 차트 영역이 깔끔하게 구분된다"
+      ],
+      "priority": "MEDIUM",
+      "confidence_score": 0.85,
+      "confidence_reason": "반응형 그리드 요구가 명시되어 있음",
+      "source_reference": "요청사항.md:42-43",
+      "source_info": {
+        "document_id": "요청사항",
+        "filename": "요청사항.md",
+        "section": "UI/UX"
+      },
+      "assumptions": ["2x2 그리드 배치 추정"],
+      "missing_info": ["최소 지원 해상도", "그리드 배치 상세 규격"],
+      "related_requirements": ["FR-007"]
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "id": "NFR-001",
+      "type": "NON_FUNCTIONAL",
+      "title": "성능 - 데이터 갱신 주기",
+      "description": "시스템 정보 데이터는 3초 이내 간격으로 갱신되어야 한다. API 응답 시간은 1초 이내여야 한다.",
+      "priority": "HIGH",
+      "confidence_score": 0.95,
+      "confidence_reason": "3초 간격이 명시적으로 요구됨",
+      "source_reference": "요청사항.md:37",
+      "acceptance_criteria": ["데이터 갱신 주기 3초 이내", "API 응답 시간 1초 이내"],
+      "assumptions": [],
+      "missing_info": [],
+      "related_requirements": ["FR-005"]
+    },
+    {
+      "id": "NFR-002",
+      "type": "NON_FUNCTIONAL",
+      "title": "성능 - 페이지 로딩",
+      "description": "대시보드 초기 페이지 로딩 시간은 2초 이내여야 한다. 차트 렌더링 지연은 500ms 이내여야 한다.",
+      "priority": "HIGH",
+      "confidence_score": 0.70,
+      "confidence_reason": "구체적 수치는 일반적 웹 성능 기준을 적용함",
+      "source_reference": "요청사항.md",
+      "acceptance_criteria": ["초기 로딩 2초 이내", "차트 렌더링 지연 500ms 이내"],
+      "assumptions": ["일반적 웹 성능 기준 적용"],
+      "missing_info": [],
+      "related_requirements": []
+    },
+    {
+      "id": "NFR-003",
+      "type": "NON_FUNCTIONAL",
+      "title": "사용성 - 직관적 인터페이스",
+      "description": "별도 교육 없이 대시보드의 정보를 즉시 이해할 수 있어야 한다. 차트 레이블, 단위, 범례가 명확히 표시되어야 한다.",
+      "priority": "MEDIUM",
+      "confidence_score": 0.85,
+      "confidence_reason": "깔끔하고 직관적인 레이아웃이 명시적으로 요구됨",
+      "source_reference": "요청사항.md:42",
+      "acceptance_criteria": ["차트 레이블이 명확함", "단위가 표시됨", "범례가 포함됨"],
+      "assumptions": [],
+      "missing_info": [],
+      "related_requirements": ["FR-007", "FR-008"]
+    },
+    {
+      "id": "NFR-004",
+      "type": "NON_FUNCTIONAL",
+      "title": "호환성 - 브라우저 지원",
+      "description": "Chrome, Firefox, Edge 등 주요 모던 브라우저에서 정상 동작해야 한다.",
+      "priority": "MEDIUM",
+      "confidence_score": 0.70,
+      "confidence_reason": "명시적 요구는 없으나 웹 애플리케이션 기본 요구사항",
+      "source_reference": "요청사항.md",
+      "acceptance_criteria": ["Chrome 최신 버전 지원", "Firefox 최신 버전 지원", "Edge 최신 버전 지원"],
+      "assumptions": ["모던 브라우저만 지원"],
+      "missing_info": ["지원 브라우저 목록"],
+      "related_requirements": []
+    },
+    {
+      "id": "NFR-005",
+      "type": "NON_FUNCTIONAL",
+      "title": "안정성 - 연속 운영",
+      "description": "대시보드가 장시간(24시간 이상) 열려 있어도 메모리 누수 없이 안정적으로 동작해야 한다.",
+      "priority": "MEDIUM",
+      "confidence_score": 0.70,
+      "confidence_reason": "모니터링 대시보드 특성상 장시간 운영이 예상됨",
+      "source_reference": "요청사항.md",
+      "acceptance_criteria": ["24시간 연속 운영 시 메모리 누수 없음", "장시간 운영 후에도 차트 갱신 정상 동작"],
+      "assumptions": [],
+      "missing_info": [],
+      "related_requirements": ["FR-005"]
+    }
+  ],
+  "constraints": [
+    {
+      "id": "CON-001",
+      "type": "CONSTRAINT",
+      "title": "프론트엔드 기술 스택",
+      "description": "프론트엔드는 React와 Recharts 라이브러리를 사용하여 개발해야 한다.",
+      "priority": "HIGH",
+      "confidence_score": 0.95,
+      "confidence_reason": "기술 스택이 명확하게 지정되어 있음",
+      "source_reference": "요청사항.md:27-28",
+      "acceptance_criteria": [],
+      "assumptions": [],
+      "missing_info": [],
+      "related_requirements": []
+    },
+    {
+      "id": "CON-002",
+      "type": "CONSTRAINT",
+      "title": "백엔드 기술 스택",
+      "description": "백엔드는 Python과 psutil 라이브러리를 사용하여 시스템 정보를 수집해야 한다.",
+      "priority": "HIGH",
+      "confidence_score": 0.95,
+      "confidence_reason": "기술 스택이 명확하게 지정되어 있음",
+      "source_reference": "요청사항.md:31-32",
+      "acceptance_criteria": [],
+      "assumptions": [],
+      "missing_info": [],
+      "related_requirements": []
+    },
+    {
+      "id": "CON-003",
+      "type": "CONSTRAINT",
+      "title": "로컬 서버 모니터링",
+      "description": "본 시스템은 대시보드가 실행되는 로컬 서버의 리소스만 모니터링한다. 원격 서버 모니터링은 범위 외이다.",
+      "priority": "HIGH",
+      "confidence_score": 0.80,
+      "confidence_reason": "원격 모니터링 관련 언급이 없어 로컬 한정으로 추정",
+      "source_reference": "요청사항.md",
+      "acceptance_criteria": [],
+      "assumptions": ["로컬 서버만 모니터링 대상"],
+      "missing_info": [],
+      "related_requirements": []
+    }
+  ],
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "백엔드 API 개발",
+      "description": "Python + psutil 기반 시스템 리소스 수집 API 완성",
+      "deliverables": [
+        "Python 백엔드 서버 설정",
+        "psutil 기반 시스템 정보 수집 모듈",
+        "REST API 엔드포인트 (CPU, 메모리, 디스크, 네트워크)",
+        "API 테스트"
+      ],
+      "dependencies": [],
+      "order": 1
+    },
+    {
+      "id": "M2",
+      "name": "프론트엔드 대시보드 개발",
+      "description": "React + Recharts 기반 4개 차트가 포함된 대시보드 UI 완성",
+      "deliverables": [
+        "React 프로젝트 구조 설정",
+        "CPU 사용률 라인 차트 컴포넌트",
+        "메모리 사용률 라인 차트 컴포넌트",
+        "디스크 사용량 파이 차트 컴포넌트",
+        "네트워크 트래픽 차트 컴포넌트",
+        "다크 테마 적용",
+        "반응형 그리드 레이아웃"
+      ],
+      "dependencies": ["M1"],
+      "order": 2
+    },
+    {
+      "id": "M3",
+      "name": "통합 및 테스트",
+      "description": "프론트엔드-백엔드 통합 및 실시간 데이터 갱신 검증",
+      "deliverables": [
+        "프론트엔드-백엔드 API 연동",
+        "3초 간격 자동 갱신 구현",
+        "통합 테스트",
+        "버그 수정 및 최적화"
+      ],
+      "dependencies": ["M1", "M2"],
+      "order": 3
+    }
+  ],
+  "unresolved_items": [
+    {
+      "id": "UNR-001",
+      "type": "question",
+      "description": "네트워크 트래픽 차트 유형(라인 차트 vs 영역 차트) 확정 필요",
+      "related_requirement_ids": ["FR-004"],
+      "priority": "MEDIUM",
+      "suggested_action": "PM과 논의하여 차트 유형 결정"
+    },
+    {
+      "id": "UNR-002",
+      "type": "question",
+      "description": "대시보드에 표시할 데이터 히스토리 범위(최근 1분/5분/10분) 결정 필요",
+      "related_requirement_ids": ["FR-001", "FR-002", "FR-004"],
+      "priority": "HIGH",
+      "suggested_action": "모니터링 용도에 따라 히스토리 범위 결정"
+    },
+    {
+      "id": "UNR-003",
+      "type": "question",
+      "description": "백엔드 API 프레임워크 선정(FastAPI vs Flask) 확정 필요",
+      "related_requirement_ids": ["FR-006"],
+      "priority": "HIGH",
+      "suggested_action": "팀 역량과 프로젝트 요구사항에 맞는 프레임워크 선정"
+    },
+    {
+      "id": "UNR-004",
+      "type": "question",
+      "description": "디스크 사용량 갱신 주기 별도 설정 여부(디스크는 변화가 느리므로 더 긴 간격 가능)",
+      "related_requirement_ids": ["FR-003"],
+      "priority": "LOW",
+      "suggested_action": "디스크 갱신 주기를 별도로 설정할지 결정"
+    },
+    {
+      "id": "UNR-005",
+      "type": "question",
+      "description": "차트 데이터 포인트 최대 보관 개수 결정 필요(메모리 관리)",
+      "related_requirement_ids": ["FR-001", "FR-002", "FR-004", "NFR-005"],
+      "priority": "MEDIUM",
+      "suggested_action": "히스토리 범위에 따라 최대 데이터 포인트 수 결정"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "status": "draft",
+    "author": "PRD Generator",
+    "created_at": "2026-03-05T16:18:27+09:00",
+    "source_documents": ["요청사항.md"],
+    "overall_confidence": 0.88,
+    "requires_pm_review": false,
+    "pm_review_reasons": []
+  }
+}

@@ -1,0 +1,327 @@
+{
+  "id": "TRD-20260305-162132",
+  "title": "시스템 모니터링 웹 대시보드 TRD",
+  "executive_summary": "본 프로젝트는 로컬 서버의 CPU, 메모리, 디스크, 네트워크 리소스를 실시간으로 시각화하는 경량 웹 대시보드를 구축한다. 프론트엔드는 React + Recharts 기반, 백엔드는 Python + FastAPI + psutil 조합으로 REST API를 제공한다. 2계층 모놀리식 아키텍처를 채택하며, 프론트엔드 폴링(3초 간격)으로 실시간성을 구현한다. 데이터베이스 없이 인메모리 방식으로 운영하며, Docker를 통해 배포 편의성을 확보한다.",
+  "technology_stack": [
+    {
+      "category": "Frontend",
+      "technologies": ["React 18.x", "TypeScript 5.x", "Recharts 2.x", "Vite 5.x", "CSS Modules"],
+      "rationale": "React와 Recharts는 PRD 제약조건(CON-001)에 의해 지정. Vite는 빠른 HMR과 경량 번들링. TypeScript로 타입 안전성 확보."
+    },
+    {
+      "category": "Backend",
+      "technologies": ["Python 3.11+", "FastAPI 0.110+", "psutil 5.9+", "Uvicorn 0.29+"],
+      "rationale": "Python과 psutil은 PRD 제약조건(CON-002)에 의해 지정. FastAPI는 비동기 지원, 자동 API 문서 생성, 고성능 ASGI 프레임워크."
+    },
+    {
+      "category": "DevOps",
+      "technologies": ["Docker 24+", "Docker Compose 2.x"],
+      "rationale": "환경 일관성 보장 및 프론트엔드/백엔드 동시 실행 편의성."
+    }
+  ],
+  "system_architecture": {
+    "overview": "2계층 클라이언트-서버 아키텍처. React 프론트엔드가 3초 간격으로 FastAPI 백엔드를 폴링하여 시스템 메트릭을 수집하고 Recharts로 시각화한다.",
+    "architecture_style": "모놀리식",
+    "layers": [
+      {
+        "name": "Presentation Layer",
+        "description": "React 기반 대시보드 UI, 차트 렌더링, 다크 테마, 반응형 레이아웃",
+        "components": [
+          {
+            "name": "DashboardLayout",
+            "type": "컴포넌트",
+            "description": "2x2 반응형 그리드 레이아웃 컨테이너",
+            "responsibilities": ["차트 배치", "반응형 그리드 관리"],
+            "dependencies": ["CpuChart", "MemoryChart", "DiskChart", "NetworkChart"],
+            "interfaces": []
+          },
+          {
+            "name": "CpuChart",
+            "type": "컴포넌트",
+            "description": "CPU 사용률 실시간 라인 차트",
+            "responsibilities": ["CPU 데이터 시각화", "시간축 트렌드 표시"],
+            "dependencies": ["Recharts", "useSystemMetrics"],
+            "interfaces": []
+          },
+          {
+            "name": "MemoryChart",
+            "type": "컴포넌트",
+            "description": "메모리 사용률 실시간 라인 차트",
+            "responsibilities": ["메모리 데이터 시각화", "전체/사용 용량 표시"],
+            "dependencies": ["Recharts", "useSystemMetrics"],
+            "interfaces": []
+          },
+          {
+            "name": "DiskChart",
+            "type": "컴포넌트",
+            "description": "디스크 사용량 파이 차트",
+            "responsibilities": ["드라이브별 디스크 사용량 시각화"],
+            "dependencies": ["Recharts", "useSystemMetrics"],
+            "interfaces": []
+          },
+          {
+            "name": "NetworkChart",
+            "type": "컴포넌트",
+            "description": "네트워크 IN/OUT 트래픽 라인 차트",
+            "responsibilities": ["수신/송신 트래픽 구분 시각화"],
+            "dependencies": ["Recharts", "useSystemMetrics"],
+            "interfaces": []
+          },
+          {
+            "name": "useSystemMetrics",
+            "type": "Hook",
+            "description": "3초 간격 폴링 및 데이터 상태 관리",
+            "responsibilities": ["API 폴링", "데이터 포인트 관리 (FIFO 60개)", "에러 처리"],
+            "dependencies": [],
+            "interfaces": ["GET /api/v1/system/all"]
+          }
+        ]
+      },
+      {
+        "name": "API Layer",
+        "description": "FastAPI REST 엔드포인트, CORS 처리, 응답 직렬화",
+        "components": [
+          {
+            "name": "SystemRouter",
+            "type": "라우터",
+            "description": "시스템 메트릭 API 라우터",
+            "responsibilities": ["엔드포인트 정의", "요청/응답 처리"],
+            "dependencies": ["MetricsCollector"],
+            "interfaces": ["/api/v1/system/*"]
+          }
+        ]
+      },
+      {
+        "name": "Service Layer",
+        "description": "시스템 메트릭 수집 비즈니스 로직",
+        "components": [
+          {
+            "name": "MetricsCollector",
+            "type": "서비스",
+            "description": "psutil 래퍼 서비스. CPU, 메모리, 디스크, 네트워크 메트릭 수집",
+            "responsibilities": ["시스템 메트릭 수집", "네트워크 초당 전송량 계산", "데이터 정규화"],
+            "dependencies": ["psutil"],
+            "interfaces": ["get_cpu()", "get_memory()", "get_disk()", "get_network()", "get_all()"]
+          }
+        ]
+      }
+    ],
+    "data_flow": "브라우저 → 3초 Timer → GET /api/v1/system/all → FastAPI Router → MetricsCollector → psutil → OS 메트릭 → JSON Response → React State 업데이트 → Recharts 렌더링",
+    "deployment_diagram": "Docker Compose로 frontend(Port 3000)와 backend(Port 8000) 두 컨테이너를 단일 호스트에서 실행. 프론트엔드는 Vite dev server 또는 Nginx로 정적 파일 서빙."
+  },
+  "database_design": {
+    "database_type": "없음 (인메모리)",
+    "recommended_engine": "N/A",
+    "entities": [],
+    "indexing_strategy": "N/A - 데이터베이스 미사용. 프론트엔드 클라이언트 측에서 최대 60개 데이터 포인트를 FIFO 방식으로 관리.",
+    "partitioning_strategy": "N/A"
+  },
+  "api_specification": {
+    "base_url": "/api/v1",
+    "authentication_method": "없음 (로컬 전용)",
+    "endpoints": [
+      {
+        "path": "/system/all",
+        "method": "GET",
+        "description": "전체 시스템 메트릭 조회 (CPU, 메모리, 디스크, 네트워크)",
+        "request_body": null,
+        "response_body": "{timestamp, cpu: {usage_percent, core_count, per_core}, memory: {usage_percent, total_gb, used_gb, available_gb}, disk: {drives: [{device, mountpoint, total_gb, used_gb, free_gb, usage_percent}]}, network: {bytes_sent, bytes_recv, bytes_sent_per_sec, bytes_recv_per_sec}}",
+        "authentication": false,
+        "related_requirement_id": "FR-001,FR-002,FR-003,FR-004,FR-005,FR-006"
+      },
+      {
+        "path": "/system/cpu",
+        "method": "GET",
+        "description": "CPU 사용률 조회",
+        "request_body": null,
+        "response_body": "{timestamp, usage_percent, core_count, per_core}",
+        "authentication": false,
+        "related_requirement_id": "FR-001,FR-006"
+      },
+      {
+        "path": "/system/memory",
+        "method": "GET",
+        "description": "메모리 사용률 조회",
+        "request_body": null,
+        "response_body": "{timestamp, usage_percent, total_gb, used_gb, available_gb}",
+        "authentication": false,
+        "related_requirement_id": "FR-002,FR-006"
+      },
+      {
+        "path": "/system/disk",
+        "method": "GET",
+        "description": "디스크 사용량 조회 (드라이브별)",
+        "request_body": null,
+        "response_body": "{timestamp, drives: [{device, mountpoint, total_gb, used_gb, free_gb, usage_percent}]}",
+        "authentication": false,
+        "related_requirement_id": "FR-003,FR-006"
+      },
+      {
+        "path": "/system/network",
+        "method": "GET",
+        "description": "네트워크 트래픽 조회 (IN/OUT)",
+        "request_body": null,
+        "response_body": "{timestamp, bytes_sent, bytes_recv, bytes_sent_per_sec, bytes_recv_per_sec}",
+        "authentication": false,
+        "related_requirement_id": "FR-004,FR-006"
+      },
+      {
+        "path": "/health",
+        "method": "GET",
+        "description": "서버 상태 확인",
+        "request_body": null,
+        "response_body": "{status: 'ok', uptime: number}",
+        "authentication": false,
+        "related_requirement_id": ""
+      }
+    ],
+    "common_headers": {
+      "Content-Type": "application/json"
+    },
+    "error_handling": "HTTP 상태 코드 기반. 400: 잘못된 요청, 500: 서버 내부 오류. 에러 응답은 {error: {code, message}} 형식."
+  },
+  "security_requirements": [
+    {
+      "category": "CORS",
+      "requirement": "허용된 출처에서만 API 접근",
+      "implementation": "FastAPI CORSMiddleware로 프론트엔드 출처(localhost:3000)만 허용",
+      "priority": "HIGH"
+    },
+    {
+      "category": "입력 검증",
+      "requirement": "API 파라미터 검증",
+      "implementation": "FastAPI Pydantic 자동 검증",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "정보 노출 방지",
+      "requirement": "민감한 시스템 정보 필터링",
+      "implementation": "psutil 수집 항목을 리소스 메트릭(CPU/메모리/디스크/네트워크)으로 제한",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "에러 처리",
+      "requirement": "서버 내부 오류 노출 방지",
+      "implementation": "프로덕션 모드에서 상세 에러 메시지 숨김",
+      "priority": "LOW"
+    }
+  ],
+  "performance_requirements": [
+    {
+      "metric": "API 응답시간 (p95)",
+      "target_value": "< 200ms",
+      "measurement_method": "FastAPI 미들웨어 로깅",
+      "related_component": "Backend API"
+    },
+    {
+      "metric": "데이터 갱신 주기",
+      "target_value": "3초",
+      "measurement_method": "프론트엔드 타이머 정확도 측정",
+      "related_component": "Polling Service"
+    },
+    {
+      "metric": "초기 페이지 로딩",
+      "target_value": "< 2초",
+      "measurement_method": "Lighthouse 측정",
+      "related_component": "React App"
+    },
+    {
+      "metric": "차트 렌더링 지연",
+      "target_value": "< 500ms",
+      "measurement_method": "React Profiler",
+      "related_component": "Recharts 컴포넌트"
+    },
+    {
+      "metric": "프론트엔드 메모리 사용량",
+      "target_value": "< 100MB",
+      "measurement_method": "Chrome DevTools Memory",
+      "related_component": "React App"
+    },
+    {
+      "metric": "백엔드 메모리 사용량",
+      "target_value": "< 50MB",
+      "measurement_method": "psutil self-monitoring",
+      "related_component": "FastAPI Server"
+    },
+    {
+      "metric": "24시간 연속 운영",
+      "target_value": "메모리 누수 없음",
+      "measurement_method": "24시간 메모리 추적",
+      "related_component": "전체 시스템"
+    }
+  ],
+  "infrastructure_requirements": [
+    {
+      "category": "서버 (로컬)",
+      "specification": "CPU 2코어+, RAM 2GB+, 디스크 1GB+",
+      "quantity": "1",
+      "purpose": "백엔드 API + 프론트엔드 호스팅",
+      "estimated_cost": "기존 서버 활용 (추가 비용 없음)"
+    },
+    {
+      "category": "Python 런타임",
+      "specification": "Python 3.11+",
+      "quantity": "1",
+      "purpose": "백엔드 실행 환경",
+      "estimated_cost": "무료"
+    },
+    {
+      "category": "Node.js 런타임",
+      "specification": "Node.js 18+ (개발 시)",
+      "quantity": "1",
+      "purpose": "프론트엔드 빌드",
+      "estimated_cost": "무료"
+    },
+    {
+      "category": "Docker (선택)",
+      "specification": "Docker 24+, Docker Compose 2.x",
+      "quantity": "1",
+      "purpose": "컨테이너화 배포",
+      "estimated_cost": "무료 (Docker Desktop 개인)"
+    }
+  ],
+  "technical_risks": [
+    {
+      "description": "3초 폴링으로 인한 프론트엔드 메모리 누수",
+      "level": "HIGH",
+      "impact": "장시간 운영 시 브라우저 메모리 증가 및 성능 저하",
+      "mitigation": "데이터 포인트 개수 제한(60개), useEffect cleanup 철저",
+      "contingency": "WebSocket으로 전환하여 서버 푸시 방식 적용"
+    },
+    {
+      "description": "psutil의 OS별 동작 차이 (Windows vs Linux)",
+      "level": "MEDIUM",
+      "impact": "OS별 메트릭 수집 결과 불일치",
+      "mitigation": "크로스 플랫폼 테스트, OS별 분기 처리",
+      "contingency": "Docker Linux 컨테이너로 실행 환경 통일"
+    },
+    {
+      "description": "Recharts 대량 데이터 포인트 렌더링 성능",
+      "level": "MEDIUM",
+      "impact": "차트 렌더링 지연 500ms 초과",
+      "mitigation": "데이터 포인트 60개로 제한, React.memo 최적화",
+      "contingency": "가벼운 차트 라이브러리로 교체 (visx 등)"
+    },
+    {
+      "description": "CORS 설정 미흡으로 API 호출 실패",
+      "level": "LOW",
+      "impact": "프론트엔드에서 백엔드 API 접근 불가",
+      "mitigation": "개발 초기 CORS 설정 검증",
+      "contingency": "Vite proxy 설정으로 우회"
+    },
+    {
+      "description": "네트워크 bytes_per_sec 계산 정확도",
+      "level": "LOW",
+      "impact": "네트워크 트래픽 수치가 부정확하게 표시",
+      "mitigation": "이전 측정 타임스탬프 기반 delta 계산",
+      "contingency": "psutil의 net_io_counters interval 파라미터 활용"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "status": "draft",
+    "created_at": "2026-03-05T16:21:32+09:00",
+    "source_prd_id": "PRD-20260305-161827",
+    "source_prd_title": "시스템 모니터링 웹 대시보드"
+  }
+}

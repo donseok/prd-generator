@@ -1,1053 +1,1182 @@
-"""PPT 제안서 생성 스크립트.
+"""PPT 제안서 생성 스크립트 (2026 Modern Design).
 
 Usage:
     python -m app.scripts.ppt_maker
 
-제안서(PROP-*.md)를 기반으로 다크 테마 PPT 생성.
+제안서(PROP-*.json)를 기반으로 모던 라이트 테마 PPT 생성.
+2026 트렌드: 미니멀, 화이트스페이스, 소프트 그라데이션, 아이콘 시각화.
+
+슬라이드 안전 영역: 높이 7.5인치, 콘텐츠는 0.3~7.2인치 이내.
 """
 
 import json
 import re
+import math
 from datetime import datetime
 from pathlib import Path
 
 from pptx import Presentation
-from pptx.util import Inches, Pt
+from pptx.util import Inches, Pt, Emu
 from pptx.dml.color import RGBColor
-from pptx.enum.text import PP_ALIGN
+from pptx.enum.text import PP_ALIGN, MSO_ANCHOR
 from pptx.enum.shapes import MSO_SHAPE
 
+from app.scripts.arch_diagram import generate_from_trd_file
 
-# 다크 테마 컬러
+
+# ============================================================
+# 2026 Modern Light Theme
+# ============================================================
 COLORS = {
-    "background": "1E1E2E",
-    "surface": "2D2D3F",
-    "primary": "7C3AED",
-    "secondary": "06B6D4",
-    "accent": "F59E0B",
-    "text_primary": "FFFFFF",
-    "text_secondary": "A0AEC0",
-    "success": "10B981",
-    "warning": "F59E0B",
+    "bg_white": "FFFFFF",
+    "bg_light": "F8FAFC",
+    "bg_section": "1E3A5F",
+    "card": "F1F5F9",
+    "card_alt": "EEF2FF",
+    "accent": "2563EB",
+    "accent2": "7C3AED",
+    "accent3": "0891B2",
+    "accent4": "059669",
+    "accent5": "DC2626",
+    "orange": "EA580C",
+    "amber": "D97706",
+    "title": "0F172A",
+    "body": "334155",
+    "subtle": "64748B",
+    "muted": "94A3B8",
+    "border": "E2E8F0",
+    "white": "FFFFFF",
 }
+
+PALETTE = ["2563EB", "7C3AED", "0891B2", "059669", "EA580C", "D97706"]
+
+FONT_TITLE = "맑은 고딕"
+FONT_BODY = "맑은 고딕"
+
+# 슬라이드 레이아웃 상수
+SLIDE_W = 10.0
+SLIDE_H = 7.5
+MARGIN_X = 0.6        # 좌우 여백
+MARGIN_TOP = 0.4      # 상단 여백
+CONTENT_TOP = 1.8     # 헤더 아래 콘텐츠 시작
+SAFE_BOTTOM = 7.1     # 콘텐츠 안전 하한
+CONTENT_H = SAFE_BOTTOM - CONTENT_TOP  # 사용 가능 높이 = 5.3인치
+CONTENT_W = SLIDE_W - 2 * MARGIN_X     # 사용 가능 폭 = 8.8인치
 
 
 def hex_to_rgb(hex_color: str) -> RGBColor:
-    """Hex 컬러를 RGBColor로 변환."""
-    hex_color = hex_color.lstrip('#')
-    return RGBColor(
-        int(hex_color[0:2], 16),
-        int(hex_color[2:4], 16),
-        int(hex_color[4:6], 16)
-    )
+    h = hex_color.lstrip('#')
+    return RGBColor(int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16))
 
 
-def set_slide_background(slide, color_hex: str):
-    """슬라이드 배경색 설정."""
-    background = slide.background
-    fill = background.fill
+def set_slide_bg(slide, color_hex: str):
+    bg = slide.background
+    fill = bg.fill
     fill.solid()
     fill.fore_color.rgb = hex_to_rgb(color_hex)
 
 
-def add_title_slide(prs, title: str, subtitle: str = ""):
-    """표지 슬라이드 추가."""
-    slide_layout = prs.slide_layouts[6]  # Blank
-    slide = prs.slides.add_slide(slide_layout)
-    set_slide_background(slide, COLORS["background"])
-    
-    # 제목
-    title_box = slide.shapes.add_textbox(
-        Inches(0.5), Inches(3), Inches(9), Inches(1.5)
-    )
-    tf = title_box.text_frame
+def _add_text(slide, left, top, width, height, text, font_size=18,
+              bold=False, color="334155", alignment=PP_ALIGN.LEFT,
+              font_name=None, word_wrap=True):
+    box = slide.shapes.add_textbox(Inches(left), Inches(top), Inches(width), Inches(height))
+    tf = box.text_frame
+    tf.word_wrap = word_wrap
     p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(48)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
-    p.alignment = PP_ALIGN.CENTER
-    
-    # 부제
+    p.text = str(text)
+    p.font.size = Pt(font_size)
+    p.font.bold = bold
+    p.font.color.rgb = hex_to_rgb(color)
+    p.font.name = font_name or FONT_BODY
+    p.alignment = alignment
+    return box
+
+
+def _add_rounded_card(slide, left, top, width, height, fill_color="F1F5F9"):
+    shape = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE,
+        Inches(left), Inches(top), Inches(width), Inches(height)
+    )
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = hex_to_rgb(fill_color)
+    shape.line.fill.background()
+    shape.adjustments[0] = 0.06
+    return shape
+
+
+def _add_circle_icon(slide, left, top, size, color, text="", text_color="FFFFFF"):
+    circle = slide.shapes.add_shape(
+        MSO_SHAPE.OVAL,
+        Inches(left), Inches(top), Inches(size), Inches(size)
+    )
+    circle.fill.solid()
+    circle.fill.fore_color.rgb = hex_to_rgb(color)
+    circle.line.fill.background()
+    if text:
+        tf = circle.text_frame
+        tf.word_wrap = False
+        p = tf.paragraphs[0]
+        p.text = str(text)
+        p.font.size = Pt(max(9, int(size * 13)))
+        p.font.bold = True
+        p.font.color.rgb = hex_to_rgb(text_color)
+        p.alignment = PP_ALIGN.CENTER
+    return circle
+
+
+def _add_accent_bar(slide, left, top, width, height=0.05, color="2563EB"):
+    bar = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE,
+        Inches(left), Inches(top), Inches(width), Inches(height)
+    )
+    bar.fill.solid()
+    bar.fill.fore_color.rgb = hex_to_rgb(color)
+    bar.line.fill.background()
+    return bar
+
+
+def _add_progress_bar(slide, left, top, width, height, pct, bg_color="E2E8F0", fill_color="2563EB"):
+    bg = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE,
+        Inches(left), Inches(top), Inches(width), Inches(height)
+    )
+    bg.fill.solid()
+    bg.fill.fore_color.rgb = hex_to_rgb(bg_color)
+    bg.line.fill.background()
+    fill_w = max(width * (pct / 100.0), 0.1)
+    fg = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE,
+        Inches(left), Inches(top), Inches(fill_w), Inches(height)
+    )
+    fg.fill.solid()
+    fg.fill.fore_color.rgb = hex_to_rgb(fill_color)
+    fg.line.fill.background()
+    return fg
+
+
+def _slide_header(slide, eng_label, kor_title, label_color="2563EB", bar_color="2563EB"):
+    """공통 슬라이드 헤더. 영문 라벨 + 한글 제목 + 액센트 바."""
+    _add_text(slide, 0.8, 0.4, 8, 0.4, eng_label,
+              font_size=12, bold=True, color=label_color)
+    _add_text(slide, 0.8, 0.8, 8, 0.6, kor_title,
+              font_size=30, bold=True, color=COLORS["title"], font_name=FONT_TITLE)
+    _add_accent_bar(slide, 0.8, 1.4, 1.5, 0.04, bar_color)
+
+
+def _calc_item_spacing(n_items, start_y=CONTENT_TOP, end_y=SAFE_BOTTOM, item_h=0.8):
+    """항목 수에 따라 동적 간격 계산. 오버플로우 방지."""
+    available = end_y - start_y
+    if n_items <= 0:
+        return start_y, item_h
+    total_needed = n_items * item_h
+    if total_needed > available:
+        item_h = available / n_items
+    return start_y, item_h
+
+
+# ============================================================
+# Slide Builders
+# ============================================================
+
+def slide_cover(prs, title, subtitle, date_str):
+    """슬라이드 1: 표지."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+
+    _add_accent_bar(slide, 0, 0, 10, 0.07, COLORS["accent"])
+
+    block = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0), Inches(0.07), Inches(0.22), Inches(7.36)
+    )
+    block.fill.solid()
+    block.fill.fore_color.rgb = hex_to_rgb(COLORS["accent"])
+    block.line.fill.background()
+
+    _add_text(slide, 0.8, 2.2, 8.5, 1.2, title,
+              font_size=42, bold=True, color=COLORS["title"],
+              font_name=FONT_TITLE)
+    _add_accent_bar(slide, 0.8, 3.5, 2.0, 0.04, COLORS["accent"])
+
     if subtitle:
-        subtitle_box = slide.shapes.add_textbox(
-            Inches(0.5), Inches(4.5), Inches(9), Inches(0.8)
-        )
-        tf = subtitle_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = subtitle
-        p.font.size = Pt(24)
-        p.font.color.rgb = hex_to_rgb(COLORS["text_secondary"])
-        p.alignment = PP_ALIGN.CENTER
-    
-    return slide
+        _add_text(slide, 0.8, 3.8, 8.5, 0.5, subtitle,
+                  font_size=18, color=COLORS["subtle"])
+    _add_text(slide, 0.8, 4.5, 8.5, 0.4, date_str,
+              font_size=14, color=COLORS["muted"])
+
+    _add_accent_bar(slide, 0, 7.43, 10, 0.07, COLORS["accent2"])
 
 
-def add_section_title_slide(prs, section_num: int, title: str):
-    """섹션 제목 슬라이드 추가."""
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    set_slide_background(slide, COLORS["background"])
-    
-    # 섹션 번호
-    num_box = slide.shapes.add_textbox(
-        Inches(0.5), Inches(2.5), Inches(9), Inches(1)
+def slide_toc(prs, sections):
+    """슬라이드 2: 목차 (2컬럼)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "CONTENTS", "목차")
+
+    n = len(sections)
+    col1_count = math.ceil(n / 2)
+
+    # 컬럼 1 (좌측)
+    y = CONTENT_TOP
+    spacing = min(0.48, (SAFE_BOTTOM - CONTENT_TOP) / max(col1_count, 1))
+    for i in range(col1_count):
+        num = f"{i+1:02d}"
+        color = PALETTE[i % len(PALETTE)]
+        _add_circle_icon(slide, 0.6, y, 0.38, color, num)
+        _add_text(slide, 1.15, y + 0.01, 3.8, 0.38, sections[i],
+                  font_size=15, color=COLORS["body"])
+        y += spacing
+
+    # 컬럼 2 (우측)
+    y = CONTENT_TOP
+    for i in range(col1_count, n):
+        num = f"{i+1:02d}"
+        color = PALETTE[i % len(PALETTE)]
+        _add_circle_icon(slide, 5.2, y, 0.38, color, num)
+        _add_text(slide, 5.75, y + 0.01, 3.8, 0.38, sections[i],
+                  font_size=15, color=COLORS["body"])
+        y += spacing
+
+
+def slide_exec_highlight(prs, main_text, metrics):
+    """슬라이드 3: 경영진 요약 핵심."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_section"])
+
+    _add_text(slide, 0.8, 0.5, 8, 0.4, "EXECUTIVE SUMMARY",
+              font_size=12, bold=True, color=COLORS["muted"])
+    _add_text(slide, 0.8, 1.1, 8.4, 1.8, main_text[:150],
+              font_size=24, bold=True, color=COLORS["white"], font_name=FONT_TITLE)
+
+    if metrics:
+        n = min(len(metrics), 3)
+        card_w = 2.4
+        gap = 0.3
+        total_w = n * card_w + (n - 1) * gap
+        start_x = (SLIDE_W - total_w) / 2
+
+        for i, m in enumerate(metrics[:3]):
+            x = start_x + i * (card_w + gap)
+            _add_rounded_card(slide, x, 3.8, card_w, 1.8, "1E4A6F")
+            _add_text(slide, x + 0.15, 3.95, card_w - 0.3, 0.35,
+                      m.get("label", ""), font_size=11, color=COLORS["muted"])
+            _add_text(slide, x + 0.15, 4.35, card_w - 0.3, 0.6,
+                      m.get("value", ""), font_size=22, bold=True,
+                      color=COLORS["white"], alignment=PP_ALIGN.CENTER,
+                      font_name=FONT_TITLE)
+            if m.get("desc"):
+                _add_text(slide, x + 0.15, 5.0, card_w - 0.3, 0.35,
+                          m["desc"], font_size=10, color=COLORS["muted"],
+                          alignment=PP_ALIGN.CENTER)
+
+
+def slide_exec_detail(prs, items):
+    """슬라이드 4: 경영진 요약 상세."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "EXECUTIVE SUMMARY", "프로젝트 개요")
+
+    n = min(len(items), 5)
+    start_y, item_h = _calc_item_spacing(n, CONTENT_TOP, SAFE_BOTTOM, 0.85)
+    icons = ["P", "S", "T", "E", "K"]
+    colors = [COLORS["accent5"], COLORS["accent"], COLORS["accent3"],
+              COLORS["accent2"], COLORS["accent4"]]
+
+    for i, item in enumerate(items[:n]):
+        y = start_y + i * item_h
+        _add_rounded_card(slide, 0.5, y, 9.0, item_h - 0.08, COLORS["card"])
+        _add_circle_icon(slide, 0.7, y + (item_h - 0.5) / 2 - 0.04, 0.45,
+                         colors[i % len(colors)], icons[i % len(icons)])
+        _add_text(slide, 1.35, y + 0.08, 2.2, 0.3, item.get("label", ""),
+                  font_size=12, bold=True, color=COLORS["accent"])
+        _add_text(slide, 1.35, y + 0.38, 7.8, 0.35, item.get("value", "")[:90],
+                  font_size=14, color=COLORS["body"])
+
+
+def slide_section(prs, num, title, subtitle=""):
+    """섹션 구분 슬라이드."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_section"])
+
+    _add_text(slide, 0.8, 2.0, 8, 0.9,
+              f"{num:02d}" if isinstance(num, int) else str(num),
+              font_size=64, bold=True, color="3B82F6", font_name=FONT_TITLE)
+    _add_accent_bar(slide, 0.8, 3.0, 2.0, 0.05, "3B82F6")
+    _add_text(slide, 0.8, 3.3, 8, 0.9, title,
+              font_size=36, bold=True, color=COLORS["white"], font_name=FONT_TITLE)
+    if subtitle:
+        _add_text(slide, 0.8, 4.2, 8, 0.5, subtitle,
+                  font_size=16, color=COLORS["muted"])
+
+
+def slide_challenges(prs, title, challenges):
+    """도전과제 슬라이드 (2x2 카드 그리드)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "CHALLENGES", title, COLORS["accent5"], COLORS["accent5"])
+
+    n = min(len(challenges), 4)
+    cols = 2
+    rows = math.ceil(n / cols)
+    cw = 4.2
+    gap_x = 0.4
+    gap_y = 0.3
+    ch = (SAFE_BOTTOM - CONTENT_TOP - (rows - 1) * gap_y) / rows  # 동적 카드 높이
+    ch = min(ch, 2.4)
+    start_x = (SLIDE_W - (cols * cw + (cols - 1) * gap_x)) / 2
+
+    warn_icons = ["!", "!!", "?", "X"]
+    for i, c in enumerate(challenges[:n]):
+        col_idx = i % cols
+        row_idx = i // cols
+        x = start_x + col_idx * (cw + gap_x)
+        y = CONTENT_TOP + row_idx * (ch + gap_y)
+
+        _add_rounded_card(slide, x, y, cw, ch, COLORS["card"])
+        _add_circle_icon(slide, x + 0.15, y + 0.15, 0.38, COLORS["accent5"],
+                         warn_icons[i % len(warn_icons)])
+
+        area = c.get("area", c.get("title", f"과제 {i+1}"))
+        desc = c.get("symptom", c.get("description", c.get("issue", "")))
+
+        _add_text(slide, x + 0.65, y + 0.15, cw - 0.85, 0.35, area[:30],
+                  font_size=14, bold=True, color=COLORS["title"])
+        _add_text(slide, x + 0.15, y + 0.65, cw - 0.3, ch - 0.8, desc[:100],
+                  font_size=12, color=COLORS["body"])
+
+
+def slide_risks_no_change(prs, risks):
+    """변화하지 않으면 슬라이드."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "IF NO CHANGE", "변화하지 않으면?", COLORS["accent5"], COLORS["accent5"])
+
+    n = min(len(risks), 5)
+    start_y, item_h = _calc_item_spacing(n, CONTENT_TOP, SAFE_BOTTOM, 0.85)
+
+    for i, risk in enumerate(risks[:n]):
+        y = start_y + i * item_h
+        text = risk if isinstance(risk, str) else str(risk)
+        _add_rounded_card(slide, 0.5, y, 9.0, item_h - 0.08, COLORS["card"])
+        _add_circle_icon(slide, 0.7, y + (item_h - 0.48) / 2 - 0.04, 0.42,
+                         COLORS["accent5"], str(i + 1))
+        _add_text(slide, 1.35, y + (item_h - 0.4) / 2 - 0.04, 7.8, 0.4,
+                  text[:100], font_size=15, color=COLORS["body"])
+
+
+def slide_before_after(prs, before_items, after_items):
+    """Before vs After 비교."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "COMPARISON", "Before vs After")
+
+    card_top = CONTENT_TOP
+    card_h = SAFE_BOTTOM - card_top
+    col_w = 4.0
+
+    # 좌측: Before
+    _add_rounded_card(slide, 0.4, card_top, col_w, card_h, "FEF2F2")
+    _add_circle_icon(slide, 0.55, card_top + 0.12, 0.4, COLORS["accent5"], "X")
+    _add_text(slide, 1.1, card_top + 0.12, 2.8, 0.4, "AS-IS (현재)",
+              font_size=17, bold=True, color=COLORS["accent5"])
+
+    n_before = min(len(before_items), 5)
+    item_area = card_h - 0.8
+    spacing = item_area / max(n_before, 1)
+    spacing = min(spacing, 0.55)
+    y = card_top + 0.7
+    for item in before_items[:n_before]:
+        _add_text(slide, 0.6, y, 3.6, 0.4, item[:60],
+                  font_size=13, color=COLORS["body"])
+        y += spacing
+
+    # 중앙 화살표
+    arrow_y = card_top + card_h / 2 - 0.2
+    arrow = slide.shapes.add_shape(
+        MSO_SHAPE.RIGHT_ARROW, Inches(4.3), Inches(arrow_y), Inches(0.7), Inches(0.4)
     )
-    tf = num_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = f"0{section_num}" if section_num < 10 else str(section_num)
-    p.font.size = Pt(72)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["primary"])
-    p.alignment = PP_ALIGN.CENTER
-    
-    # 제목
-    title_box = slide.shapes.add_textbox(
-        Inches(0.5), Inches(3.5), Inches(9), Inches(1)
+    arrow.fill.solid()
+    arrow.fill.fore_color.rgb = hex_to_rgb(COLORS["accent"])
+    arrow.line.fill.background()
+
+    # 우측: After
+    _add_rounded_card(slide, 5.6, card_top, col_w, card_h, "F0FDF4")
+    _add_circle_icon(slide, 5.75, card_top + 0.12, 0.4, COLORS["accent4"], "O")
+    _add_text(slide, 6.3, card_top + 0.12, 2.8, 0.4, "TO-BE (미래)",
+              font_size=17, bold=True, color=COLORS["accent4"])
+
+    n_after = min(len(after_items), 5)
+    y = card_top + 0.7
+    for item in after_items[:n_after]:
+        _add_text(slide, 5.8, y, 3.6, 0.4, item[:60],
+                  font_size=13, color=COLORS["body"])
+        y += spacing
+
+
+def slide_kpi(prs, title, kpis):
+    """KPI 카드 슬라이드 (2x2)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "KEY PERFORMANCE INDICATORS", title)
+
+    n = min(len(kpis), 4)
+    cols = 2
+    rows = math.ceil(n / cols)
+    cw = 4.2
+    gap_x = 0.4
+    gap_y = 0.3
+    ch = min(2.2, (SAFE_BOTTOM - CONTENT_TOP - (rows - 1) * gap_y) / max(rows, 1))
+    start_x = (SLIDE_W - (cols * cw + (cols - 1) * gap_x)) / 2
+
+    for i, kpi in enumerate(kpis[:n]):
+        col = i % cols
+        row = i // cols
+        x = start_x + col * (cw + gap_x)
+        y = CONTENT_TOP + row * (ch + gap_y)
+
+        _add_rounded_card(slide, x, y, cw, ch, COLORS["card"])
+
+        metric_name = kpi.get("metric", kpi.get("name", f"KPI {i+1}"))
+        current = kpi.get("current", "-")
+        target = kpi.get("target", "-")
+        improvement = kpi.get("improvement", "")
+
+        _add_text(slide, x + 0.2, y + 0.12, cw - 0.4, 0.3, metric_name[:35],
+                  font_size=12, bold=True, color=COLORS["subtle"])
+        _add_text(slide, x + 0.2, y + 0.5, cw - 0.4, 0.55,
+                  f"{current}  ->  {target}",
+                  font_size=20, bold=True, color=COLORS["accent"],
+                  font_name=FONT_TITLE)
+
+        if improvement:
+            badge_y = y + ch - 0.55
+            _add_rounded_card(slide, x + 0.2, badge_y, 1.8, 0.38, COLORS["accent4"])
+            _add_text(slide, x + 0.22, badge_y + 0.02, 1.76, 0.34, improvement[:20],
+                      font_size=11, bold=True, color=COLORS["white"],
+                      alignment=PP_ALIGN.CENTER)
+
+
+def slide_solution_highlight(prs, value_prop, overview):
+    """솔루션 개요 하이라이트."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_section"])
+
+    _add_text(slide, 0.8, 0.5, 8, 0.4, "OUR SOLUTION",
+              font_size=12, bold=True, color=COLORS["muted"])
+    _add_text(slide, 0.8, 1.5, 8.4, 1.8, value_prop[:120],
+              font_size=28, bold=True, color=COLORS["white"], font_name=FONT_TITLE)
+
+    if overview:
+        _add_accent_bar(slide, 0.8, 3.6, 2.0, 0.04, "3B82F6")
+        _add_text(slide, 0.8, 3.9, 8.4, 1.5, overview[:150],
+                  font_size=16, color=COLORS["muted"])
+
+
+def slide_scope(prs, in_scope, out_scope):
+    """작업 범위 슬라이드 (2컬럼)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "PROJECT SCOPE", "작업 범위")
+
+    card_top = CONTENT_TOP
+    card_h = SAFE_BOTTOM - card_top
+    col_w = 4.2
+
+    # In-Scope
+    _add_rounded_card(slide, 0.4, card_top, col_w, card_h, "F0FDF4")
+    _add_circle_icon(slide, 0.55, card_top + 0.1, 0.35, COLORS["accent4"], "O")
+    _add_text(slide, 1.05, card_top + 0.1, 3.2, 0.35, "포함 범위 (In-Scope)",
+              font_size=14, bold=True, color=COLORS["accent4"])
+
+    n_in = min(len(in_scope), 6)
+    spacing = min(0.42, (card_h - 0.7) / max(n_in, 1))
+    y = card_top + 0.6
+    for item in in_scope[:n_in]:
+        text = item if isinstance(item, str) else item.get("value", item.get("name", str(item)))
+        _add_text(slide, 0.6, y, 3.8, 0.35, text[:50],
+                  font_size=12, color=COLORS["body"])
+        y += spacing
+
+    # Out-of-Scope
+    _add_rounded_card(slide, 5.4, card_top, col_w, card_h, "FEF2F2")
+    _add_circle_icon(slide, 5.55, card_top + 0.1, 0.35, COLORS["accent5"], "X")
+    _add_text(slide, 6.05, card_top + 0.1, 3.2, 0.35, "제외 범위 (Out of Scope)",
+              font_size=14, bold=True, color=COLORS["accent5"])
+
+    n_out = min(len(out_scope), 6)
+    spacing = min(0.42, (card_h - 0.7) / max(n_out, 1))
+    y = card_top + 0.6
+    for item in out_scope[:n_out]:
+        text = item if isinstance(item, str) else item.get("item", item.get("name", str(item)))
+        _add_text(slide, 5.6, y, 3.8, 0.35, text[:50],
+                  font_size=12, color=COLORS["body"])
+        y += spacing
+
+
+def slide_features(prs, features):
+    """핵심 기능 슬라이드 (카드 그리드)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "KEY FEATURES", "핵심 기능", COLORS["accent2"], COLORS["accent2"])
+
+    n = min(len(features), 6)
+    cols = 3 if n > 4 else 2
+    rows = math.ceil(n / cols)
+    gap_x = 0.3
+    gap_y = 0.25
+    cw = (CONTENT_W - (cols - 1) * gap_x) / cols
+    ch = min(2.0, (SAFE_BOTTOM - CONTENT_TOP - (rows - 1) * gap_y) / max(rows, 1))
+    start_x = MARGIN_X
+
+    for i, feat in enumerate(features[:n]):
+        col = i % cols
+        row = i // cols
+        x = start_x + col * (cw + gap_x)
+        y = CONTENT_TOP + row * (ch + gap_y)
+
+        _add_rounded_card(slide, x, y, cw, ch, COLORS["card_alt"])
+        _add_circle_icon(slide, x + 0.1, y + 0.1, 0.35, PALETTE[i % len(PALETTE)],
+                         str(i + 1))
+
+        name = feat.get("name", f"기능 {i+1}")
+        desc = feat.get("description", "")
+        _add_text(slide, x + 0.55, y + 0.1, cw - 0.7, 0.3, name[:25],
+                  font_size=13, bold=True, color=COLORS["title"])
+        _add_text(slide, x + 0.1, y + 0.55, cw - 0.2, ch - 0.65, desc[:70],
+                  font_size=10, color=COLORS["body"])
+
+
+def slide_tech_stack(prs, tech_items):
+    """기술 스택 슬라이드."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "TECHNOLOGY STACK", "기술 스택", COLORS["accent3"], COLORS["accent3"])
+
+    n = min(len(tech_items), 6)
+    start_y, item_h = _calc_item_spacing(n, CONTENT_TOP, SAFE_BOTTOM, 0.78)
+
+    for i, item in enumerate(tech_items[:n]):
+        y = start_y + i * item_h
+        cat = item.get("category", "")
+        tech = item.get("technology", item.get("tech", ""))
+
+        _add_rounded_card(slide, 0.5, y, 9.0, item_h - 0.06, COLORS["card"])
+        _add_circle_icon(slide, 0.7, y + (item_h - 0.42) / 2 - 0.03, 0.4,
+                         PALETTE[i % len(PALETTE)], cat[:1].upper() if cat else "T")
+        _add_text(slide, 1.3, y + 0.06, 2.5, 0.28, cat[:20],
+                  font_size=12, bold=True, color=COLORS["accent"])
+        _add_text(slide, 1.3, y + 0.35, 7.8, 0.3, tech[:80],
+                  font_size=13, color=COLORS["body"])
+
+
+def slide_architecture(prs, diagram_path):
+    """시스템 아키텍처 다이어그램 슬라이드."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "SYSTEM ARCHITECTURE", "시스템 아키텍처", COLORS["accent3"], COLORS["accent3"])
+
+    # 이미지를 콘텐츠 영역에 꽉 차게 삽입
+    img_top = CONTENT_TOP
+    img_h = SAFE_BOTTOM - img_top
+    img_w = CONTENT_W
+
+    # 이미지 비율 유지하면서 최대 크기 계산 (원본 1920x1080 = 16:9)
+    aspect = 1920 / 1080
+    fit_w = img_h * aspect
+    if fit_w > img_w:
+        fit_w = img_w
+        fit_h = img_w / aspect
+    else:
+        fit_h = img_h
+
+    img_left = MARGIN_X + (img_w - fit_w) / 2
+    img_top_adj = img_top + (img_h - fit_h) / 2
+
+    slide.shapes.add_picture(
+        str(diagram_path),
+        Inches(img_left), Inches(img_top_adj),
+        Inches(fit_w), Inches(fit_h)
     )
-    tf = title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(40)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
-    p.alignment = PP_ALIGN.CENTER
-    
-    return slide
 
 
-def add_content_slide(prs, title: str, bullets: list):
-    """내용 슬라이드 (제목 + 불릿 리스트)."""
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    set_slide_background(slide, COLORS["background"])
-    
-    # 제목
-    title_box = slide.shapes.add_textbox(
-        Inches(0.5), Inches(0.5), Inches(9), Inches(0.8)
-    )
-    tf = title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(32)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
-    
-    # 불릿 리스트
-    content_box = slide.shapes.add_textbox(
-        Inches(0.5), Inches(1.5), Inches(9), Inches(5)
-    )
-    tf = content_box.text_frame
-    tf.word_wrap = True
-    
-    for i, bullet in enumerate(bullets):
-        if i == 0:
-            p = tf.paragraphs[0]
-        else:
-            p = tf.add_paragraph()
-        p.text = f"• {bullet}"
-        p.font.size = Pt(20)
-        p.font.color.rgb = hex_to_rgb(COLORS["text_secondary"])
-        p.space_before = Pt(12)
-    
-    return slide
+def slide_timeline(prs, total_duration, phases):
+    """타임라인 슬라이드 (컴팩트)."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "PROJECT TIMELINE", "프로젝트 일정")
+
+    # 총 기간 뱃지
+    if total_duration:
+        _add_rounded_card(slide, 7.2, 0.8, 2.2, 0.45, COLORS["accent"])
+        _add_text(slide, 7.25, 0.83, 2.1, 0.4, total_duration,
+                  font_size=14, bold=True, color=COLORS["white"],
+                  alignment=PP_ALIGN.CENTER)
+
+    n = min(len(phases), 5)
+    start_y, item_h = _calc_item_spacing(n, CONTENT_TOP, SAFE_BOTTOM, 0.95)
+
+    for i, phase in enumerate(phases[:n]):
+        y = start_y + i * item_h
+        color = PALETTE[i % len(PALETTE)]
+        name = phase.get("phase", phase.get("name", phase.get("phase_name", f"Phase {i+1}")))
+        duration = phase.get("duration", phase.get("period", ""))
+        desc = phase.get("period", phase.get("description", ""))
+
+        _add_circle_icon(slide, 0.6, y + 0.02, 0.38, color, str(i + 1))
+        _add_text(slide, 1.15, y, 4.5, 0.35, name[:35],
+                  font_size=15, bold=True, color=COLORS["title"])
+        _add_text(slide, 6.5, y, 3.0, 0.35, duration[:20],
+                  font_size=13, color=COLORS["subtle"], alignment=PP_ALIGN.RIGHT)
+
+        # 프로그레스 바
+        bar_y = y + 0.4
+        pct = min(100, ((i + 1) / n) * 100)
+        _add_progress_bar(slide, 1.15, bar_y, 7.0, 0.15, pct, COLORS["border"], color)
+
+        # 설명 (겹침 방지: 공간 있을 때만)
+        if desc and desc != duration and item_h >= 0.85:
+            _add_text(slide, 1.15, bar_y + 0.2, 7.0, 0.25, desc[:60],
+                      font_size=10, color=COLORS["muted"])
 
 
-def add_highlight_slide(prs, main_text: str, sub_text: str = ""):
-    """강조 슬라이드 (핵심 메시지)."""
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    set_slide_background(slide, COLORS["background"])
-    
-    # 메인 텍스트
-    main_box = slide.shapes.add_textbox(
-        Inches(0.5), Inches(2.5), Inches(9), Inches(2)
-    )
-    tf = main_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = main_text
-    p.font.size = Pt(44)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
-    p.alignment = PP_ALIGN.CENTER
-    
-    # 서브 텍스트
-    if sub_text:
-        sub_box = slide.shapes.add_textbox(
-            Inches(0.5), Inches(4.5), Inches(9), Inches(1)
-        )
-        tf = sub_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = sub_text
-        p.font.size = Pt(24)
-        p.font.color.rgb = hex_to_rgb(COLORS["secondary"])
-        p.alignment = PP_ALIGN.CENTER
-    
-    return slide
-
-
-def add_closing_slide(prs, title: str = "Q&A", contact_info: str = ""):
-    """마무리 슬라이드."""
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    set_slide_background(slide, COLORS["background"])
-    
-    # 제목
-    title_box = slide.shapes.add_textbox(
-        Inches(0.5), Inches(2.5), Inches(9), Inches(1.5)
-    )
-    tf = title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(56)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["primary"])
-    p.alignment = PP_ALIGN.CENTER
-    
-    # 연락처
-    if contact_info:
-        contact_box = slide.shapes.add_textbox(
-            Inches(0.5), Inches(4.5), Inches(9), Inches(1)
-        )
-        tf = contact_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = contact_info
-        p.font.size = Pt(20)
-        p.font.color.rgb = hex_to_rgb(COLORS["text_secondary"])
-        p.alignment = PP_ALIGN.CENTER
-    
-    return slide
-
-
-def add_two_column_slide(prs, title: str, left_title: str, left_items: list,
-                          right_title: str, right_items: list,
-                          left_color: str = None, right_color: str = None):
-    """2컬럼 비교 슬라이드."""
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    set_slide_background(slide, COLORS["background"])
-
-    # 제목
-    title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.7))
-    tf = title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(32)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
-
-    # 왼쪽 컬럼
-    left_box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
-                                       Inches(0.3), Inches(1.2), Inches(4.4), Inches(5.8))
-    left_box.fill.solid()
-    left_box.fill.fore_color.rgb = hex_to_rgb(left_color or COLORS["surface"])
-    left_box.line.fill.background()
-
-    left_title_box = slide.shapes.add_textbox(Inches(0.5), Inches(1.4), Inches(4), Inches(0.5))
-    tf = left_title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = left_title
-    p.font.size = Pt(24)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["warning"])
-
-    left_content = slide.shapes.add_textbox(Inches(0.5), Inches(2.0), Inches(4), Inches(4.8))
-    tf = left_content.text_frame
-    tf.word_wrap = True
-    for i, item in enumerate(left_items[:6]):
-        if i == 0:
-            p = tf.paragraphs[0]
-        else:
-            p = tf.add_paragraph()
-        p.text = f"• {item}"
-        p.font.size = Pt(16)
-        p.font.color.rgb = hex_to_rgb(COLORS["text_secondary"])
-        p.space_before = Pt(8)
-
-    # 오른쪽 컬럼
-    right_box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
-                                        Inches(5.3), Inches(1.2), Inches(4.4), Inches(5.8))
-    right_box.fill.solid()
-    right_box.fill.fore_color.rgb = hex_to_rgb(right_color or COLORS["surface"])
-    right_box.line.fill.background()
-
-    right_title_box = slide.shapes.add_textbox(Inches(5.5), Inches(1.4), Inches(4), Inches(0.5))
-    tf = right_title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = right_title
-    p.font.size = Pt(24)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["success"])
-
-    right_content = slide.shapes.add_textbox(Inches(5.5), Inches(2.0), Inches(4), Inches(4.8))
-    tf = right_content.text_frame
-    tf.word_wrap = True
-    for i, item in enumerate(right_items[:6]):
-        if i == 0:
-            p = tf.paragraphs[0]
-        else:
-            p = tf.add_paragraph()
-        p.text = f"• {item}"
-        p.font.size = Pt(16)
-        p.font.color.rgb = hex_to_rgb(COLORS["text_secondary"])
-        p.space_before = Pt(8)
-
-    return slide
-
-
-def add_kpi_card_slide(prs, title: str, kpis: list):
-    """KPI 카드 슬라이드."""
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    set_slide_background(slide, COLORS["background"])
-
-    # 제목
-    title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.7))
-    tf = title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(32)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
-
-    # KPI 카드들 (2x2 그리드)
-    card_positions = [
-        (0.3, 1.3), (5.0, 1.3),
-        (0.3, 4.0), (5.0, 4.0)
-    ]
-
-    for i, kpi in enumerate(kpis[:4]):
-        x, y = card_positions[i]
-
-        # 카드 배경
-        card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
-                                       Inches(x), Inches(y), Inches(4.5), Inches(2.4))
-        card.fill.solid()
-        card.fill.fore_color.rgb = hex_to_rgb(COLORS["surface"])
-        card.line.fill.background()
-
-        # 메트릭 이름
-        metric_box = slide.shapes.add_textbox(Inches(x + 0.2), Inches(y + 0.2), Inches(4), Inches(0.4))
-        tf = metric_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = kpi.get("metric", "")
-        p.font.size = Pt(16)
-        p.font.color.rgb = hex_to_rgb(COLORS["text_secondary"])
-
-        # 변화 (Before → After)
-        value_box = slide.shapes.add_textbox(Inches(x + 0.2), Inches(y + 0.7), Inches(4), Inches(0.8))
-        tf = value_box.text_frame
-        p = tf.paragraphs[0]
-        before = kpi.get("current", kpi.get("before", ""))
-        after = kpi.get("target", kpi.get("after", ""))
-        p.text = f"{before} → {after}"
-        p.font.size = Pt(28)
-        p.font.bold = True
-        p.font.color.rgb = hex_to_rgb(COLORS["primary"])
-
-        # 개선율
-        improve_box = slide.shapes.add_textbox(Inches(x + 0.2), Inches(y + 1.6), Inches(4), Inches(0.5))
-        tf = improve_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = kpi.get("improvement", "")
-        p.font.size = Pt(18)
-        p.font.color.rgb = hex_to_rgb(COLORS["success"])
-
-    return slide
-
-
-def add_timeline_slide(prs, title: str, phases: list):
-    """타임라인 슬라이드."""
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    set_slide_background(slide, COLORS["background"])
-
-    # 제목
-    title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.7))
-    tf = title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(32)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
-
-    # 타임라인 바
-    colors = [COLORS["primary"], COLORS["secondary"], COLORS["accent"]]
-    bar_y = 3.0
-    total_width = 9.0
-
-    for i, phase in enumerate(phases[:3]):
-        bar_width = total_width / len(phases[:3])
-        x = 0.5 + (i * bar_width)
-
-        # 막대
-        bar = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
-                                      Inches(x), Inches(bar_y), Inches(bar_width - 0.1), Inches(0.6))
-        bar.fill.solid()
-        bar.fill.fore_color.rgb = hex_to_rgb(colors[i % len(colors)])
-        bar.line.fill.background()
-
-        # Phase 이름
-        name_box = slide.shapes.add_textbox(Inches(x), Inches(bar_y - 0.8), Inches(bar_width), Inches(0.6))
-        tf = name_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = phase.get("phase", f"Phase {i+1}")
-        p.font.size = Pt(16)
-        p.font.bold = True
-        p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
-        p.alignment = PP_ALIGN.CENTER
-
-        # 기간
-        duration_box = slide.shapes.add_textbox(Inches(x), Inches(bar_y + 0.8), Inches(bar_width), Inches(0.8))
-        tf = duration_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = f"{phase.get('duration', '')}\n{phase.get('period', '')}"
-        p.font.size = Pt(14)
-        p.font.color.rgb = hex_to_rgb(COLORS["text_secondary"])
-        p.alignment = PP_ALIGN.CENTER
-
-    return slide
-
-
-def add_team_slide(prs, title: str, team: list, effort_summary: dict):
+def slide_team(prs, team_comp, total_mm):
     """팀 구성 슬라이드."""
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    set_slide_background(slide, COLORS["background"])
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "PROJECT TEAM", "투입 인력", COLORS["accent2"], COLORS["accent2"])
 
-    # 제목
-    title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.7))
-    tf = title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(32)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
+    n = min(len(team_comp), 6)
+    cols = 3 if n > 3 else n
+    rows = math.ceil(n / cols)
+    gap_x = 0.3
+    gap_y = 0.25
+    cw = (CONTENT_W - (cols - 1) * gap_x) / cols
 
-    # 팀원 카드
-    for i, member in enumerate(team[:6]):
-        row = i // 3
-        col = i % 3
-        x = 0.3 + (col * 3.2)
-        y = 1.2 + (row * 2.6)
+    # 총 공수 뱃지 높이 확보
+    badge_h = 0.5
+    badge_gap = 0.2
+    available_h = SAFE_BOTTOM - CONTENT_TOP - badge_h - badge_gap
+    ch = min(2.2, (available_h - (rows - 1) * gap_y) / max(rows, 1))
+    start_x = MARGIN_X
 
-        # 카드
-        card = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
-                                       Inches(x), Inches(y), Inches(3.0), Inches(2.3))
-        card.fill.solid()
-        card.fill.fore_color.rgb = hex_to_rgb(COLORS["surface"])
-        card.line.fill.background()
+    role_icons = ["PM", "BE", "FE", "UX", "QA", "DV"]
 
-        # 역할
-        role_box = slide.shapes.add_textbox(Inches(x + 0.15), Inches(y + 0.15), Inches(2.7), Inches(0.5))
-        tf = role_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = member.get("role", "")
-        p.font.size = Pt(18)
-        p.font.bold = True
-        p.font.color.rgb = hex_to_rgb(COLORS["primary"])
+    for i, member in enumerate(team_comp[:n]):
+        col = i % cols
+        row = i // cols
+        x = start_x + col * (cw + gap_x)
+        y = CONTENT_TOP + row * (ch + gap_y)
 
-        # 인원
-        count_box = slide.shapes.add_textbox(Inches(x + 0.15), Inches(y + 0.65), Inches(2.7), Inches(0.4))
-        tf = count_box.text_frame
-        p = tf.paragraphs[0]
+        _add_rounded_card(slide, x, y, cw, ch, COLORS["card"])
+
+        role = member.get("role", f"역할 {i+1}")
         count = member.get("count", 1)
-        p.text = f"{count}명" if count >= 1 else f"{count} (50%)"
-        p.font.size = Pt(24)
-        p.font.bold = True
-        p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
+        expertise = member.get("expertise", member.get("skills", ""))
 
-        # 전문성
-        exp_box = slide.shapes.add_textbox(Inches(x + 0.15), Inches(y + 1.2), Inches(2.7), Inches(1.0))
-        tf = exp_box.text_frame
-        tf.word_wrap = True
-        p = tf.paragraphs[0]
-        p.text = member.get("expertise", "")[:50]
-        p.font.size = Pt(12)
-        p.font.color.rgb = hex_to_rgb(COLORS["text_secondary"])
+        icon_text = role_icons[i] if i < len(role_icons) else role[:2]
+        _add_circle_icon(slide, x + (cw - 0.5) / 2, y + 0.12, 0.5,
+                         PALETTE[i % len(PALETTE)], icon_text)
 
-    # 총 공수
-    total_box = slide.shapes.add_textbox(Inches(0.5), Inches(6.5), Inches(9), Inches(0.5))
-    tf = total_box.text_frame
-    p = tf.paragraphs[0]
-    total_mm = effort_summary.get("total", {}).get("man_months", 16)
-    p.text = f"총 공수: {total_mm} Man-Months"
-    p.font.size = Pt(20)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["secondary"])
-    p.alignment = PP_ALIGN.CENTER
+        _add_text(slide, x + 0.05, y + 0.72, cw - 0.1, 0.3, role[:15],
+                  font_size=14, bold=True, color=COLORS["title"],
+                  alignment=PP_ALIGN.CENTER)
 
-    return slide
+        count_str = f"{count}명" if count >= 1 else f"{count} (파트타임)"
+        _add_text(slide, x + 0.05, y + 1.02, cw - 0.1, 0.3, count_str,
+                  font_size=18, bold=True, color=COLORS["accent"],
+                  alignment=PP_ALIGN.CENTER, font_name=FONT_TITLE)
 
+        if expertise and ch >= 1.8:
+            _add_text(slide, x + 0.05, y + 1.35, cw - 0.1, 0.5,
+                      str(expertise)[:40], font_size=9, color=COLORS["subtle"],
+                      alignment=PP_ALIGN.CENTER)
 
-def add_risk_table_slide(prs, title: str, risks: list):
-    """리스크 테이블 슬라이드."""
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    set_slide_background(slide, COLORS["background"])
-
-    # 제목
-    title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.7))
-    tf = title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(32)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
-
-    # 리스크 항목
-    y_start = 1.2
-    for i, risk in enumerate(risks[:5]):
-        y = y_start + (i * 1.1)
-
-        # 배경 박스
-        box = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE,
-                                      Inches(0.3), Inches(y), Inches(9.4), Inches(1.0))
-        box.fill.solid()
-        box.fill.fore_color.rgb = hex_to_rgb(COLORS["surface"])
-        box.line.fill.background()
-
-        # 영향도 표시
-        impact = risk.get("impact", "MEDIUM")
-        impact_color = COLORS["warning"] if impact == "HIGH" else COLORS["secondary"]
-        impact_box = slide.shapes.add_textbox(Inches(0.4), Inches(y + 0.1), Inches(0.8), Inches(0.4))
-        tf = impact_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = impact
-        p.font.size = Pt(12)
-        p.font.bold = True
-        p.font.color.rgb = hex_to_rgb(impact_color)
-
-        # 리스크 내용
-        risk_box = slide.shapes.add_textbox(Inches(1.3), Inches(y + 0.1), Inches(4.0), Inches(0.4))
-        tf = risk_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = risk.get("risk", "")[:40]
-        p.font.size = Pt(14)
-        p.font.bold = True
-        p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
-
-        # 대응
-        mitigation_box = slide.shapes.add_textbox(Inches(1.3), Inches(y + 0.5), Inches(8.2), Inches(0.4))
-        tf = mitigation_box.text_frame
-        tf.word_wrap = True
-        p = tf.paragraphs[0]
-        p.text = f"→ {risk.get('mitigation', '')[:60]}"
-        p.font.size = Pt(12)
-        p.font.color.rgb = hex_to_rgb(COLORS["text_secondary"])
-
-    return slide
+    # 총 공수 하단 (카드 아래에 배치)
+    badge_y = CONTENT_TOP + rows * (ch + gap_y) + 0.1
+    badge_y = min(badge_y, SAFE_BOTTOM - badge_h)
+    _add_rounded_card(slide, 2.5, badge_y, 5.0, badge_h, COLORS["accent"])
+    _add_text(slide, 2.55, badge_y + 0.05, 4.9, 0.4,
+              f"총 공수: {total_mm} Man-Months",
+              font_size=16, bold=True, color=COLORS["white"],
+              alignment=PP_ALIGN.CENTER, font_name=FONT_TITLE)
 
 
-def add_steps_slide(prs, title: str, steps: list):
-    """스텝 다이어그램 슬라이드."""
-    slide_layout = prs.slide_layouts[6]
-    slide = prs.slides.add_slide(slide_layout)
-    set_slide_background(slide, COLORS["background"])
+def slide_risks(prs, risks):
+    """리스크 관리 슬라이드."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "RISK MANAGEMENT", "리스크 관리", COLORS["orange"], COLORS["orange"])
 
-    # 제목
-    title_box = slide.shapes.add_textbox(Inches(0.5), Inches(0.3), Inches(9), Inches(0.7))
-    tf = title_box.text_frame
-    p = tf.paragraphs[0]
-    p.text = title
-    p.font.size = Pt(32)
-    p.font.bold = True
-    p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
+    n = min(len(risks), 4)
+    start_y, item_h = _calc_item_spacing(n, CONTENT_TOP, SAFE_BOTTOM, 1.15)
 
-    # 스텝들
-    y_start = 1.5
-    for i, step in enumerate(steps[:5]):
-        y = y_start + (i * 1.1)
+    for i, risk in enumerate(risks[:n]):
+        y = start_y + i * item_h
+        risk_text = risk.get("risk", risk.get("description", ""))
+        impact = risk.get("impact", risk.get("level", "MEDIUM"))
+        mitigation = risk.get("mitigation", "")
 
-        # 번호 원
-        circle = slide.shapes.add_shape(MSO_SHAPE.OVAL,
-                                         Inches(0.5), Inches(y), Inches(0.6), Inches(0.6))
-        circle.fill.solid()
-        circle.fill.fore_color.rgb = hex_to_rgb(COLORS["primary"])
-        circle.line.fill.background()
+        if impact == "HIGH":
+            level_color = COLORS["accent5"]
+        elif impact == "LOW":
+            level_color = COLORS["accent4"]
+        else:
+            level_color = COLORS["amber"]
 
-        # 번호 텍스트
-        num_box = slide.shapes.add_textbox(Inches(0.5), Inches(y + 0.1), Inches(0.6), Inches(0.4))
-        tf = num_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = str(step.get("step", i + 1))
-        p.font.size = Pt(20)
-        p.font.bold = True
-        p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
-        p.alignment = PP_ALIGN.CENTER
+        _add_rounded_card(slide, 0.5, y, 9.0, item_h - 0.08, COLORS["card"])
 
-        # 액션
-        action_box = slide.shapes.add_textbox(Inches(1.3), Inches(y + 0.1), Inches(6), Inches(0.5))
-        tf = action_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = step.get("action", "")
-        p.font.size = Pt(20)
-        p.font.color.rgb = hex_to_rgb(COLORS["text_primary"])
+        # 영향도 뱃지
+        _add_rounded_card(slide, 0.65, y + 0.12, 0.8, 0.3, level_color)
+        _add_text(slide, 0.67, y + 0.13, 0.76, 0.28, impact,
+                  font_size=10, bold=True, color=COLORS["white"],
+                  alignment=PP_ALIGN.CENTER)
 
-        # 기간
-        duration_box = slide.shapes.add_textbox(Inches(7.5), Inches(y + 0.1), Inches(2), Inches(0.5))
-        tf = duration_box.text_frame
-        p = tf.paragraphs[0]
-        p.text = step.get("duration", "")
-        p.font.size = Pt(16)
-        p.font.color.rgb = hex_to_rgb(COLORS["secondary"])
-        p.alignment = PP_ALIGN.RIGHT
+        _add_text(slide, 1.65, y + 0.08, 7.5, 0.35, risk_text[:55],
+                  font_size=14, bold=True, color=COLORS["title"])
 
-    return slide
+        if mitigation and item_h >= 0.85:
+            _add_text(slide, 1.65, y + 0.5, 7.5, 0.4, f"-> {mitigation[:65]}",
+                      font_size=11, color=COLORS["subtle"])
 
 
-def parse_proposal(md_content: str) -> dict:
-    """제안서 Markdown 파싱."""
-    data = {
-        "title": "",
-        "date": "",
-        "client": "",
-        "sections": {}
-    }
+def slide_benefits(prs, quant_benefits, qual_benefits):
+    """기대 효과 슬라이드."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "EXPECTED BENEFITS", "기대 효과", COLORS["accent4"], COLORS["accent4"])
 
-    # 제목 추출
-    title_match = re.search(r'^# (.+?)$', md_content, re.MULTILINE)
-    if title_match:
-        data["title"] = title_match.group(1).strip()
+    has_quant = bool(quant_benefits)
+    has_qual = bool(qual_benefits)
 
-    # 날짜 추출
-    date_match = re.search(r'\*\*제안일\*\*:\s*(.+?)$', md_content, re.MULTILINE)
-    if date_match:
-        data["date"] = date_match.group(1).strip()
+    if has_quant:
+        n_q = min(len(quant_benefits), 3)
+        cw = 2.6
+        gap = 0.3
+        total_w = n_q * cw + (n_q - 1) * gap
+        start_x = (SLIDE_W - total_w) / 2
+        card_h = 1.6
 
-    # 수신 추출
-    client_match = re.search(r'\*\*수신\*\*:\s*(.+?)$', md_content, re.MULTILINE)
-    if client_match:
-        data["client"] = client_match.group(1).strip()
+        for i, b in enumerate(quant_benefits[:n_q]):
+            x = start_x + i * (cw + gap)
+            _add_rounded_card(slide, x, CONTENT_TOP, cw, card_h, COLORS["card"])
 
-    return data
+            metric = b.get("metric", "")
+            before = b.get("before", "-")
+            after = b.get("after", "-")
+
+            _add_text(slide, x + 0.12, CONTENT_TOP + 0.1, cw - 0.24, 0.25,
+                      metric[:30], font_size=11, bold=True, color=COLORS["subtle"])
+            _add_text(slide, x + 0.12, CONTENT_TOP + 0.45, cw - 0.24, 0.5,
+                      f"{before} -> {after}",
+                      font_size=17, bold=True, color=COLORS["accent4"],
+                      alignment=PP_ALIGN.CENTER, font_name=FONT_TITLE)
+            _add_circle_icon(slide, x + (cw - 0.3) / 2, CONTENT_TOP + card_h - 0.45,
+                             0.3, COLORS["accent4"], "^")
+
+    qual_start_y = CONTENT_TOP + (1.9 if has_quant else 0)
+    if has_qual:
+        n_qual = min(len(qual_benefits), 5)
+        spacing = min(0.42, (SAFE_BOTTOM - qual_start_y) / max(n_qual, 1))
+        y = qual_start_y
+        for i, qual in enumerate(qual_benefits[:n_qual]):
+            text = qual if isinstance(qual, str) else str(qual)
+            _add_text(slide, 0.8, y, 8.4, 0.35, f"  {text[:80]}",
+                      font_size=14, color=COLORS["body"])
+            y += spacing
 
 
-def load_proposal_json(json_path: Path) -> dict:
-    """제안서 JSON 로드."""
-    with open(json_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+def slide_next_steps(prs, steps):
+    """다음 단계 슬라이드."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_white"])
+    _slide_header(slide, "NEXT STEPS", "다음 단계")
 
+    n = min(len(steps), 5)
+    start_y, item_h = _calc_item_spacing(n, CONTENT_TOP, SAFE_BOTTOM, 0.9)
+
+    for i, step in enumerate(steps[:n]):
+        y = start_y + i * item_h
+        action = step.get("action", step) if isinstance(step, dict) else str(step)
+        duration = step.get("duration", "") if isinstance(step, dict) else ""
+
+        _add_rounded_card(slide, 0.5, y, 9.0, item_h - 0.12, COLORS["card"])
+        _add_circle_icon(slide, 0.7, y + (item_h - 0.45) / 2 - 0.06, 0.42,
+                         PALETTE[i % len(PALETTE)], str(i + 1))
+        _add_text(slide, 1.35, y + (item_h - 0.4) / 2 - 0.06, 5.8, 0.4,
+                  action[:60], font_size=15, color=COLORS["body"])
+        if duration:
+            _add_text(slide, 7.5, y + (item_h - 0.35) / 2 - 0.06, 1.8, 0.35,
+                      duration[:15], font_size=12, color=COLORS["subtle"],
+                      alignment=PP_ALIGN.RIGHT)
+
+        # 연결선 (마지막 항목 제외)
+        if i < n - 1:
+            conn_y = y + item_h - 0.12
+            conn = slide.shapes.add_shape(
+                MSO_SHAPE.RECTANGLE,
+                Inches(0.9), Inches(conn_y), Inches(0.03), Inches(0.12)
+            )
+            conn.fill.solid()
+            conn.fill.fore_color.rgb = hex_to_rgb(COLORS["border"])
+            conn.line.fill.background()
+
+
+def slide_closing(prs, title_text, cta):
+    """마무리 슬라이드."""
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    set_slide_bg(slide, COLORS["bg_section"])
+
+    _add_text(slide, 0.5, 2.2, 9, 1.2, title_text,
+              font_size=44, bold=True, color=COLORS["white"],
+              alignment=PP_ALIGN.CENTER, font_name=FONT_TITLE)
+    _add_accent_bar(slide, 3.5, 3.6, 3.0, 0.05, "3B82F6")
+    _add_text(slide, 0.5, 4.0, 9, 0.6, cta,
+              font_size=18, color=COLORS["muted"], alignment=PP_ALIGN.CENTER)
+    _add_text(slide, 0.5, 5.2, 9, 0.5, "Q & A",
+              font_size=26, bold=True, color="3B82F6",
+              alignment=PP_ALIGN.CENTER, font_name=FONT_TITLE)
+
+
+# ============================================================
+# Validation
+# ============================================================
+
+def validate_ppt(prs):
+    """PPT 슬라이드별 레이아웃 검증. 오버플로우/겹침 검출."""
+    slide_w = prs.slide_width
+    slide_h = prs.slide_height
+    issues = []
+
+    for idx, slide in enumerate(prs.slides):
+        slide_num = idx + 1
+        shapes_info = []
+
+        for shape in slide.shapes:
+            left = shape.left / 914400  # EMU to inches
+            top = shape.top / 914400
+            width = shape.width / 914400
+            height = shape.height / 914400
+            right = left + width
+            bottom = top + height
+
+            shapes_info.append({
+                "name": shape.shape_id,
+                "left": round(left, 2),
+                "top": round(top, 2),
+                "right": round(right, 2),
+                "bottom": round(bottom, 2),
+            })
+
+            # 슬라이드 경계 초과 검사
+            slide_w_in = slide_w / 914400
+            slide_h_in = slide_h / 914400
+
+            if right > slide_w_in + 0.1:
+                issues.append(f"  슬라이드 {slide_num}: 요소가 우측 경계 초과 "
+                              f"(right={right:.2f} > {slide_w_in:.1f})")
+            if bottom > slide_h_in + 0.1:
+                issues.append(f"  슬라이드 {slide_num}: 요소가 하단 경계 초과 "
+                              f"(bottom={bottom:.2f} > {slide_h_in:.1f})")
+
+        # 동일 위치 텍스트 겹침 검사 (같은 좌표에 같은 크기 텍스트가 중복 배치된 경우)
+        # 의도적 레이어링(카드+텍스트, 그리드 레이아웃)은 제외
+        for i, a in enumerate(shapes_info):
+            for j, b in enumerate(shapes_info):
+                if i >= j:
+                    continue
+                # 거의 동일 위치(0.05인치 이내)에 동일 크기 요소가 겹치면 문제
+                same_pos = abs(a["left"] - b["left"]) < 0.05 and abs(a["top"] - b["top"]) < 0.05
+                same_size = abs(a["right"] - a["left"] - (b["right"] - b["left"])) < 0.1 and \
+                            abs(a["bottom"] - a["top"] - (b["bottom"] - b["top"])) < 0.1
+                if same_pos and same_size:
+                    a_area = (a["right"] - a["left"]) * (a["bottom"] - a["top"])
+                    if a_area > 1.0:  # 큰 요소만 (작은 뱃지/바 제외)
+                        issues.append(
+                            f"  슬라이드 {slide_num}: 동일 위치 중복 요소 "
+                            f"(top={a['top']:.1f}, left={a['left']:.1f})"
+                        )
+
+    return issues
+
+
+# ============================================================
+# Data Normalization
+# ============================================================
 
 def normalize_proposal_data(data: dict) -> dict:
-    """제안서 JSON 구조를 PPT 생성에 맞게 정규화."""
-    # 이미 정규화된 구조인지 확인 (storytelling_structure 존재 여부)
+    """제안서 JSON을 PPT 데이터로 정규화."""
     if "storytelling_structure" in data:
         return data
-
-    # --- 새로운 구조 감지: current_challenges 키가 있으면 새 JSON 포맷 ---
     if "current_challenges" in data:
         return _normalize_new_format(data)
-
-    # --- 기존 구조 (ProposalDocument 모델) 변환 ---
     return _normalize_legacy_format(data)
 
 
 def _normalize_new_format(data: dict) -> dict:
-    """새 제안서 JSON 포맷 (current_challenges, kpi, solution.modules 등) 정규화."""
+    """새 제안서 JSON 포맷 정규화."""
     exec_summary = data.get("executive_summary", {})
     core_msg = exec_summary.get("core_message", "")
     invest = exec_summary.get("investment_overview", {})
     key_metrics = exec_summary.get("key_metrics", {})
+    title = data.get("title", "프로젝트 제안서")
 
     normalized = {
-        "title": data.get("title", "프로젝트 제안서"),
+        "title": title,
         "metadata": {
             "proposal_date": data.get("created_at", ""),
             "client_company": data.get("client_name", ""),
             "proposer": data.get("proposer", ""),
         },
         "storytelling_structure": {
-            "hook": "RFID 수동 운영의 한계를 넘어, 스마트 계량 시대로",
-            "solution": core_msg[:80] if core_msg else "디지털 전환으로 업무 효율 혁신",
-            "cta": "지금 바로 스마트 계량 시스템을 시작하세요!",
+            "hook": core_msg[:60] if core_msg else title,
+            "solution": core_msg[:80] if core_msg else title,
+            "cta": "함께 시작하겠습니다",
         },
     }
 
-    # executive_summary
     normalized["executive_summary"] = {
         "problem": core_msg,
         "solution": core_msg,
-        "duration": invest.get("project_period", "8개월"),
+        "duration": invest.get("project_period", ""),
         "effort": invest.get("total_effort_with_buffer", invest.get("total_effort", "")),
-        "key_benefits": [
-            f"무인 자동 계량 {key_metrics.get('auto_weighing_ratio', '90%+')}",
-            f"Paperless {key_metrics.get('paper_slip_usage', '0%')}",
-        ],
+        "key_benefits": list(key_metrics.values())[:2] if key_metrics else [],
     }
 
-    # current_situation from current_challenges
     challenges_raw = data.get("current_challenges", [])
-    challenges = []
-    for ch in challenges_raw:
-        challenges.append({
-            "area": ch.get("title", ""),
-            "symptom": ch.get("description", ""),
-            "business_impact": ch.get("description", ""),
-        })
+    challenges = [{"area": ch.get("title", ""), "symptom": ch.get("description", ""),
+                    "business_impact": ch.get("description", "")} for ch in challenges_raw]
 
-    # future_vision from project_goals
     goals = data.get("project_goals", [])
-    future_vision = {}
-    for i, g in enumerate(goals[:4]):
-        future_vision[f"vision_{i+1}"] = f"{g.get('title', '')}: {g.get('description', '')}"
+    future_vision = {f"vision_{i+1}": f"{g.get('title', '')}: {g.get('description', '')}"
+                     for i, g in enumerate(goals[:4])}
 
     normalized["current_situation"] = {
         "challenges": challenges,
-        "risks_if_no_change": [
-            "종이 계량표 안전사고 위험 지속",
-            "RFID 카드 관리 비용 누적",
-            "특정 부서 업무 과중 심화",
-            "디지털 전환 지연으로 경쟁력 저하",
-        ],
+        "risks_if_no_change": [ch.get("description", "") for ch in challenges_raw[:4]],
         "future_vision": future_vision,
     }
 
-    # objectives from kpi
-    kpi_list = data.get("kpi", [])
-    kpis = []
-    for kpi in kpi_list[:4]:
-        kpis.append({
-            "metric": kpi.get("name", ""),
-            "current": kpi.get("current", "-"),
-            "target": kpi.get("target", ""),
-            "improvement": kpi.get("measurement", ""),
-        })
-    normalized["objectives"] = {
-        "kpis": kpis,
-        "goals": [g.get("description", "") for g in goals],
-    }
+    kpis = [{"metric": k.get("name", ""), "current": k.get("current", "-"),
+             "target": k.get("target", ""), "improvement": k.get("measurement", "")}
+            for k in data.get("kpi", [])[:4]]
+    normalized["objectives"] = {"kpis": kpis, "goals": [g.get("description", "") for g in goals]}
 
-    # solution from scope + solution.modules
     scope_data = data.get("scope", {})
-    in_scope_raw = scope_data.get("in_scope", [])
-    out_scope_raw = scope_data.get("out_of_scope", [])
-
-    in_scope = [{"category": "", "value": s} if isinstance(s, str) else s for s in in_scope_raw]
-    out_scope = [{"item": s} if isinstance(s, str) else s for s in out_scope_raw]
-
+    in_scope = [{"value": s} if isinstance(s, str) else s for s in scope_data.get("in_scope", [])]
+    out_scope = [{"item": s} if isinstance(s, str) else s for s in scope_data.get("out_of_scope", [])]
     modules = data.get("solution", {}).get("modules", [])
-    module_overview = ", ".join(m.get("name", "") for m in modules[:3])
 
     normalized["solution"] = {
-        "value_proposition": "LPR+AI 자동인식으로 무인 계량 시대를 엽니다",
-        "overview": module_overview,
-        "scope": {
-            "in_scope": in_scope,
-            "out_of_scope": out_scope,
-        },
+        "value_proposition": core_msg[:60] if core_msg else title,
+        "overview": ", ".join(m.get("name", "") for m in modules[:3]),
+        "scope": {"in_scope": in_scope, "out_of_scope": out_scope},
     }
 
-    # technical_approach from technology_stack (nested dict → flat list)
     tech_data = data.get("technology_stack", {})
-    tech_list = []
-    category_names = {
-        "backend": "백엔드",
-        "frontend_web": "프론트엔드(Web)",
-        "mobile": "모바일",
-        "cs_program": "계량대 CS",
-        "database": "데이터베이스",
-        "infrastructure": "인프라",
-    }
-    for cat_key, cat_label in category_names.items():
-        cat = tech_data.get(cat_key, {})
-        if isinstance(cat, dict):
-            parts = []
-            for k, v in cat.items():
-                parts.append(v)
-            tech_list.append({"category": cat_label, "technology": ", ".join(parts)})
+    tech_list = [{"category": k, "technology": ", ".join(v.values()) if isinstance(v, dict) else str(v)}
+                 for k, v in tech_data.items() if isinstance(v, dict)]
     normalized["technical_approach"] = {"technology_stack": tech_list}
 
-    # timeline
     timeline_data = data.get("timeline", {})
-    phases_raw = timeline_data.get("phases", [])
-    phases = []
-    for ph in phases_raw:
-        phases.append({
-            "phase": ph.get("name", ""),
-            "duration": ph.get("period", ""),
-            "period": ph.get("dates", ""),
-        })
     normalized["timeline"] = {
-        "total_duration": timeline_data.get("total_duration", "8개월"),
-        "phases": phases,
+        "total_duration": timeline_data.get("total_duration", ""),
+        "phases": [{"phase": p.get("name", ""), "duration": p.get("period", ""),
+                     "period": p.get("dates", "")} for p in timeline_data.get("phases", [])],
     }
 
-    # team from resource_plan.team
     resource = data.get("resource_plan", {})
-    team_raw = resource.get("team", [])
-    team_comp = []
-    for m in team_raw:
-        team_comp.append({
-            "role": m.get("role", ""),
-            "count": m.get("count", 1),
-            "expertise": m.get("period", ""),
-        })
     normalized["team"] = {
-        "composition": team_comp,
-        "effort_summary": {
-            "total": {"man_months": resource.get("total_man_months_with_buffer", resource.get("total_man_months", 24.9))}
-        },
+        "composition": [{"role": m.get("role", ""), "count": m.get("count", 1),
+                          "expertise": m.get("period", "")}
+                         for m in resource.get("team", [])],
+        "effort_summary": {"total": {"man_months": resource.get("total_man_months_with_buffer",
+                                                                  resource.get("total_man_months", 0))}},
     }
 
-    # risk_management from risks
-    risks_raw = data.get("risks", [])
-    risks_conv = []
-    for r in risks_raw:
-        risks_conv.append({
-            "risk": r.get("title", ""),
-            "impact": r.get("impact", "MEDIUM"),
-            "mitigation": r.get("mitigation", ""),
-        })
-    normalized["risk_management"] = risks_conv
+    normalized["risk_management"] = [{"risk": r.get("title", r.get("description", "")),
+                                       "impact": r.get("impact", "MEDIUM"),
+                                       "mitigation": r.get("mitigation", "")}
+                                      for r in data.get("risks", [])]
 
-    # expected_benefits
     benefits = data.get("expected_benefits", {})
     if isinstance(benefits, dict):
-        quant_raw = benefits.get("quantitative", [])
-        quant = []
-        for b in quant_raw[:4]:
-            quant.append({
-                "metric": b.get("item", ""),
-                "before": b.get("before", ""),
-                "after": b.get("after", ""),
-                "improvement": "개선",
-            })
-        normalized["expected_benefits"] = {
-            "quantitative": quant,
-            "qualitative": benefits.get("qualitative", []),
-        }
+        quant = [{"metric": b.get("item", ""), "before": b.get("before", ""),
+                  "after": b.get("after", ""), "improvement": "개선"}
+                 for b in benefits.get("quantitative", [])[:4]]
+        normalized["expected_benefits"] = {"quantitative": quant, "qualitative": benefits.get("qualitative", [])}
     else:
         normalized["expected_benefits"] = {"quantitative": [], "qualitative": []}
 
-    # next_steps from milestones
     milestones = timeline_data.get("milestones", [])
-    steps = []
-    for i, ms in enumerate(milestones[:5]):
-        steps.append({
-            "step": i + 1,
-            "action": ms.get("name", ""),
-            "duration": ms.get("date", ""),
-        })
-    normalized["next_steps"] = steps
-
+    normalized["next_steps"] = [{"step": i + 1, "action": ms.get("name", ""), "duration": ms.get("date", "")}
+                                 for i, ms in enumerate(milestones[:5])]
     return normalized
 
 
 def _normalize_legacy_format(data: dict) -> dict:
-    """기존 ProposalDocument 모델 JSON 포맷 정규화."""
+    """기존 ProposalDocument 모델 JSON 정규화. 동적 데이터 추출."""
+    title = data.get("title", "프로젝트 제안서")
+    exec_str = data.get("executive_summary", "")
+    overview = data.get("project_overview", {})
+    timeline_data = data.get("timeline", {})
+    resource = data.get("resource_plan", {})
+    total_duration = timeline_data.get("total_duration", "")
+    total_mm = resource.get("total_man_months", "")
+
     normalized = {
-        "title": data.get("title", "프로젝트 제안서"),
+        "title": title,
         "metadata": data.get("metadata", {}),
         "storytelling_structure": {
-            "hook": "레거시 시스템의 한계를 극복합니다",
-            "solution": "디지털 전환으로 업무 효율 혁신",
-            "cta": "지금 바로 함께 시작하세요!"
+            "hook": exec_str[:60] if isinstance(exec_str, str) and exec_str else title,
+            "solution": exec_str[:80] if isinstance(exec_str, str) and exec_str else title,
+            "cta": "함께 시작하겠습니다",
         },
     }
 
-    # executive_summary 변환 (string → dict)
-    exec_str = data.get("executive_summary", "")
     if isinstance(exec_str, str):
-        lines = exec_str.split('\n\n')
         normalized["executive_summary"] = {
-            "problem": lines[0] if len(lines) > 0 else "",
-            "solution": lines[1] if len(lines) > 1 else "",
-            "duration": data.get("timeline", {}).get("total_duration", "7개월"),
-            "effort": f"{data.get('resource_plan', {}).get('total_man_months', 16)} M/M",
-            "key_benefits": data.get("expected_benefits", [])[:2] if isinstance(data.get("expected_benefits"), list) else []
+            "problem": exec_str,
+            "solution": exec_str,
+            "duration": total_duration,
+            "effort": f"{total_mm} M/M" if total_mm else "",
+            "key_benefits": data.get("expected_benefits", [])[:2]
+                            if isinstance(data.get("expected_benefits"), list) else []
         }
     else:
         normalized["executive_summary"] = exec_str
 
-    # project_overview → current_situation 변환
-    overview = data.get("project_overview", {})
     background = overview.get("background", "")
+    objectives = overview.get("objectives", [])
+    success_criteria = overview.get("success_criteria", [])
+
     challenges = []
     if background:
-        problems = ["유지보수 인력 확보 어려움", "수기 대장 작성 병행", "운전기사 대기 시간 45분", "실시간 현황 파악 어려움"]
-        for i, prob in enumerate(problems):
-            challenges.append({
-                "area": f"문제 {i+1}",
-                "symptom": prob,
-                "business_impact": prob
-            })
+        sentences = [s.strip() for s in background.replace('. ', '.\n').split('\n') if s.strip()]
+        for i, sent in enumerate(sentences[:4]):
+            challenges.append({"area": f"현황 {i+1}", "symptom": sent[:80], "business_impact": sent[:80]})
 
-    success_criteria = overview.get("success_criteria", [])
-    future_vision = {}
-    for i, criterion in enumerate(success_criteria[:4]):
-        future_vision[f"vision_{i+1}"] = criterion
+    risks_if_no = [f"{obj} 미달성 시 서비스 품질 저하" for obj in objectives[:4] if isinstance(obj, str)]
+    future_vision = {f"vision_{i+1}": c for i, c in enumerate(success_criteria[:4])}
 
     normalized["current_situation"] = {
         "challenges": challenges,
-        "risks_if_no_change": [
-            "시스템 장애 시 복구 불가",
-            "인력 이탈 시 운영 마비",
-            "경쟁력 저하",
-            "고객 불만 증가"
-        ],
-        "future_vision": future_vision
+        "risks_if_no_change": risks_if_no if risks_if_no else ["현재 방식 유지 시 비효율 지속"],
+        "future_vision": future_vision,
     }
 
-    # objectives 변환
-    obj_list = overview.get("objectives", [])
-    kpis = []
-    for criterion in success_criteria[:4]:
-        if "→" in criterion:
-            parts = criterion.split("→")
-            kpis.append({
-                "metric": criterion.split()[0] if criterion.split() else "",
-                "current": parts[0].strip().split()[-1] if parts else "",
-                "target": parts[1].strip().split()[0] if len(parts) > 1 else "",
-                "improvement": "개선"
-            })
-        else:
-            kpis.append({
-                "metric": criterion[:20],
-                "current": "-",
-                "target": criterion,
-                "improvement": ""
-            })
-    normalized["objectives"] = {"kpis": kpis, "goals": obj_list}
+    kpis = [{"metric": c[:30], "current": "-", "target": c, "improvement": ""}
+            for c in success_criteria[:4]]
+    normalized["objectives"] = {"kpis": kpis, "goals": objectives}
 
-    # scope_of_work → solution 변환
     scope = data.get("scope_of_work", {})
+    solution_approach = data.get("solution_approach", {})
     in_scope_list = scope.get("in_scope", [])
     out_scope_list = scope.get("out_of_scope", [])
+    key_features = scope.get("key_features", [])
 
-    in_scope_converted = []
-    for item in in_scope_list:
-        if isinstance(item, str):
-            in_scope_converted.append({"category": "", "value": item})
-        else:
-            in_scope_converted.append(item)
+    in_scope_converted = [{"value": i} if isinstance(i, str) else i for i in in_scope_list]
+    out_scope_converted = [{"item": i} if isinstance(i, str) else i for i in out_scope_list]
 
-    out_scope_converted = []
-    for item in out_scope_list:
-        if isinstance(item, str):
-            out_scope_converted.append({"item": item})
-        else:
-            out_scope_converted.append(item)
-
-    solution_approach = data.get("solution_approach", {})
     normalized["solution"] = {
-        "value_proposition": "손으로 쓰던 전표가 스마트폰으로",
-        "overview": solution_approach.get("overview", ""),
-        "scope": {
-            "in_scope": in_scope_converted,
-            "out_of_scope": out_scope_converted
-        }
+        "value_proposition": solution_approach.get("overview", title),
+        "overview": solution_approach.get("architecture", ""),
+        "scope": {"in_scope": in_scope_converted, "out_of_scope": out_scope_converted},
+        "key_features": key_features,
     }
 
-    # solution_approach → technical_approach 변환
     tech_stack = solution_approach.get("technology_stack", [])
     tech_converted = []
     for item in tech_stack:
         if isinstance(item, str):
-            if ":" in item:
-                parts = item.split(":", 1)
-                tech_converted.append({"category": parts[0].strip(), "technology": parts[1].strip()})
-            else:
-                tech_converted.append({"category": "", "technology": item})
+            parts = item.split("(", 1)
+            cat = parts[1].rstrip(")") if len(parts) > 1 else ""
+            tech_converted.append({"category": cat, "technology": parts[0].strip()})
         else:
             tech_converted.append(item)
     normalized["technical_approach"] = {"technology_stack": tech_converted}
 
-    # timeline 변환
-    timeline_data = data.get("timeline", {})
     phases = timeline_data.get("phases", [])
-    phases_converted = []
-    for phase in phases:
-        phases_converted.append({
-            "phase": phase.get("phase_name", ""),
-            "duration": phase.get("duration", ""),
-            "period": phase.get("description", "")
-        })
     normalized["timeline"] = {
-        "total_duration": timeline_data.get("total_duration", "7개월"),
-        "phases": phases_converted
+        "total_duration": total_duration,
+        "phases": [{"phase": p.get("phase_name", ""), "duration": p.get("duration", ""),
+                     "period": p.get("description", "")} for p in phases],
     }
 
-    # resource_plan → team 변환
-    resource = data.get("resource_plan", {})
     team_structure = resource.get("team_structure", [])
-    team_converted = []
-    for member in team_structure:
-        resp = member.get("responsibilities", [])
-        team_converted.append({
-            "role": member.get("role", ""),
-            "count": member.get("count", 1),
-            "expertise": ", ".join(resp[:2]) if resp else ""
-        })
     normalized["team"] = {
-        "composition": team_converted,
-        "effort_summary": {
-            "total": {"man_months": resource.get("total_man_months", 16)}
-        }
+        "composition": [{"role": m.get("role", ""), "count": m.get("count", 1),
+                          "expertise": ", ".join(m.get("responsibilities", [])[:2])}
+                         for m in team_structure],
+        "effort_summary": {"total": {"man_months": total_mm}},
     }
 
-    # risks → risk_management 변환
-    risks = data.get("risks", [])
-    risks_converted = []
-    for risk in risks:
-        risks_converted.append({
-            "risk": risk.get("description", ""),
-            "impact": risk.get("level", "MEDIUM"),
-            "mitigation": risk.get("mitigation", "")
-        })
-    normalized["risk_management"] = risks_converted
+    normalized["risk_management"] = [{"risk": r.get("description", ""),
+                                       "impact": r.get("level", "MEDIUM"),
+                                       "mitigation": r.get("mitigation", "")}
+                                      for r in data.get("risks", [])]
 
-    # expected_benefits 변환
     benefits = data.get("expected_benefits", [])
     if isinstance(benefits, list):
-        quant = []
-        for b in benefits[:4]:
-            if isinstance(b, str) and ":" in b:
-                parts = b.split(":", 1)
-                quant.append({
-                    "metric": parts[0].strip(),
-                    "before": "현재",
-                    "after": parts[1].strip()[:30],
-                    "improvement": "개선"
-                })
+        quant = [{"metric": b[:40], "before": "", "after": "", "improvement": ""}
+                 for b in benefits[:4] if isinstance(b, str)]
         normalized["expected_benefits"] = {"quantitative": quant, "qualitative": benefits}
     else:
         normalized["expected_benefits"] = benefits
 
-    # next_steps 변환
     steps = data.get("next_steps", [])
-    steps_converted = []
-    for i, step in enumerate(steps):
-        if isinstance(step, str):
-            steps_converted.append({"step": i + 1, "action": step, "duration": ""})
-        else:
-            steps_converted.append(step)
-    normalized["next_steps"] = steps_converted
-
+    normalized["next_steps"] = [{"step": i + 1, "action": s, "duration": ""}
+                                 if isinstance(s, str) else s for i, s in enumerate(steps)]
     return normalized
 
 
+# ============================================================
+# Main Generator
+# ============================================================
+
+def _get_or_generate_arch_diagram() -> Path | None:
+    """아키텍처 다이어그램 PNG 가져오기 또는 TRD에서 자동 생성."""
+    diagram_dir = Path("workspace/outputs/diagrams")
+    existing = list(diagram_dir.glob("ARCH-*.png")) if diagram_dir.exists() else []
+    if existing:
+        return max(existing, key=lambda x: x.stat().st_mtime)
+
+    # TRD JSON에서 자동 생성
+    trd_dir = Path("workspace/outputs/trd")
+    trd_files = list(trd_dir.glob("TRD-*.json")) if trd_dir.exists() else []
+    if not trd_files:
+        return None
+
+    trd_path = max(trd_files, key=lambda x: x.stat().st_mtime)
+    try:
+        print(f"   아키텍처 다이어그램 자동 생성 중... ({trd_path.name})")
+        result = generate_from_trd_file(trd_path, diagram_dir)
+        print(f"   다이어그램 생성 완료: {result.name}")
+        return result
+    except Exception as e:
+        print(f"   [경고] 다이어그램 생성 실패: {e}")
+        return None
+
+
+def load_proposal_json(json_path: Path) -> dict:
+    with open(json_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
 def generate_ppt(proposal_path: Path, output_path: Path):
-    """PPT 생성."""
-    # 제안서 읽기 (JSON 우선, 없으면 MD)
+    """PPT 생성 메인."""
     json_path = proposal_path.with_suffix('.json')
     if json_path.exists():
         raw_data = load_proposal_json(json_path)
         print(f"   JSON 데이터 로드: {json_path.name}")
     else:
-        md_content = proposal_path.read_text(encoding='utf-8')
-        raw_data = parse_proposal(md_content)
+        raw_data = {"title": "프로젝트 제안서"}
 
-    # 데이터 정규화
     data = normalize_proposal_data(raw_data)
 
-    # PPT 생성
     prs = Presentation()
-    prs.slide_width = Inches(10)
-    prs.slide_height = Inches(7.5)
+    prs.slide_width = Inches(SLIDE_W)
+    prs.slide_height = Inches(SLIDE_H)
 
-    # 데이터 추출
-    title = data.get("title", "프로젝트 제안서")
+    title = data.get("title", "프로젝트 제안서").replace(" 제안서", "")
     metadata = data.get("metadata", {})
     exec_summary = data.get("executive_summary", {})
     current_sit = data.get("current_situation", {})
@@ -1060,170 +1189,170 @@ def generate_ppt(proposal_path: Path, output_path: Path):
     benefits = data.get("expected_benefits", {})
     next_steps = data.get("next_steps", [])
     storytelling = data.get("storytelling_structure", {})
+    key_features = solution.get("key_features", [])
 
-    # 1. 표지
-    add_title_slide(
-        prs,
-        title.replace(" 제안서", ""),
-        f"{metadata.get('proposal_date', '')} | {metadata.get('client_company', '[고객사]')} 귀중"
-    )
+    client = metadata.get("client_company", data.get("client_name", ""))
+    date_str = metadata.get("proposal_date", metadata.get("created_at", ""))
+    if not date_str:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+    subtitle = f"{client} 귀중" if client else ""
 
-    # 2. 목차
-    add_content_slide(prs, "목차 (Contents)", [
-        "01  경영진 요약 (Executive Summary)",
-        "02  현재 상황과 도전 (Current Challenges)",
-        "03  프로젝트 목표 (Objectives)",
-        "04  우리의 솔루션 (Our Solution)",
-        "05  기술 접근법 (Technical Approach)",
-        "06  일정 계획 (Timeline)",
-        "07  투입 인력 (Team)",
-        "08  기대 효과 (Expected Benefits)",
-        "09  다음 단계 (Next Steps)"
-    ])
+    total_duration = timeline.get("total_duration", "")
+    total_mm = team.get("effort_summary", {}).get("total", {}).get("man_months", "")
 
-    # 3. 경영진 요약 - 핵심 메시지
-    add_highlight_slide(
-        prs,
-        storytelling.get("solution", exec_summary.get("solution", "디지털 전환")),
-        storytelling.get("hook", "15년 된 레거시 시스템의 한계를 극복합니다")
-    )
+    # ---- 슬라이드 생성 ----
 
-    # 4. 경영진 요약 - 상세
-    add_content_slide(prs, "경영진 요약 (Executive Summary)", [
-        f"해결할 문제: {exec_summary.get('problem', '')}",
-        f"솔루션: {exec_summary.get('solution', '')}",
-        f"예상 기간: {exec_summary.get('duration', '7개월')}",
-        f"투입 공수: {exec_summary.get('effort', '16 M/M')}",
-        f"핵심 효과: {', '.join(exec_summary.get('key_benefits', [])[:2])}"
-    ])
+    slide_cover(prs, title, subtitle, date_str)
 
-    # 5. 현재 상황 섹션
-    add_section_title_slide(prs, 1, "현재 상황")
-
-    # 6. 현재의 도전
-    challenges = current_sit.get("challenges", [])
-    challenge_bullets = [
-        f"{c.get('area', '')}: {c.get('symptom', '')}"
-        for c in challenges[:4]
+    toc_items = [
+        "경영진 요약 (Executive Summary)",
+        "현재 상황과 도전 (Challenges)",
+        "프로젝트 목표 (Objectives)",
+        "우리의 솔루션 (Solution)",
+        "핵심 기능 (Features)",
+        "기술 스택 (Tech Stack)",
+        "시스템 아키텍처 (Architecture)",
+        "프로젝트 일정 (Timeline)",
+        "투입 인력 (Team)",
+        "리스크 관리 (Risks)",
+        "기대 효과 (Benefits)",
+        "다음 단계 (Next Steps)",
     ]
-    add_content_slide(prs, "현재의 도전과 과제", challenge_bullets)
+    slide_toc(prs, toc_items)
 
-    # 7. 변화하지 않으면?
+    # 경영진 요약 - 핵심
+    exec_problem = exec_summary.get("problem", "") if isinstance(exec_summary, dict) else str(exec_summary)
+    exec_metrics = []
+    if total_duration:
+        exec_metrics.append({"label": "프로젝트 기간", "value": total_duration, "desc": ""})
+    if total_mm:
+        exec_metrics.append({"label": "투입 공수", "value": f"{total_mm} M/M", "desc": ""})
+    key_benefits = exec_summary.get("key_benefits", []) if isinstance(exec_summary, dict) else []
+    if key_benefits:
+        exec_metrics.append({"label": "핵심 효과", "value": str(key_benefits[0])[:20], "desc": ""})
+    slide_exec_highlight(prs, exec_problem[:150], exec_metrics)
+
+    # 경영진 요약 - 상세
+    detail_items = []
+    if isinstance(exec_summary, dict):
+        if exec_summary.get("problem"):
+            detail_items.append({"label": "해결할 문제", "value": exec_summary["problem"][:80]})
+        if exec_summary.get("solution") and exec_summary["solution"] != exec_summary.get("problem"):
+            detail_items.append({"label": "솔루션", "value": exec_summary["solution"][:80]})
+        if total_duration:
+            detail_items.append({"label": "예상 기간", "value": total_duration})
+        if exec_summary.get("effort"):
+            detail_items.append({"label": "투입 공수", "value": str(exec_summary["effort"])})
+        for b in key_benefits[:2]:
+            detail_items.append({"label": "핵심 효과", "value": str(b)[:60]})
+    slide_exec_detail(prs, detail_items)
+
+    # 섹션: 현재 상황
+    slide_section(prs, 1, "현재 상황", "Current Challenges")
+
+    challenges = current_sit.get("challenges", [])
+    slide_challenges(prs, "현재의 도전과 과제", challenges)
+
     risks_no_change = current_sit.get("risks_if_no_change", [])
-    add_content_slide(prs, "변화하지 않으면?", risks_no_change[:4])
+    slide_risks_no_change(prs, risks_no_change)
 
-    # 8. Before vs After 비교
-    future_vision = current_sit.get("future_vision", {})
-    add_two_column_slide(
-        prs, "Before vs After",
-        "현재 (AS-IS)", [c.get("business_impact", "") for c in challenges[:4]],
-        "미래 (TO-BE)", list(future_vision.values())[:4]
-    )
+    before_items = [c.get("business_impact", c.get("symptom", "")) for c in challenges[:5]]
+    after_items = list(current_sit.get("future_vision", {}).values())[:5]
+    slide_before_after(prs, before_items, after_items)
 
-    # 9. 프로젝트 목표 섹션
-    add_section_title_slide(prs, 2, "프로젝트 목표")
-
-    # 10. KPI 카드
+    # 섹션: 프로젝트 목표
+    slide_section(prs, 2, "프로젝트 목표", "Objectives & KPI")
     kpis = objectives.get("kpis", [])
-    add_kpi_card_slide(prs, "목표 및 핵심 KPI", kpis)
+    slide_kpi(prs, "핵심 성과 지표 (KPI)", kpis)
 
-    # 11. 솔루션 섹션
-    add_section_title_slide(prs, 3, "우리의 솔루션")
+    # 섹션: 솔루션
+    slide_section(prs, 3, "우리의 솔루션", "Our Solution")
+    slide_solution_highlight(prs, solution.get("value_proposition", title), solution.get("overview", "")[:120])
 
-    # 12. 솔루션 개요
-    add_highlight_slide(
-        prs,
-        solution.get("value_proposition", "손으로 쓰던 전표가 스마트폰으로"),
-        solution.get("overview", "")[:80]
-    )
-
-    # 13. 작업 범위
     in_scope = solution.get("scope", {}).get("in_scope", [])
     out_scope = solution.get("scope", {}).get("out_of_scope", [])
-    add_two_column_slide(
-        prs, "작업 범위 (Scope)",
-        "포함 (In-Scope)", [f"{s.get('category', '')}: {s.get('value', '')}" for s in in_scope[:5]],
-        "제외 (Out of Scope)", [s.get("item", "") for s in out_scope[:4]]
-    )
+    slide_scope(prs, in_scope, out_scope)
 
-    # 14. 기술 스택
+    if key_features:
+        slide_features(prs, key_features)
+
+    # 기술 스택
     tech_stack = tech.get("technology_stack", [])
-    add_content_slide(prs, "기술 스택 (Technology Stack)", [
-        f"{t.get('category', '')}: {t.get('technology', '')}"
-        for t in tech_stack[:6]
-    ])
+    slide_tech_stack(prs, tech_stack)
 
-    # 15. 일정 섹션
-    add_section_title_slide(prs, 4, "일정 계획")
+    # 시스템 아키텍처 다이어그램
+    arch_diagram_path = _get_or_generate_arch_diagram()
+    if arch_diagram_path:
+        slide_architecture(prs, arch_diagram_path)
 
-    # 16. 타임라인
+    # 섹션: 일정
+    slide_section(prs, 4, "프로젝트 일정", "Timeline & Milestones")
     phases = timeline.get("phases", [])
-    add_timeline_slide(prs, f"프로젝트 타임라인 ({timeline.get('total_duration', '7개월')})", phases)
+    slide_timeline(prs, total_duration, phases)
 
-    # 17. 인력 섹션 + 팀 구성
+    # 팀 구성
     team_comp = team.get("composition", [])
-    effort_sum = team.get("effort_summary", {})
-    add_team_slide(prs, "프로젝트 팀 구성", team_comp, effort_sum)
+    slide_team(prs, team_comp, total_mm)
 
-    # 18. 리스크 관리
-    add_risk_table_slide(prs, "리스크 관리", risks)
+    # 리스크
+    slide_risks(prs, risks)
 
-    # 19. 기대 효과 - 핵심 수치
-    quant_benefits = benefits.get("quantitative", [])
-    if quant_benefits:
-        first_benefit = quant_benefits[0]
-        add_highlight_slide(
-            prs,
-            f"{first_benefit.get('before', '')} → {first_benefit.get('after', '')}",
-            f"{first_benefit.get('metric', '')} {first_benefit.get('improvement', '')}"
-        )
+    # 기대 효과
+    quant = benefits.get("quantitative", []) if isinstance(benefits, dict) else []
+    qual = benefits.get("qualitative", []) if isinstance(benefits, dict) else (
+        benefits if isinstance(benefits, list) else [])
+    slide_benefits(prs, quant, qual)
 
-    # 20. 다음 단계
-    add_steps_slide(prs, "다음 단계 (Next Steps)", next_steps)
+    # 다음 단계
+    slide_next_steps(prs, next_steps)
 
-    # 21. Q&A
-    add_closing_slide(
-        prs,
-        "감사합니다",
-        f"Q&A | {storytelling.get('cta', '지금 바로 문의하세요!')}"
-    )
+    # Q&A
+    slide_closing(prs, "감사합니다", storytelling.get("cta", "함께 시작하겠습니다"))
 
-    # 저장
+    # ---- 최종 검증 ----
+    print("\n[검증] 슬라이드 레이아웃 검증 중...")
+    issues = validate_ppt(prs)
+    if issues:
+        print(f"  [주의] {len(issues)}건의 레이아웃 이슈 발견:")
+        for issue in issues[:10]:
+            print(f"    {issue}")
+    else:
+        print("  [통과] 모든 슬라이드 레이아웃 정상")
+
     prs.save(str(output_path))
-    return output_path
+    slide_count = len(prs.slides)
+    return output_path, slide_count
 
 
 def main():
     print("\n" + "=" * 70)
-    print("PPT 제안서 생성")
+    print("PPT 제안서 생성 (2026 Modern Design)")
     print(f'시작 시간: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     print("=" * 70)
-    
-    # 최신 제안서 찾기
+
     proposal_dir = Path("workspace/outputs/proposals")
     md_files = list(proposal_dir.glob("PROP-*.md"))
-    
+
     if not md_files:
         print("제안서 파일을 찾을 수 없습니다.")
         print("먼저 /pro:pro-maker를 실행하세요.")
         return
-    
+
     proposal_path = max(md_files, key=lambda x: x.stat().st_mtime)
     print(f"\n[입력] 제안서: {proposal_path}")
-    
-    # 출력 경로
+
     output_dir = Path("workspace/outputs/ppt")
     output_dir.mkdir(parents=True, exist_ok=True)
-    
+
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     output_path = output_dir / f"PPT-{timestamp}.pptx"
-    
-    # PPT 생성
-    result = generate_ppt(proposal_path, output_path)
-    
+
+    result, slide_count = generate_ppt(proposal_path, output_path)
+
     if result:
         print(f"\n[완료] PPT 생성 완료: {output_path}")
-        print(f"   슬라이드 수: 21장")
+        print(f"   슬라이드 수: {slide_count}장")
+        print(f"   테마: 2026 Modern Light")
     else:
         print("\n[실패] PPT 생성 실패")
 

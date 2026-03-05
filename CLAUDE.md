@@ -70,6 +70,11 @@ python -m app.scripts.wbs_maker    # WBS 생성
 python -m app.scripts.pro_maker    # 제안서 생성
 python -m app.scripts.pro_maker --client "고객사명"
 python -m app.scripts.ppt_maker    # PPT 생성 (제안서 기반)
+python -m app.scripts.doc_maker    # DOCX 전체 변환 (PRD+TRD+WBS+제안서)
+python -m app.scripts.doc_maker --type prd       # PRD만 DOCX 변환
+python -m app.scripts.doc_maker --type trd       # TRD만 DOCX 변환
+python -m app.scripts.doc_maker --type wbs       # WBS만 DOCX 변환
+python -m app.scripts.doc_maker --type proposal  # 제안서만 DOCX 변환
 ```
 
 ### Custom Slash Commands
@@ -79,7 +84,13 @@ python -m app.scripts.ppt_maker    # PPT 생성 (제안서 기반)
 /wbs:wbs-maker    # WBS 생성 (입력: 최신 PRD JSON)
 /pro:pro-maker    # 제안서 생성 (입력: 최신 PRD JSON)
 /ppt:ppt-maker    # PPT 생성 (입력: 최신 제안서 PROP-*.md)
+/doc:doc-maker    # DOCX 전체 변환 (PRD+TRD+WBS+제안서)
+/doc:doc-prd      # PRD DOCX 변환
+/doc:doc-trd      # TRD DOCX 변환
+/doc:doc-wbs      # WBS DOCX 변환
+/doc:doc-proposal # 제안서 DOCX 변환
 /del:del-doc      # 생성된 문서 삭제 (테스트 초기화)
+/web:dash-board   # 대시보드 실행 (백엔드+프론트엔드+크롬 브라우저)
 ```
 
 ### Custom Agents
@@ -132,6 +143,7 @@ Documents → [Layer 1: Parsing] → [Layer 2: Normalization] → [Layer 3: Vali
 - `app/scripts/wbs_maker.py` - WBS generation
 - `app/scripts/pro_maker.py` - Proposal generation
 - `app/scripts/ppt_maker.py` - PPT generation (dark theme, 20 slides)
+- `app/scripts/doc_maker.py` - DOCX conversion (MD → Word)
 
 ### Data Flow
 
@@ -142,6 +154,7 @@ Documents → [Layer 1: Parsing] → [Layer 2: Normalization] → [Layer 3: Vali
 - `/workspace/outputs/wbs/` - Generated WBS documents (MD + JSON)
 - `/workspace/outputs/proposals/` - Generated customer proposals (MD + JSON)
 - `/workspace/outputs/ppt/` - Generated PPT presentations (PPTX)
+- `/workspace/outputs/doc/` - Generated Word documents (DOCX)
 
 **Runtime Data:**
 - `/data/jobs/{job_id}.json` - Processing job state

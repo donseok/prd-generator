@@ -86,7 +86,7 @@ const DOC_TYPE_CONFIG: Record<string, {
 export default function MainPage() {
   const [docFilter, setDocFilter] = useState<DocTypeFilter>("all");
   const [mounted, setMounted] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
+  const [isDarkMode, setIsDarkMode] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [contentViewer, setContentViewer] = useState<ContentViewerState>({
     isOpen: false,
@@ -123,16 +123,16 @@ export default function MainPage() {
   useEffect(() => {
     setMounted(true);
     const savedTheme = localStorage.getItem("theme");
-    if (savedTheme === "light") {
-      setIsDarkMode(false);
+    if (savedTheme === "dark") {
+      setIsDarkMode(true);
     }
   }, []);
 
   useEffect(() => {
     if (isDarkMode) {
-      document.body.classList.remove('light-mode');
+      document.body.classList.add('dark-mode');
     } else {
-      document.body.classList.add('light-mode');
+      document.body.classList.remove('dark-mode');
     }
   }, [isDarkMode]);
 
