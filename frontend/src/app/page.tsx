@@ -1,94 +1,59 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import Link from "next/link";
 import {
-  Layers,
-  X,
-  Loader2,
-  RefreshCw,
-  FileText,
-  Target,
-  TrendingUp,
-  FileCode,
-  Presentation,
-  Sun,
-  Moon,
-  Trash2,
-  Clock,
-  FolderOpen,
+  ArrowUpRight,
   CheckCircle2,
+  Clock3,
   Code2,
-  FileType,
+  FileCode2,
+  FileJson2,
+  FileStack,
+  FileText,
+  FolderOpen,
+  LayoutDashboard,
+  Loader2,
+  Presentation,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+  X,
 } from "lucide-react";
-import { api, OutputDocument } from "@/lib/api";
+import { api, type OutputDocument } from "@/lib/api";
+import { AppShell, HeroPanel, MetricCard, SectionHeader, formatDate } from "@/components/app-shell";
 
-// 콘텐츠 뷰어 상태 타입
-interface ContentViewerState {
+type ViewerState = {
   isOpen: boolean;
   docId: string;
   docTitle: string;
   format: "json" | "md";
   content: string;
   loading: boolean;
-}
+};
 
-// 문서 타입 필터
 type DocTypeFilter = "all" | "PRD" | "TRD" | "WBS" | "Proposal" | "PPT";
 
-// 문서 타입별 설정
-const DOC_TYPE_CONFIG: Record<string, {
-  label: string;
-  shortLabel: string;
-  gradient: string;
-  bgColor: string;
-  icon: typeof FileText
-}> = {
-  PRD: {
-    label: "제품요구사항문서",
-    shortLabel: "PRD",
-    gradient: "from-violet-500 to-purple-600",
-    bgColor: "bg-violet-500/10",
-    icon: FileText
-  },
-  TRD: {
-    label: "기술요구사항문서",
-    shortLabel: "TRD",
-    gradient: "from-blue-500 to-cyan-500",
-    bgColor: "bg-blue-500/10",
-    icon: FileCode
-  },
-  WBS: {
-    label: "작업분해구조서",
-    shortLabel: "WBS",
-    gradient: "from-emerald-500 to-teal-500",
-    bgColor: "bg-emerald-500/10",
-    icon: Target
-  },
-  Proposal: {
-    label: "제안서",
-    shortLabel: "제안서",
-    gradient: "from-amber-500 to-orange-500",
-    bgColor: "bg-amber-500/10",
-    icon: FileText
-  },
-  PPT: {
-    label: "프레젠테이션",
-    shortLabel: "PPT",
-    gradient: "from-rose-500 to-pink-500",
-    bgColor: "bg-rose-500/10",
-    icon: Presentation
-  },
+const DOC_TYPE_META: Record<
+  Exclude<DocTypeFilter, "all">,
+  { label: string; shortLabel: string; icon: typeof FileText; tone: string; note: string }
+> = {
+  PRD: { label: "제품 요구사항 문서", shortLabel: "PRD", icon: FileText, tone: "from-blue-700 to-sky-400", note: "서비스 방향과 요구사항 정의" },
+  TRD: { label: "기술 요구사항 문서", shortLabel: "TRD", icon: FileCode2, tone: "from-indigo-700 to-blue-400", note: "구현 관점의 기술 설계" },
+  WBS: { label: "작업 분해 구조", shortLabel: "WBS", icon: LayoutDashboard, tone: "from-emerald-700 to-teal-400", note: "실행 일정과 작업 구조" },
+  Proposal: { label: "제안서", shortLabel: "제안서", icon: FileStack, tone: "from-orange-500 to-amber-300", note: "대외 공유용 문서" },
+  PPT: { label: "발표 자료", shortLabel: "PPT", icon: Presentation, tone: "from-rose-600 to-orange-300", note: "프레젠테이션 산출물" },
 };
+
+const FILTERS: DocTypeFilter[] = ["all", "PRD", "TRD", "WBS", "Proposal", "PPT"];
 
 export default function MainPage() {
   const [docFilter, setDocFilter] = useState<DocTypeFilter>("all");
-  const [mounted, setMounted] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [contentViewer, setContentViewer] = useState<ContentViewerState>({
+  const [viewer, setViewer] = useState<ViewerState>({
     isOpen: false,
     docId: "",
     docTitle: "",
@@ -97,53 +62,37 @@ export default function MainPage() {
     loading: false,
   });
 
-  // CLI 생성 문서 목록 조회
-  const { data: outputsData, isLoading: outputsLoading, refetch: refetchOutputs, dataUpdatedAt: outputsUpdatedAt } = useQuery({
+  const { data: outputsData, isLoading, refetch, dataUpdatedAt } = useQuery({
     queryKey: ["output-documents"],
     queryFn: () => api.listOutputDocuments(),
     refetchInterval: 30000,
   });
 
-  const outputs = outputsData?.documents || [];
+  const outputs = useMemo(() => outputsData?.documents ?? [], [outputsData?.documents]);
+  const filteredOutputs = useMemo(
+    () => outputs.filter((doc) => docFilter === "all" || doc.doc_type === docFilter),
+    [docFilter, outputs]
+  );
 
-  const filteredOutputs = outputs.filter((doc) => {
-    if (docFilter === "all") return true;
-    return doc.doc_type === docFilter;
-  });
-
-  const docStats = {
-    total: outputs.length,
-    PRD: outputs.filter((d) => d.doc_type === "PRD").length,
-    TRD: outputs.filter((d) => d.doc_type === "TRD").length,
-    WBS: outputs.filter((d) => d.doc_type === "WBS").length,
-    Proposal: outputs.filter((d) => d.doc_type === "Proposal").length,
-    PPT: outputs.filter((d) => d.doc_type === "PPT").length,
-  };
-
-  useEffect(() => {
-    setMounted(true);
-    const savedTheme = localStorage.getItem("theme");
-    if (savedTheme === "dark") {
-      setIsDarkMode(true);
-    }
-  }, []);
+  const stats = useMemo(
+    () => ({
+      total: outputs.length,
+      PRD: outputs.filter((doc) => doc.doc_type === "PRD").length,
+      TRD: outputs.filter((doc) => doc.doc_type === "TRD").length,
+      WBS: outputs.filter((doc) => doc.doc_type === "WBS").length,
+      Proposal: outputs.filter((doc) => doc.doc_type === "Proposal").length,
+      PPT: outputs.filter((doc) => doc.doc_type === "PPT").length,
+    }),
+    [outputs]
+  );
 
   useEffect(() => {
-    if (isDarkMode) {
-      document.body.classList.add('dark-mode');
-    } else {
-      document.body.classList.remove('dark-mode');
-    }
-  }, [isDarkMode]);
+    document.body.classList.toggle("modal-open", viewer.isOpen);
+    return () => document.body.classList.remove("modal-open");
+  }, [viewer.isOpen]);
 
-  const toggleTheme = () => {
-    const newMode = !isDarkMode;
-    setIsDarkMode(newMode);
-    localStorage.setItem("theme", newMode ? "dark" : "light");
-  };
-
-  const openContentViewer = async (doc: OutputDocument, format: "json" | "md") => {
-    setContentViewer({
+  async function openContentViewer(doc: OutputDocument, format: "json" | "md") {
+    setViewer({
       isOpen: true,
       docId: doc.id,
       docTitle: doc.title,
@@ -154,530 +103,350 @@ export default function MainPage() {
 
     try {
       const response = await api.getOutputDocument(doc.id, format);
-      let content = "";
-      if (format === "json" && response.content_json) {
-        content = JSON.stringify(response.content_json, null, 2);
-      } else if (format === "md" && response.content_md) {
-        content = response.content_md;
-      }
-      setContentViewer((prev) => ({ ...prev, content, loading: false }));
+      const content = format === "json" ? JSON.stringify(response.content_json ?? {}, null, 2) : response.content_md ?? "";
+      setViewer((prev) => ({ ...prev, content, loading: false }));
     } catch (error) {
-      console.error("문서 내용 로드 실패:", error);
-      setContentViewer((prev) => ({
-        ...prev,
-        content: "문서 내용을 불러오는 데 실패했습니다.",
-        loading: false,
-      }));
+      console.error("문서 내용을 불러오지 못했습니다.", error);
+      setViewer((prev) => ({ ...prev, content: "문서 내용을 불러오지 못했습니다.", loading: false }));
     }
-  };
+  }
 
-  const closeContentViewer = () => {
-    setContentViewer({
-      isOpen: false,
-      docId: "",
-      docTitle: "",
-      format: "json",
-      content: "",
-      loading: false,
-    });
-  };
-
-  const handleDeleteAll = async () => {
-    if (outputs.length === 0) {
-      alert("삭제할 문서가 없습니다.");
+  async function handleDeleteAll() {
+    if (!outputs.length) {
+      alert("삭제할 생성 문서가 없습니다.");
       return;
     }
 
-    const confirmed = confirm(
-      `정말로 ${outputs.length}개의 생성된 문서를 모두 삭제하시겠습니까?\n\n삭제된 파일은 복구할 수 없습니다.`
-    );
-
+    const confirmed = confirm(`생성 문서 ${outputs.length}개를 모두 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`);
     if (!confirmed) return;
 
     setDeleting(true);
     try {
       const response = await api.deleteAllDocuments();
-      alert(`${response.message}\n\n상세:\n- PRD: ${response.details.prd || 0}개\n- TRD: ${response.details.trd || 0}개\n- WBS: ${response.details.wbs || 0}개\n- 제안서: ${response.details.proposals || 0}개\n- PPT: ${response.details.ppt || 0}개`);
-      refetchOutputs();
+      alert(response.message);
+      await refetch();
     } catch (error) {
-      console.error("문서 삭제 실패:", error);
+      console.error("문서 삭제에 실패했습니다.", error);
       alert("문서 삭제에 실패했습니다.");
     } finally {
       setDeleting(false);
     }
-  };
+  }
 
   return (
-    <div className={`min-h-screen transition-colors duration-500 ${isDarkMode ? 'bg-[#08080c]' : 'bg-slate-50'}`}>
-      {/* Ambient Background */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none">
-        {/* Gradient Orbs */}
-        <div
-          className="absolute -top-[40%] -left-[20%] w-[70%] h-[70%] rounded-full opacity-30 blur-[120px] animate-pulse-glow"
-          style={{ background: 'radial-gradient(circle, rgba(139, 92, 246, 0.4) 0%, transparent 70%)' }}
-        />
-        <div
-          className="absolute -bottom-[30%] -right-[20%] w-[60%] h-[60%] rounded-full opacity-25 blur-[100px] animate-pulse-glow"
-          style={{ background: 'radial-gradient(circle, rgba(6, 182, 212, 0.4) 0%, transparent 70%)', animationDelay: '1.5s' }}
-        />
-        <div
-          className="absolute top-[20%] right-[10%] w-[30%] h-[30%] rounded-full opacity-20 blur-[80px] animate-float"
-          style={{ background: 'radial-gradient(circle, rgba(236, 72, 153, 0.3) 0%, transparent 70%)' }}
-        />
-
-        {/* Grid Pattern */}
-        <div
-          className="absolute inset-0 opacity-[0.015]"
-          style={{
-            backgroundImage: `linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)`,
-            backgroundSize: '60px 60px'
-          }}
-        />
-      </div>
-
-      {/* Header */}
-      <header className={`relative z-50 ${isDarkMode ? 'bg-[#08080c]/80' : 'bg-white/80'} backdrop-blur-xl border-b ${isDarkMode ? 'border-white/[0.06]' : 'border-slate-200'}`}>
-        <div className="max-w-7xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            {/* Logo & Title */}
-            <div className="flex items-center gap-4">
-              <div className="relative group">
-                <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-cyan-500 rounded-2xl blur-xl opacity-60 group-hover:opacity-80 transition-opacity" />
-                <div className="relative w-12 h-12 bg-gradient-to-br from-violet-500 to-cyan-500 rounded-2xl flex items-center justify-center text-white font-black text-lg shadow-lg">
-                  DK
-                </div>
+    <AppShell>
+      <HeroPanel
+        kicker="문서 스튜디오"
+        title="생성된 산출물을 하나의 화면에서 선별하고 탐색합니다"
+        description="결과 문서를 더 빠르게 훑고, 필요한 파일만 미리 본 뒤 바로 열 수 있도록 메인 대시보드를 다시 정리했습니다. 최근 산출물과 문서 타입 분포가 먼저 보이고, 아래에서는 아카이브를 바로 조작할 수 있습니다."
+        actions={
+          <>
+            <Link href="/upload" className="brand-button">
+              <Sparkles className="h-4 w-4" />
+              새 문서 생성
+            </Link>
+            <button onClick={() => refetch()} className="secondary-button">
+              <RefreshCw className="h-4 w-4" />
+              새로고침
+            </button>
+          </>
+        }
+        aside={
+          <div className="space-y-5">
+            <div className="flex items-center justify-between">
+              <p className="data-label">최근 동기화</p>
+              <span className="pill-badge bg-emerald-100 text-emerald-700">
+                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse-soft" />
+                실시간
+              </span>
+            </div>
+            <p className="text-4xl font-black tracking-[-0.06em] text-slate-900">
+              {formatDate(new Date(dataUpdatedAt || Date.now()).toISOString(), {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
+            </p>
+            <div className="grid gap-3">
+              <div className="surface-muted p-4">
+                <p className="data-label">문서 형식</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">JSON, Markdown, PPTX를 같은 흐름에서 확인하고 열 수 있습니다.</p>
               </div>
-              <div>
-                <h1 className={`text-xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                  문서 자동 생성시스템
-                </h1>
-                <div className={`flex items-center gap-2 text-xs ${isDarkMode ? 'text-white/40' : 'text-slate-500'}`}>
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                  </span>
-                  <Clock className="w-3 h-3" />
-                  {mounted && outputsUpdatedAt ? new Date(outputsUpdatedAt).toLocaleTimeString("ko-KR") : "로딩 중..."}
-                </div>
+              <div className="surface-muted p-4">
+                <p className="data-label">탐색 흐름</p>
+                <p className="mt-2 text-sm leading-6 text-slate-600">결과 확인, 미리보기, 삭제, 외부 열기까지 한 화면에서 이어집니다.</p>
               </div>
             </div>
+          </div>
+        }
+      />
 
-            {/* Actions */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={toggleTheme}
-                className={`p-2.5 rounded-xl transition-all duration-300 hover:scale-105 ${isDarkMode
-                  ? 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06]'
-                  : 'bg-slate-100 hover:bg-slate-200 border border-slate-200'
-                  }`}
-                title={isDarkMode ? "라이트 모드" : "다크 모드"}
-              >
-                {isDarkMode ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
-              </button>
+      <section className="grid gap-4 lg:grid-cols-[1.25fr_0.75fr]">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <MetricCard label="전체 산출물" value={stats.total} note="현재 저장된 생성 문서" />
+          <MetricCard label="PRD" value={stats.PRD} note="제품 요구사항 문서" accent="brand" />
+          <MetricCard label="TRD" value={stats.TRD} note="기술 설계 문서" accent="brand" />
+          <MetricCard label="WBS" value={stats.WBS} note="실행 계획 구조" accent="mint" />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div className="section-card stagger-in">
+            <p className="data-label">빠른 작업</p>
+            <div className="mt-4 space-y-3">
+              <QuickLink href="/upload" title="입력 파일 등록" description="원본 문서를 올리고 생성 파이프라인을 시작합니다." />
+              <QuickLink href="/history" title="PRD 아카이브 열기" description="기존 PRD를 다시 확인하고 내보낼 수 있습니다." />
+            </div>
+          </div>
+          <div className="section-card stagger-in">
+            <p className="data-label">문서 타입 맵</p>
+            <div className="mt-4 space-y-3">
+              {(["PRD", "TRD", "WBS", "Proposal", "PPT"] as const).map((type) => {
+                const meta = DOC_TYPE_META[type];
+                const count = stats[type];
+                return (
+                  <div key={type} className="surface-muted flex items-center justify-between px-4 py-3">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-900">{meta.label}</p>
+                      <p className="text-xs text-slate-500">{meta.note}</p>
+                    </div>
+                    <span className="text-xl font-black tracking-[-0.05em] text-slate-900">{count}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </section>
 
-              <button
-                onClick={() => refetchOutputs()}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 hover:scale-105 ${isDarkMode
-                  ? 'bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] text-white/80'
-                  : 'bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700'
-                  }`}
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span className="hidden sm:inline text-sm font-medium">새로고침</span>
-              </button>
-
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="section-card">
+          <SectionHeader
+            title="생성 문서 아카이브"
+            description="문서 타입별로 필터링하고, 세부 내용을 바로 열람할 수 있습니다."
+            action={
               <button
                 onClick={handleDeleteAll}
                 disabled={deleting || outputs.length === 0}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all duration-300 hover:scale-105 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100 ${isDarkMode
-                  ? 'bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-400'
-                  : 'bg-red-50 hover:bg-red-100 border border-red-200 text-red-600'
-                  }`}
+                className="secondary-button !rounded-full !px-4 !py-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {deleting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <Trash2 className="w-4 h-4" />
-                )}
-                <span className="hidden sm:inline text-sm font-medium">삭제</span>
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                전체 삭제
               </button>
+            }
+          />
+
+          <div className="mb-5 flex flex-wrap gap-2">
+            {FILTERS.map((filter) => {
+              const active = filter === docFilter;
+              const meta = filter === "all" ? null : DOC_TYPE_META[filter];
+              const Icon = meta?.icon ?? FolderOpen;
+              const count = filter === "all" ? stats.total : stats[filter];
+
+              return (
+                <button key={filter} onClick={() => setDocFilter(filter)} className={`tab-button ${active ? "tab-button-active" : "tab-button-idle"}`}>
+                  <Icon className="h-4 w-4" />
+                  {filter === "all" ? "전체" : meta?.shortLabel}
+                  <span className={`rounded-full px-2 py-0.5 text-xs ${active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          {isLoading ? (
+            <LoadingState />
+          ) : filteredOutputs.length === 0 ? (
+            <EmptyState
+              title={docFilter === "all" ? "아직 생성된 문서가 없습니다" : `${docFilter} 문서가 없습니다`}
+              description="문서 생성 작업을 실행하면 결과물이 이곳에 쌓입니다."
+            />
+          ) : (
+            <div className="space-y-3">
+              {filteredOutputs.map((doc, index) => (
+                <DocumentRow key={doc.id} doc={doc} onViewContent={openContentViewer} priority={index < 2} />
+              ))}
+            </div>
+          )}
+        </div>
+
+        <aside className="section-card stagger-in">
+          <SectionHeader title="작업 힌트" description="대시보드에서 바로 이어서 처리할 수 있는 흐름입니다." />
+          <div className="space-y-4">
+            <div className="surface-muted p-4">
+              <p className="data-label">미리보기</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">JSON과 Markdown은 모달에서 바로 열어 구조를 빠르게 확인할 수 있습니다.</p>
+            </div>
+            <div className="surface-muted p-4">
+              <p className="data-label">프레젠테이션</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">PPTX 결과물은 외부 프로그램으로 곧바로 열 수 있도록 연결했습니다.</p>
+            </div>
+            <div className="surface-muted p-4">
+              <p className="data-label">정리 작업</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">문서가 쌓이면 전체 삭제로 아카이브를 한 번에 정리할 수 있습니다.</p>
             </div>
           </div>
-        </div>
-      </header>
+        </aside>
+      </section>
 
-      <main className="relative max-w-7xl mx-auto px-6 py-8">
-        {/* Stats Grid - Bento Style */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
-          <StatCard
-            icon={<TrendingUp className="w-5 h-5" />}
-            label="전체"
-            value={docStats.total}
-            gradient="from-violet-500 to-cyan-500"
-            delay={0}
-            isDarkMode={isDarkMode}
-          />
-          <StatCard
-            icon={<FileText className="w-5 h-5" />}
-            label="PRD"
-            value={docStats.PRD}
-            gradient="from-violet-500 to-purple-600"
-            delay={1}
-            isDarkMode={isDarkMode}
-          />
-          <StatCard
-            icon={<FileCode className="w-5 h-5" />}
-            label="TRD"
-            value={docStats.TRD}
-            gradient="from-blue-500 to-cyan-500"
-            delay={2}
-            isDarkMode={isDarkMode}
-          />
-          <StatCard
-            icon={<Target className="w-5 h-5" />}
-            label="WBS"
-            value={docStats.WBS}
-            gradient="from-emerald-500 to-teal-500"
-            delay={3}
-            isDarkMode={isDarkMode}
-          />
-          <StatCard
-            icon={<FileText className="w-5 h-5" />}
-            label="제안서"
-            value={docStats.Proposal}
-            gradient="from-amber-500 to-orange-500"
-            delay={4}
-            isDarkMode={isDarkMode}
-          />
-          <StatCard
-            icon={<Presentation className="w-5 h-5" />}
-            label="PPT"
-            value={docStats.PPT}
-            gradient="from-rose-500 to-pink-500"
-            delay={5}
-            isDarkMode={isDarkMode}
-          />
-        </div>
-
-        {/* Filter Tabs */}
-        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-          {(["all", "PRD", "TRD", "WBS", "Proposal", "PPT"] as const).map((type) => {
-            const config = type === "all" ? null : DOC_TYPE_CONFIG[type];
-            const Icon = config?.icon || Layers;
-            const count = type === "all" ? docStats.total : docStats[type];
-            const isActive = docFilter === type;
-
-            return (
-              <button
-                key={type}
-                onClick={() => setDocFilter(type)}
-                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-medium transition-all duration-300 whitespace-nowrap text-sm ${isActive
-                  ? "bg-gradient-to-r from-violet-500/90 to-cyan-500/90 text-white shadow-lg shadow-violet-500/20"
-                  : isDarkMode
-                    ? "bg-white/[0.02] text-white/50 hover:bg-white/[0.05] hover:text-white/80 border border-white/[0.04]"
-                    : "bg-white text-slate-500 hover:bg-slate-50 hover:text-slate-700 border border-slate-200"
-                  }`}
-              >
-                <Icon className="w-4 h-4" />
-                <span>{type === "all" ? "전체" : config?.shortLabel || type}</span>
-                <span className={`px-1.5 py-0.5 rounded-md text-xs ${isActive ? "bg-white/20" : isDarkMode ? "bg-white/10" : "bg-slate-100"}`}>
-                  {count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Document List */}
-        {outputsLoading ? (
-          <LoadingState isDarkMode={isDarkMode} />
-        ) : filteredOutputs.length === 0 ? (
-          <EmptyState
-            message={docFilter === "all" ? "아직 생성된 문서가 없습니다" : `${docFilter} 타입의 문서가 없습니다`}
-            subMessage="에이전트(@auto-doc)를 사용해 문서를 생성해보세요"
-            isDarkMode={isDarkMode}
-          />
-        ) : (
-          <div className="space-y-3">
-            {filteredOutputs.map((doc, index) => (
-              <DocumentCard
-                key={doc.id}
-                doc={doc}
-                index={index}
-                onViewContent={openContentViewer}
-                isDarkMode={isDarkMode}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Content Viewer Modal */}
-        {contentViewer.isOpen && (
-          <ContentViewerModal
-            contentViewer={contentViewer}
-            onClose={closeContentViewer}
-            isDarkMode={isDarkMode}
-          />
-        )}
-      </main>
-    </div>
+      {viewer.isOpen ? (
+        <ContentViewerModal
+          viewer={viewer}
+          onClose={() =>
+            setViewer({
+              isOpen: false,
+              docId: "",
+              docTitle: "",
+              format: "json",
+              content: "",
+              loading: false,
+            })
+          }
+        />
+      ) : null}
+    </AppShell>
   );
 }
 
-// Stat Card Component
-function StatCard({
-  icon,
-  label,
-  value,
-  gradient,
-  delay,
-  isDarkMode,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: number;
-  gradient: string;
-  delay: number;
-  isDarkMode: boolean;
-}) {
+function QuickLink({ href, title, description }: { href: string; title: string; description: string }) {
   return (
-    <div
-      className={`group relative overflow-hidden rounded-2xl p-4 transition-all duration-300 hover:scale-[1.02] ${isDarkMode
-        ? 'bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.1]'
-        : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-lg'
-        }`}
-      style={{
-        animation: `fadeInUp 0.5s ease-out forwards`,
-        animationDelay: `${delay * 0.08}s`,
-        opacity: 0
-      }}
-    >
-      {/* Glow Effect */}
-      <div className={`absolute -top-8 -right-8 w-20 h-20 bg-gradient-to-br ${gradient} rounded-full blur-2xl opacity-0 group-hover:opacity-30 transition-opacity duration-500`} />
-
-      <div className="relative flex items-center gap-3">
-        <div className={`p-2.5 rounded-xl bg-gradient-to-br ${gradient} text-white shadow-lg`}>
-          {icon}
-        </div>
+    <Link href={href} className="list-card block">
+      <div className="flex items-center justify-between gap-4">
         <div>
-          <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-            {value}
-          </div>
-          <div className={`text-xs font-medium ${isDarkMode ? 'text-white/40' : 'text-slate-500'}`}>
-            {label}
-          </div>
+          <p className="text-base font-semibold text-slate-900">{title}</p>
+          <p className="mt-1 text-sm text-slate-500">{description}</p>
         </div>
+        <ArrowUpRight className="h-5 w-5 text-slate-400" />
       </div>
-    </div>
+    </Link>
   );
 }
 
-// Document Card Component
-function DocumentCard({
+function DocumentRow({
   doc,
-  index,
   onViewContent,
-  isDarkMode
+  priority,
 }: {
   doc: OutputDocument;
-  index: number;
   onViewContent: (doc: OutputDocument, format: "json" | "md") => void;
-  isDarkMode: boolean;
+  priority?: boolean;
 }) {
-  const config = DOC_TYPE_CONFIG[doc.doc_type] || DOC_TYPE_CONFIG.PRD;
-  const Icon = config.icon;
+  const meta = DOC_TYPE_META[doc.doc_type as keyof typeof DOC_TYPE_META] ?? DOC_TYPE_META.PRD;
+  const Icon = meta.icon;
 
   return (
-    <div
-      className={`group relative overflow-hidden rounded-2xl transition-all duration-300 hover:scale-[1.005] ${isDarkMode
-        ? 'bg-white/[0.02] border border-white/[0.06] hover:bg-white/[0.04] hover:border-white/[0.1]'
-        : 'bg-white border border-slate-200 hover:border-slate-300 hover:shadow-xl'
-        }`}
-      style={{
-        animation: `fadeInUp 0.4s ease-out forwards`,
-        animationDelay: `${index * 0.05}s`,
-        opacity: 0
-      }}
-    >
-      {/* Hover Glow */}
-      <div className={`absolute inset-0 bg-gradient-to-r ${config.gradient} opacity-0 group-hover:opacity-[0.03] transition-opacity duration-500`} />
-
-      <div className="relative p-5">
-        <div className="flex items-center justify-between gap-4">
-          {/* Left: Icon & Info */}
-          <div className="flex items-center gap-4 min-w-0 flex-1">
-            <div className={`shrink-0 p-3 rounded-xl bg-gradient-to-br ${config.gradient} text-white shadow-lg shadow-violet-500/10`}>
-              <Icon className="w-5 h-5" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h3 className={`font-semibold truncate mb-1 ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-                {doc.title}
-              </h3>
-              <div className={`flex items-center gap-3 text-xs ${isDarkMode ? 'text-white/40' : 'text-slate-500'}`}>
-                <span className="flex items-center gap-1">
-                  <Clock className="w-3 h-3" />
-                  {new Date(doc.created_at).toLocaleString("ko-KR")}
-                </span>
-              </div>
-            </div>
+    <div className={`list-card ${priority ? "ring-1 ring-blue-200/70" : ""}`}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 items-start gap-4">
+          <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] bg-gradient-to-br ${meta.tone} text-white shadow-sm`}>
+            <Icon className="h-6 w-6" />
           </div>
-
-          {/* Right: Badges & Actions */}
-          <div className="flex items-center gap-3 shrink-0">
-            {/* File Type Buttons */}
-            <div className="flex gap-2">
-              {doc.has_json && (
-                <button
-                  onClick={() => onViewContent(doc, "json")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isDarkMode
-                    ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20 hover:bg-blue-500/20 hover:border-blue-500/40'
-                    : 'bg-blue-50 text-blue-600 border border-blue-200 hover:bg-blue-100'
-                    }`}
-                >
-                  <Code2 className="w-3 h-3" />
-                  JSON
-                </button>
-              )}
-              {doc.has_md && (
-                <button
-                  onClick={() => onViewContent(doc, "md")}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isDarkMode
-                    ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20 hover:border-emerald-500/40'
-                    : 'bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-100'
-                    }`}
-                >
-                  <FileType className="w-3 h-3" />
-                  MD
-                </button>
-              )}
-              {doc.has_pptx && (
-                <button
-                  onClick={async () => {
-                    try {
-                      await api.openPptxFile(doc.id);
-                    } catch (error) {
-                      console.error("PPTX 파일 열기 실패:", error);
-                      alert("PPTX 파일을 열 수 없습니다.");
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-200 ${isDarkMode
-                    ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20 hover:border-rose-500/40'
-                    : 'bg-rose-50 text-rose-600 border border-rose-200 hover:bg-rose-100'
-                    }`}
-                >
-                  <Presentation className="w-3 h-3" />
-                  PPTX
-                </button>
-              )}
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="pill-badge bg-slate-100 text-slate-700">{meta.label}</span>
+              {priority ? <span className="pill-badge bg-blue-100 text-blue-700">최근 생성</span> : null}
             </div>
-
-            {/* Status & Type Badges */}
-            <div className="flex items-center gap-2">
-              <span className={`px-3 py-1.5 rounded-lg text-xs font-medium bg-gradient-to-r ${config.gradient} text-white shadow-sm`}>
-                {config.shortLabel}
+            <p className="mt-3 truncate text-xl font-bold tracking-[-0.04em] text-slate-900">{doc.title}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500">
+              <span className="inline-flex items-center gap-1">
+                <Clock3 className="h-4 w-4" />
+                {formatDate(doc.created_at)}
               </span>
-              <span className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-emerald-500/90 text-white shadow-sm">
-                <CheckCircle2 className="w-3 h-3" />
-                완료
+              <span className="inline-flex items-center gap-1 text-emerald-700">
+                <CheckCircle2 className="h-4 w-4" />
+                생성 완료
               </span>
             </div>
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          {doc.has_json ? (
+            <button onClick={() => onViewContent(doc, "json")} className="secondary-button !rounded-full !px-4 !py-2">
+              <FileJson2 className="h-4 w-4" />
+              JSON
+            </button>
+          ) : null}
+          {doc.has_md ? (
+            <button onClick={() => onViewContent(doc, "md")} className="secondary-button !rounded-full !px-4 !py-2">
+              <Code2 className="h-4 w-4" />
+              마크다운
+            </button>
+          ) : null}
+          {doc.has_pptx ? (
+            <button
+              onClick={async () => {
+                try {
+                  await api.openPptxFile(doc.id);
+                } catch (error) {
+                  console.error("PPTX 파일을 열지 못했습니다.", error);
+                  alert("PPTX 파일을 열지 못했습니다.");
+                }
+              }}
+              className="brand-button !rounded-full !px-4 !py-2"
+            >
+              <Presentation className="h-4 w-4" />
+              PPTX 열기
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
   );
 }
 
-// Loading State Component
-function LoadingState({ isDarkMode }: { isDarkMode: boolean }) {
+function LoadingState() {
   return (
-    <div className="flex flex-col items-center justify-center py-24">
-      <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-violet-500 to-cyan-500 rounded-full blur-2xl opacity-40 animate-pulse" />
-        <Loader2 className={`relative w-12 h-12 animate-spin ${isDarkMode ? 'text-white' : 'text-slate-700'}`} />
-      </div>
-      <p className={`mt-6 text-sm font-medium ${isDarkMode ? 'text-white/40' : 'text-slate-500'}`}>
-        문서를 불러오는 중...
-      </p>
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <Loader2 className="h-10 w-10 animate-spin text-slate-400" />
+      <p className="mt-4 text-sm text-slate-500">문서를 불러오는 중입니다.</p>
     </div>
   );
 }
 
-// Empty State Component
-function EmptyState({ message, subMessage, isDarkMode }: { message: string; subMessage: string; isDarkMode: boolean }) {
+function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className={`relative overflow-hidden rounded-3xl ${isDarkMode ? 'bg-white/[0.02] border border-white/[0.06]' : 'bg-white border border-slate-200'}`}>
-      {/* Background Gradient */}
-      <div className="absolute inset-0 bg-gradient-to-br from-violet-500/[0.03] via-transparent to-cyan-500/[0.03]" />
-
-      <div className="relative flex flex-col items-center justify-center py-20 px-6">
-        <div className="relative mb-6">
-          <div className="absolute inset-0 bg-gradient-to-r from-violet-500/20 to-cyan-500/20 rounded-3xl blur-2xl animate-pulse" />
-          <div className={`relative p-6 rounded-3xl ${isDarkMode ? 'bg-white/[0.03] border border-white/[0.06]' : 'bg-slate-50 border border-slate-200'}`}>
-            <FolderOpen className={`w-12 h-12 ${isDarkMode ? 'text-white/30' : 'text-slate-400'}`} />
-          </div>
-        </div>
-        <p className={`text-lg font-medium mb-2 ${isDarkMode ? 'text-white/60' : 'text-slate-600'}`}>{message}</p>
-        <p className={`text-sm ${isDarkMode ? 'text-white/30' : 'text-slate-400'}`}>{subMessage}</p>
-      </div>
+    <div className="surface-muted flex flex-col items-center justify-center rounded-[28px] px-6 py-24 text-center">
+      <FolderOpen className="h-12 w-12 text-slate-300" />
+      <p className="mt-4 text-xl font-semibold tracking-tight text-slate-800">{title}</p>
+      <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">{description}</p>
     </div>
   );
 }
 
-// Content Viewer Modal Component
-function ContentViewerModal({
-  contentViewer,
-  onClose,
-  isDarkMode
-}: {
-  contentViewer: ContentViewerState;
-  onClose: () => void;
-  isDarkMode: boolean;
-}) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+function ContentViewerModal({ viewer, onClose }: { viewer: ViewerState; onClose: () => void }) {
+  let parsedJson: unknown = {};
+  if (viewer.format === "json" && viewer.content) {
+    try {
+      parsedJson = JSON.parse(viewer.content);
+    } catch {
+      parsedJson = { error: viewer.content };
+    }
+  }
 
-      {/* Modal */}
-      <div className={`relative w-full max-w-5xl max-h-[90vh] flex flex-col rounded-3xl shadow-2xl overflow-hidden ${isDarkMode ? 'bg-[#0d0d12] border border-white/[0.08]' : 'bg-white border border-slate-200'
-        }`}>
-        {/* Header */}
-        <div className={`flex items-center justify-between p-5 border-b ${isDarkMode ? 'border-white/[0.06]' : 'border-slate-200'}`}>
-          <div className="flex items-center gap-3">
-            <h2 className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-slate-900'}`}>
-              {contentViewer.docTitle}
-            </h2>
-            <span className={`px-3 py-1 rounded-lg text-xs font-medium ${contentViewer.format === "json"
-              ? isDarkMode ? "bg-blue-500/15 text-blue-400 border border-blue-500/30" : "bg-blue-50 text-blue-600 border border-blue-200"
-              : isDarkMode ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-emerald-50 text-emerald-600 border border-emerald-200"
-              }`}>
-              {contentViewer.format.toUpperCase()}
-            </span>
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8">
+      <button className="absolute inset-0 bg-slate-900/35 backdrop-blur-sm" onClick={onClose} aria-label="모달 닫기" />
+      <div className="glass-panel-strong relative z-10 flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-[32px]">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div className="min-w-0">
+            <p className="truncate text-lg font-semibold text-slate-900">{viewer.docTitle}</p>
+            <p className="mt-1 text-sm text-slate-500">{viewer.format.toUpperCase()} 미리보기</p>
           </div>
-          <button
-            onClick={onClose}
-            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'hover:bg-white/10 text-white/60' : 'hover:bg-slate-100 text-slate-500'}`}
-          >
-            <X className="w-5 h-5" />
+          <button onClick={onClose} className="secondary-button !rounded-full !px-4 !py-2">
+            <X className="h-4 w-4" />
+            닫기
           </button>
         </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
-          {contentViewer.loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className={`w-8 h-8 animate-spin ${isDarkMode ? 'text-white/40' : 'text-slate-400'}`} />
+        <div className="overflow-auto p-6">
+          {viewer.loading ? (
+            <div className="flex items-center justify-center py-24">
+              <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
             </div>
-          ) : contentViewer.format === "md" ? (
-            <div className={`prose prose-lg max-w-none ${isDarkMode ? 'prose-invert' : ''}`}>
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {contentViewer.content}
-              </ReactMarkdown>
+          ) : viewer.format === "md" ? (
+            <div className="prose-modern">
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>{viewer.content}</ReactMarkdown>
             </div>
           ) : (
-            <div className={`rounded-xl p-4 overflow-x-auto ${isDarkMode ? 'bg-[#08080c] border border-white/[0.06]' : 'bg-slate-50 border border-slate-200'}`}>
-              <JsonViewer data={JSON.parse(contentViewer.content)} isDarkMode={isDarkMode} />
+            <div className="surface-muted overflow-x-auto rounded-[28px] p-5">
+              <JsonViewer data={parsedJson} />
             </div>
           )}
         </div>
@@ -686,104 +455,83 @@ function ContentViewerModal({
   );
 }
 
-// JSON Viewer Component
-function JsonViewer({ data, isDarkMode, depth = 0 }: { data: unknown; isDarkMode: boolean; depth?: number }) {
+function JsonViewer({ data }: { data: unknown }) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  const toggleCollapse = (key: string) => {
-    setCollapsed(prev => ({ ...prev, [key]: !prev[key] }));
-  };
+  function toggleCollapse(key: string) {
+    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
-  const renderValue = (value: unknown, key: string, currentDepth: number): React.ReactNode => {
-    const textColor = isDarkMode ? {
-      null: 'text-slate-500',
-      boolean: 'text-amber-400',
-      number: 'text-cyan-400',
-      string: 'text-emerald-400',
-      key: 'text-blue-400',
-      bracket: 'text-slate-500'
-    } : {
-      null: 'text-slate-400',
-      boolean: 'text-amber-600',
-      number: 'text-cyan-600',
-      string: 'text-emerald-600',
-      key: 'text-blue-600',
-      bracket: 'text-slate-400'
+  function renderValue(value: unknown, key: string): React.ReactNode {
+    const palette = {
+      null: "text-slate-400",
+      boolean: "text-amber-700",
+      number: "text-sky-700",
+      string: "text-emerald-700",
+      property: "text-blue-700",
+      bracket: "text-slate-500",
     };
 
-    if (value === null) {
-      return <span className={textColor.null}>null</span>;
-    }
-    if (typeof value === "boolean") {
-      return <span className={textColor.boolean}>{value.toString()}</span>;
-    }
-    if (typeof value === "number") {
-      return <span className={textColor.number}>{value}</span>;
-    }
-    if (typeof value === "string") {
-      return <span className={textColor.string}>&quot;{value}&quot;</span>;
-    }
+    if (value === null) return <span className={palette.null}>null</span>;
+    if (typeof value === "boolean") return <span className={palette.boolean}>{String(value)}</span>;
+    if (typeof value === "number") return <span className={palette.number}>{value}</span>;
+    if (typeof value === "string") return <span className={palette.string}>&quot;{value}&quot;</span>;
+
     if (Array.isArray(value)) {
-      if (value.length === 0) {
-        return <span className={textColor.bracket}>[]</span>;
-      }
+      if (!value.length) return <span className={palette.bracket}>[]</span>;
       const isCollapsed = collapsed[key];
       return (
         <div className="inline">
-          <button onClick={() => toggleCollapse(key)} className={`${textColor.bracket} hover:text-white mr-1`}>
-            {isCollapsed ? "▶" : "▼"}
+          <button onClick={() => toggleCollapse(key)} className="mr-1 text-slate-500 hover:text-slate-900">
+            {isCollapsed ? ">" : "v"}
           </button>
-          <span className={textColor.bracket}>[</span>
-          <span className="text-violet-400 text-xs ml-1">{value.length} items</span>
-          {!isCollapsed && (
-            <div className={`ml-4 border-l ${isDarkMode ? 'border-white/10' : 'border-slate-200'} pl-3`}>
-              {value.map((item, idx) => (
-                <div key={idx} className="my-1">
-                  {renderValue(item, `${key}-${idx}`, currentDepth + 1)}
-                  {idx < value.length - 1 && <span className={textColor.bracket}>,</span>}
+          <span className={palette.bracket}>[</span>
+          <span className="ml-1 text-xs text-slate-400">{value.length}개 항목</span>
+          {!isCollapsed ? (
+            <div className="ml-4 border-l border-slate-200 pl-3">
+              {value.map((item, index) => (
+                <div key={`${key}-${index}`} className="my-1">
+                  {renderValue(item, `${key}-${index}`)}
+                  {index < value.length - 1 ? <span className={palette.bracket}>,</span> : null}
                 </div>
               ))}
             </div>
-          )}
-          <span className={textColor.bracket}>]</span>
+          ) : null}
+          <span className={palette.bracket}>]</span>
         </div>
       );
     }
+
     if (typeof value === "object") {
       const entries = Object.entries(value as Record<string, unknown>);
-      if (entries.length === 0) {
-        return <span className={textColor.bracket}>{"{}"}</span>;
-      }
+      if (!entries.length) return <span className={palette.bracket}>{"{}"}</span>;
       const isCollapsed = collapsed[key];
       return (
         <div className="inline">
-          <button onClick={() => toggleCollapse(key)} className={`${textColor.bracket} hover:text-white mr-1`}>
-            {isCollapsed ? "▶" : "▼"}
+          <button onClick={() => toggleCollapse(key)} className="mr-1 text-slate-500 hover:text-slate-900">
+            {isCollapsed ? ">" : "v"}
           </button>
-          <span className={textColor.bracket}>{"{"}</span>
-          <span className="text-violet-400 text-xs ml-1">{entries.length} keys</span>
-          {!isCollapsed && (
-            <div className={`ml-4 border-l ${isDarkMode ? 'border-white/10' : 'border-slate-200'} pl-3`}>
-              {entries.map(([k, v], idx) => (
-                <div key={k} className="my-1">
-                  <span className={textColor.key}>&quot;{k}&quot;</span>
-                  <span className={textColor.bracket}>: </span>
-                  {renderValue(v, `${key}-${k}`, currentDepth + 1)}
-                  {idx < entries.length - 1 && <span className={textColor.bracket}>,</span>}
+          <span className={palette.bracket}>{"{"}</span>
+          <span className="ml-1 text-xs text-slate-400">{entries.length}개 필드</span>
+          {!isCollapsed ? (
+            <div className="ml-4 border-l border-slate-200 pl-3">
+              {entries.map(([entryKey, entryValue], index) => (
+                <div key={`${key}-${entryKey}`} className="my-1">
+                  <span className={palette.property}>&quot;{entryKey}&quot;</span>
+                  <span className={palette.bracket}>: </span>
+                  {renderValue(entryValue, `${key}-${entryKey}`)}
+                  {index < entries.length - 1 ? <span className={palette.bracket}>,</span> : null}
                 </div>
               ))}
             </div>
-          )}
-          <span className={textColor.bracket}>{"}"}</span>
+          ) : null}
+          <span className={palette.bracket}>{"}"}</span>
         </div>
       );
     }
-    return <span className={textColor.null}>{String(value)}</span>;
-  };
 
-  return (
-    <div className="font-mono text-sm leading-relaxed">
-      {renderValue(data, "root", depth)}
-    </div>
-  );
+    return <span className={palette.null}>{String(value)}</span>;
+  }
+
+  return <div className="font-mono text-sm leading-7">{renderValue(data, "root")}</div>;
 }

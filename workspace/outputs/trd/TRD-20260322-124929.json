@@ -1,0 +1,363 @@
+{
+  "id": "TRD-20260322-328d",
+  "title": "시스템 모니터링 웹 대시보드 - 기술 요구사항 문서 (TRD)",
+  "executive_summary": "본 시스템은 Python FastAPI 백엔드와 Vanilla JavaScript 프론트엔드를 기반으로 구축되며, psutil 라이브러리를 활용하여 서버의 CPU, 메모리, 디스크, 네트워크 트래픽 데이터를 수집하고 REST API를 통해 전달하는 시스템 모니터링 웹 대시보드입니다.\n\n아키텍처는 프레젠테이션, API, 시스템 데이터 수집의 3계층 레이어드 구조를 채택하여 각 계층의 독립적인 유지보수와 확장이 가능하도록 설계했습니다. 프론트엔드는 별도의 프레임워크 의존 없이 Fetch API 기반 3초 간격 폴링 방식으로 준실시간 데이터를 갱신하며, CSS Grid와 Custom Properties를 활용한 다크 테마 대시보드로 운영자의 시인성을 확보했습니다. Docker Compose를 통해 프론트엔드와 백엔드를 컨테이너화하여 환경 간 배포 일관성을 보장합니다.\n\n기술 선정 시 WebSocket 대신 폴링 방식을 채택하여 구현 복잡도를 낮추면서도 3초 주기의 충분한 갱신 빈도를 확보했으며, 외부 프레임워크 의존을 최소화하여 경량화와 장기 유지보수성을 동시에 달성했습니다. 총 8개 핵심 기능과 4개 비기능 요구사항을 충족하는 구조로 설계되었습니다.\n\n예상되는 기술 리스크로는 폴링 방식 특성상 동시 모니터링 클라이언트 증가 시 API 서버 부하가 있으며, 이에 대비하여 컨테이너 기반 수평 확장 구조와 폴링 주기 동적 조절 메커니즘을 통해 대응할 계획입니다.",
+  "technology_stack": [
+    {
+      "category": "Frontend",
+      "technologies": [
+        "HTML5",
+        "CSS3 (Custom Properties)",
+        "Vanilla JavaScript (ES6+)",
+        "Chart.js 4.4"
+      ],
+      "rationale": "별도 빌드 도구 없이 즉시 실행 가능하며, Chart.js는 라인/파이 차트와 실시간 업데이트를 경량으로 지원"
+    },
+    {
+      "category": "Backend",
+      "technologies": [
+        "Python 3.11+",
+        "FastAPI 0.115",
+        "Uvicorn 0.32",
+        "psutil 6.1"
+      ],
+      "rationale": "비동기 네이티브 지원으로 200ms 이내 응답 보장, psutil은 크로스플랫폼 시스템 정보 수집 표준 라이브러리"
+    },
+    {
+      "category": "API Communication",
+      "technologies": [
+        "REST API (JSON)",
+        "Fetch API (Polling 3초 간격)"
+      ],
+      "rationale": "PRD 가정사항에 REST 명시, 3초 폴링은 구현 단순성과 준실시간 요구사항을 균형 있게 충족"
+    },
+    {
+      "category": "Styling & Layout",
+      "technologies": [
+        "CSS Grid",
+        "CSS Custom Properties (Dark Theme)",
+        "CSS Media Queries"
+      ],
+      "rationale": "2x2 그리드 레이아웃과 반응형 브레이크포인트를 프레임워크 없이 네이티브로 구현, 다크 테마는 CSS 변수로 일괄 관리"
+    },
+    {
+      "category": "Infrastructure",
+      "technologies": [
+        "Docker 24+",
+        "Docker Compose 2.x",
+        "Uvicorn (ASGI Server)"
+      ],
+      "rationale": "컨테이너 기반 배포로 클라우드 환경 일관성 확보, 단일 서버 구성으로 오케스트레이션 불필요"
+    },
+    {
+      "category": "Development & Quality",
+      "technologies": [
+        "pytest 8.x",
+        "httpx (AsyncClient)",
+        "ESLint"
+      ],
+      "rationale": "FastAPI 비동기 엔드포인트 테스트에 pytest+httpx 조합이 최적, ESLint로 프론트엔드 코드 품질 확보"
+    }
+  ],
+  "system_architecture": {
+    "overview": "3계층 아키텍처 기반의 시스템 모니터링 대시보드입니다. Vanilla JavaScript 프론트엔드가 FastAPI 백엔드로부터 3초 간격 폴링으로 시스템 메트릭을 수집하며, psutil을 통해 서버의 CPU, 메모리, 디스크, 네트워크 데이터를 실시간으로 시각화합니다. Docker Compose를 통해 프론트엔드와 백엔드를 컨테이너화하여 배포 일관성을 보장합니다.",
+    "architecture_style": "Layered Architecture with Polling-based Real-time Updates",
+    "layers": [
+      {
+        "name": "Presentation Layer",
+        "description": "사용자 인터페이스 렌더링, 차트 시각화, 주기적 데이터 폴링을 담당",
+        "components": [
+          {
+            "name": "Dashboard SPA",
+            "type": "frontend",
+            "description": "Vanilla JavaScript(ES6+) 기반 싱글 페이지 대시보드 애플리케이션",
+            "responsibilities": [
+              "CSS Grid 기반 반응형 대시보드 레이아웃 렌더링",
+              "CSS Custom Properties 기반 다크 테마 UI 적용",
+              "Fetch API를 통한 3초 간격 폴링 데이터 갱신",
+              "Chart.js 4.4를 활용한 CPU, 메모리, 네트워크 실시간 차트 렌더링",
+              "디스크 사용량 게이지/바 시각화"
+            ],
+            "dependencies": [
+              "API Server"
+            ],
+            "interfaces": [
+              "REST API (JSON)"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "API Layer",
+        "description": "시스템 메트릭 수집 비즈니스 로직과 RESTful API 엔드포인트를 제공",
+        "components": [
+          {
+            "name": "API Server",
+            "type": "backend",
+            "description": "FastAPI 0.115 기반 RESTful API 서버, Uvicorn ASGI 서버로 구동",
+            "responsibilities": [
+              "시스템 메트릭 수집 API 엔드포인트 제공",
+              "요청 유효성 검증 및 CORS 처리",
+              "응답 데이터 직렬화 (JSON)",
+              "API 에러 핸들링 및 상태 코드 관리"
+            ],
+            "dependencies": [
+              "Metrics Collector"
+            ],
+            "interfaces": [
+              "REST API (JSON)"
+            ]
+          },
+          {
+            "name": "Metrics Collector",
+            "type": "backend_service",
+            "description": "psutil 6.1 기반 시스템 메트릭 수집 서비스 모듈",
+            "responsibilities": [
+              "CPU 사용률 수집 (코어별/전체)",
+              "메모리 사용률 수집 (총용량, 사용량, 사용률)",
+              "디스크 사용량 수집 (파티션별 용량, 사용률)",
+              "네트워크 트래픽 수집 (송수신 바이트, 패킷)",
+              "시스템 기본 정보 수집 (호스트명, OS, 업타임)"
+            ],
+            "dependencies": [
+              "OS Kernel (via psutil)"
+            ],
+            "interfaces": [
+              "Python Internal API"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Infrastructure Layer",
+        "description": "컨테이너 오케스트레이션 및 서비스 배포 환경을 관리",
+        "components": [
+          {
+            "name": "Docker Compose Orchestrator",
+            "type": "infrastructure",
+            "description": "Docker Compose 2.x 기반 멀티 컨테이너 오케스트레이션",
+            "responsibilities": [
+              "프론트엔드 정적 파일 서빙 컨테이너 관리",
+              "백엔드 API 서버 컨테이너 관리",
+              "컨테이너 간 네트워크 구성",
+              "환경 변수 및 포트 매핑 관리"
+            ],
+            "dependencies": [],
+            "interfaces": [
+              "Docker CLI",
+              "docker-compose.yml"
+            ]
+          },
+          {
+            "name": "Frontend Container",
+            "type": "container",
+            "description": "Nginx 또는 경량 HTTP 서버를 통한 정적 파일 서빙",
+            "responsibilities": [
+              "HTML/CSS/JS 정적 파일 서빙",
+              "API 서버로의 리버스 프록시 (CORS 우회)"
+            ],
+            "dependencies": [
+              "Backend Container"
+            ],
+            "interfaces": [
+              "HTTP (80/443)"
+            ]
+          },
+          {
+            "name": "Backend Container",
+            "type": "container",
+            "description": "Uvicorn 0.32 ASGI 서버로 FastAPI 앱 구동",
+            "responsibilities": [
+              "FastAPI 애플리케이션 호스팅",
+              "호스트 시스템 메트릭 접근 (/proc, /sys 마운트)"
+            ],
+            "dependencies": [],
+            "interfaces": [
+              "HTTP (8000)"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Quality Assurance Layer",
+        "description": "테스트 자동화 및 코드 품질 관리",
+        "components": [
+          {
+            "name": "Backend Test Suite",
+            "type": "testing",
+            "description": "pytest 8.x 및 httpx AsyncClient 기반 API 테스트",
+            "responsibilities": [
+              "API 엔드포인트 통합 테스트",
+              "메트릭 수집 로직 단위 테스트",
+              "응답 스키마 검증 테스트",
+              "에러 핸들링 시나리오 테스트"
+            ],
+            "dependencies": [
+              "API Server"
+            ],
+            "interfaces": [
+              "pytest CLI"
+            ]
+          },
+          {
+            "name": "Frontend Linter",
+            "type": "quality",
+            "description": "ESLint 기반 JavaScript 코드 품질 검사",
+            "responsibilities": [
+              "JavaScript 코드 스타일 일관성 검증",
+              "잠재적 버그 패턴 탐지"
+            ],
+            "dependencies": [],
+            "interfaces": [
+              "ESLint CLI"
+            ]
+          }
+        ]
+      }
+    ],
+    "data_flow": "1) 대시보드 초기 로드 → 브라우저가 정적 파일(HTML/CSS/JS) 요청 → Frontend Container(Nginx)가 서빙 2) 메트릭 폴링 사이클 → JavaScript Fetch API가 3초 간격으로 REST API 호출 → FastAPI 엔드포인트 수신 → Metrics Collector가 psutil로 OS 커널에서 CPU/메모리/디스크/네트워크 데이터 수집 → JSON 직렬화하여 응답 반환 3) 차트 갱신 → 프론트엔드가 JSON 응답 파싱 → Chart.js 인스턴스에 새 데이터 포인트 추가 → 실시간 차트 리렌더링 4) Docker 환경 → Frontend Container가 Nginx 리버스 프록시로 /api/* 요청을 Backend Container(Uvicorn:8000)로 전달 → 단일 오리진으로 CORS 이슈 해소",
+    "deployment_diagram": ""
+  },
+  "database_design": {
+    "database_type": "In-Memory Store",
+    "recommended_engine": "Python collections (deque) / Redis (optional for horizontal scaling)",
+    "entities": [
+      {
+        "name": "metric_snapshots",
+        "description": "3초 간격으로 수집되는 시스템 메트릭 스냅샷. CPU, 메모리, 네트워크 등 시계열 데이터의 단일 시점 기록.",
+        "attributes": [
+          "id: INTEGER PRIMARY KEY AUTOINCREMENT (논리적 식별자, 인메모리에서는 deque index 활용)",
+          "timestamp: TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP (수집 시각)",
+          "cpu_usage_percent: DECIMAL(5, 2) NOT NULL CHECK (cpu_usage_percent >= 0 AND cpu_usage_percent <= 100) (CPU 사용률 %)",
+          "memory_usage_percent: DECIMAL(5, 2) NOT NULL CHECK (memory_usage_percent >= 0 AND memory_usage_percent <= 100) (메모리 사용률 %)",
+          "memory_total_bytes: BIGINT NOT NULL (전체 메모리 용량 bytes)",
+          "memory_used_bytes: BIGINT NOT NULL (사용 중 메모리 bytes)",
+          "memory_available_bytes: BIGINT NOT NULL (가용 메모리 bytes)",
+          "network_bytes_sent: BIGINT NOT NULL DEFAULT 0 (누적 송신 바이트)",
+          "network_bytes_recv: BIGINT NOT NULL DEFAULT 0 (누적 수신 바이트)",
+          "network_bytes_sent_per_sec: DECIMAL(18, 2) NOT NULL DEFAULT 0 (초당 송신 바이트, 이전 스냅샷 대비 계산)",
+          "network_bytes_recv_per_sec: DECIMAL(18, 2) NOT NULL DEFAULT 0 (초당 수신 바이트, 이전 스냅샷 대비 계산)"
+        ],
+        "primary_key": "id",
+        "relationships": []
+      },
+      {
+        "name": "disk_partitions",
+        "description": "디스크 파티션별 사용량 정보. 각 스냅샷 시점의 드라이브별 용량/잔여 공간을 기록.",
+        "attributes": [
+          "id: INTEGER PRIMARY KEY AUTOINCREMENT",
+          "snapshot_id: INTEGER NOT NULL REFERENCES metric_snapshots(id) ON DELETE CASCADE (소속 스냅샷)",
+          "device: VARCHAR(100) NOT NULL (드라이브/파티션 이름, e.g., 'C:', '/dev/sda1')",
+          "mountpoint: VARCHAR(255) NOT NULL (마운트 경로, e.g., '/', 'C:\\')",
+          "fstype: VARCHAR(50) (파일시스템 타입, e.g., 'NTFS', 'ext4')",
+          "total_bytes: BIGINT NOT NULL (파티션 전체 용량 bytes)",
+          "used_bytes: BIGINT NOT NULL (사용 중 bytes)",
+          "free_bytes: BIGINT NOT NULL (잔여 공간 bytes)",
+          "usage_percent: DECIMAL(5, 2) NOT NULL CHECK (usage_percent >= 0 AND usage_percent <= 100) (사용률 %)"
+        ],
+        "primary_key": "id",
+        "relationships": [
+          "N:1 metric_snapshots (snapshot_id -> metric_snapshots.id)"
+        ]
+      }
+    ],
+    "indexing_strategy": "인메모리 deque 구조 자체가 시간 순서로 정렬되어 있으므로 별도 인덱싱 불필요. 향후 RDBMS 마이그레이션 시 timestamp DESC 인덱스를 metric_snapshots에, (snapshot_id, device) 복합 인덱스를 disk_partitions에 적용. 최근 N분 데이터 조회가 주요 쿼리 패턴이므로 시간 기반 인덱스가 핵심.",
+    "partitioning_strategy": "인메모리 저장이므로 파티셔닝 불필요. 향후 영속성 도입 시 metric_snapshots 테이블에 timestamp 기준 일별/주별 파티셔닝(RANGE PARTITION) 적용. 30일 이상 된 파티션은 자동 DROP하여 스토리지 관리. TimescaleDB hypertable 도입도 고려 가능."
+  },
+  "api_specification": {
+    "base_url": "/api/v1",
+    "authentication_method": "JWT",
+    "endpoints": [],
+    "common_headers": {},
+    "error_handling": ""
+  },
+  "security_requirements": [
+    {
+      "category": "Authentication",
+      "requirement": "사용자 인증 체계 구축",
+      "implementation": "JWT 기반 토큰 인증",
+      "priority": "HIGH"
+    },
+    {
+      "category": "Authorization",
+      "requirement": "역할 기반 접근 제어(RBAC)",
+      "implementation": "사용자 역할별 권한 관리",
+      "priority": "HIGH"
+    },
+    {
+      "category": "Data Protection",
+      "requirement": "민감 데이터 암호화",
+      "implementation": "AES-256 암호화 적용",
+      "priority": "HIGH"
+    }
+  ],
+  "performance_requirements": [
+    {
+      "metric": "성능",
+      "target_value": "대시보드 초기 로딩 3초 이내, API 응답 200ms 이내, 차트 렌더링 60fps 유지. 1시간 연속 구동 시 브라우저 메모리 200MB 이하.",
+      "measurement_method": "성능 테스트 도구 활용",
+      "related_component": null
+    }
+  ],
+  "infrastructure_requirements": [
+    {
+      "category": "Compute",
+      "specification": "Application Server (4 vCPU, 16GB RAM)",
+      "quantity": "2",
+      "purpose": "웹 애플리케이션 서버",
+      "estimated_cost": null
+    },
+    {
+      "category": "Database",
+      "specification": "Managed Database (8 vCPU, 32GB RAM, 500GB SSD)",
+      "quantity": "1 (Primary-Replica)",
+      "purpose": "주 데이터베이스",
+      "estimated_cost": null
+    },
+    {
+      "category": "Storage",
+      "specification": "Object Storage (S3/GCS)",
+      "quantity": "500GB",
+      "purpose": "파일 저장소",
+      "estimated_cost": null
+    },
+    {
+      "category": "Network",
+      "specification": "Load Balancer + CDN",
+      "quantity": "1",
+      "purpose": "트래픽 분산 및 정적 콘텐츠 배포",
+      "estimated_cost": null
+    }
+  ],
+  "technical_risks": [
+    {
+      "description": "외부 시스템 연동 복잡성",
+      "level": "MEDIUM",
+      "impact": "연동 인터페이스 변경 시 추가 개발 필요",
+      "mitigation": "사전 인터페이스 정의 및 Mock 서버 활용",
+      "contingency": "연동 범위 축소 또는 단계별 구현"
+    },
+    {
+      "description": "대용량 데이터 처리 성능",
+      "level": "MEDIUM",
+      "impact": "응답 시간 지연 및 시스템 과부하",
+      "mitigation": "캐싱 전략 및 비동기 처리 적용",
+      "contingency": "데이터 처리 범위 조정"
+    },
+    {
+      "description": "보안 취약점 발생 가능성",
+      "level": "HIGH",
+      "impact": "데이터 유출 및 서비스 중단",
+      "mitigation": "보안 코드 리뷰 및 취약점 스캔 정기 수행",
+      "contingency": "보안 패치 즉시 적용 체계 구축"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "status": "DRAFT",
+    "created_at": "2026-03-22T12:49:29.310784",
+    "updated_at": null,
+    "source_prd_id": "PRD-20260322-124000",
+    "source_prd_title": "시스템 모니터링 웹 대시보드"
+  }
+}

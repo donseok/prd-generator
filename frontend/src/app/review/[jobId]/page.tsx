@@ -1,23 +1,21 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter, useParams } from "next/navigation";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import Link from "next/link";
+import { useMemo, useState, type ReactNode } from "react";
+import { useParams, useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeft,
-  Layers,
   AlertCircle,
-  CheckCircle,
-  XCircle,
-  Edit3,
-  Loader2,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
-  Send,
+  Edit3,
   FileText,
+  Loader2,
+  Send,
+  XCircle,
 } from "lucide-react";
-import { api, ReviewItem } from "@/lib/api";
+import { api, type ReviewItem } from "@/lib/api";
+import { AppShell, HeroPanel, MetricCard, SectionHeader, TopBar } from "@/components/app-shell";
 
 type Decision = "approve" | "reject" | "modify";
 
@@ -27,6 +25,14 @@ interface ReviewDecision {
   notes?: string;
   modifiedContent?: Record<string, unknown>;
 }
+
+const ISSUE_LABELS: Record<string, { label: string; tone: string }> = {
+  low_confidence: { label: "낮은 신뢰도", tone: "bg-amber-100 text-amber-700" },
+  ambiguous: { label: "모호한 표현", tone: "bg-orange-100 text-orange-700" },
+  incomplete: { label: "불완전한 정보", tone: "bg-rose-100 text-rose-700" },
+  conflict: { label: "충돌 가능성", tone: "bg-violet-100 text-violet-700" },
+  missing_info: { label: "누락 정보", tone: "bg-sky-100 text-sky-700" },
+};
 
 export default function ReviewPage() {
   const router = useRouter();
@@ -44,15 +50,8 @@ export default function ReviewPage() {
   });
 
   const submitDecisionMutation = useMutation({
-    mutationFn: async (decision: ReviewDecision) => {
-      return api.submitReviewDecision(
-        jobId,
-        decision.itemId,
-        decision.decision,
-        decision.notes,
-        decision.modifiedContent
-      );
-    },
+    mutationFn: async (decision: ReviewDecision) =>
+      api.submitReviewDecision(jobId, decision.itemId, decision.decision, decision.notes, decision.modifiedContent),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["review", jobId] });
     },
@@ -65,168 +64,158 @@ export default function ReviewPage() {
     },
   });
 
-  const setDecision = (itemId: string, decision: Decision, notes?: string) => {
-    const newDecisions = new Map(decisions);
-    newDecisions.set(itemId, { itemId, decision, notes });
-    setDecisions(newDecisions);
-  };
+  const pendingItems = reviewData?.pending_items ?? [];
+  const resolvedCount = reviewData?.resolved_items?.length ?? 0;
+  const totalCount = pendingItems.length + resolvedCount;
 
-  const handleSubmitAll = async () => {
-    if (decisions.size === 0) return;
+  const completionRate = useMemo(() => {
+    if (!totalCount) return 0;
+    return Math.round((resolvedCount / totalCount) * 100);
+  }, [resolvedCount, totalCount]);
+
+  function setDecision(itemId: string, decision: Decision, notes?: string) {
+    setDecisions((current) => {
+      const next = new Map(current);
+      next.set(itemId, { itemId, decision, notes });
+      return next;
+    });
+  }
+
+  async function handleSubmitAll() {
+    if (!decisions.size) return;
 
     setSubmitting(true);
     try {
-      // Submit all decisions
       for (const decision of Array.from(decisions.values())) {
         await submitDecisionMutation.mutateAsync(decision);
       }
       setDecisions(new Map());
-    } catch (err) {
-      console.error("Failed to submit decisions:", err);
+    } catch (submitError) {
+      console.error("리뷰 제출에 실패했습니다.", submitError);
     } finally {
       setSubmitting(false);
     }
-  };
+  }
 
-  const handleCompleteReview = async () => {
+  function handleCompleteReview() {
     if (reviewData && reviewData.pending_count > 0) {
-      alert("모든 항목을 검토해야 합니다.");
+      alert("남아 있는 리뷰 항목을 먼저 처리해 주세요.");
       return;
     }
     completeReviewMutation.mutate();
-  };
-
-  const pendingItems = reviewData?.pending_items || [];
-  const resolvedCount = reviewData?.resolved_items?.length || 0;
-  const totalCount = pendingItems.length + resolvedCount;
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header */}
-      <header className="border-b border-slate-700 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link
-                href="/"
-                className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
-              >
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-gradient-to-br from-orange-500 to-amber-500 rounded-lg">
-                  <Layers className="w-5 h-5" />
-                </div>
-                <div>
-                  <h1 className="text-lg font-bold">PM 검토</h1>
-                  <p className="text-xs text-slate-400">
-                    {resolvedCount}/{totalCount} 완료
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {pendingItems.length === 0 && resolvedCount > 0 && (
-              <button
-                onClick={handleCompleteReview}
-                disabled={completeReviewMutation.isPending}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-500 rounded-lg transition-colors disabled:opacity-50"
-              >
-                {completeReviewMutation.isPending ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : (
-                  <CheckCircle className="w-4 h-4" />
-                )}
-                검토 완료
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-8">
-        {isLoading ? (
-          <div className="text-center py-12">
-            <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-orange-400" />
-            <p className="text-slate-400">검토 항목 로딩 중...</p>
-          </div>
-        ) : error ? (
-          <div className="text-center py-12">
-            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
-            <p className="text-red-400">검토 항목을 불러올 수 없습니다</p>
-          </div>
-        ) : pendingItems.length === 0 ? (
-          <div className="text-center py-12">
-            <CheckCircle className="w-12 h-12 mx-auto mb-4 text-green-400" />
-            <p className="text-xl font-semibold text-green-400 mb-2">
-              모든 검토가 완료되었습니다
-            </p>
-            <p className="text-slate-400 mb-6">
-              PRD 생성을 완료하려면 상단의 &quot;검토 완료&quot; 버튼을 클릭하세요.
-            </p>
+    <AppShell header={<TopBar title="PM 리뷰" subtitle={`${resolvedCount} / ${totalCount}개 처리`} href="/" />}>
+      <HeroPanel
+        kicker="사람 검토"
+        title="판단이 필요한 요구사항을 집중 검토하는 단계입니다"
+        description="애매하거나 신뢰도가 낮은 요구사항만 따로 모아 카드 단위로 검토할 수 있게 다시 구성했습니다. 승인, 반려, 수정 요청을 빠르게 선택하고 메모를 남긴 뒤 최종 PRD로 이어집니다."
+        actions={
+          pendingItems.length === 0 && resolvedCount > 0 ? (
             <button
               onClick={handleCompleteReview}
               disabled={completeReviewMutation.isPending}
-              className="inline-flex items-center gap-2 px-6 py-3 bg-green-600 hover:bg-green-500 rounded-lg transition-colors disabled:opacity-50"
+              className="brand-button disabled:opacity-50"
             >
-              {completeReviewMutation.isPending ? (
-                <Loader2 className="w-5 h-5 animate-spin" />
-              ) : (
-                <FileText className="w-5 h-5" />
-              )}
-              PRD 생성 완료
+              {completeReviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              최종 PRD 열기
             </button>
+          ) : null
+        }
+        aside={
+          <div className="space-y-4">
+            <div>
+              <p className="data-label">완료율</p>
+              <p className="mt-2 text-4xl font-semibold tracking-tight text-slate-900">{completionRate}%</p>
+            </div>
+            <div className="h-3 overflow-hidden rounded-full bg-slate-200">
+              <div className="h-full rounded-full" style={{ width: `${completionRate}%`, background: "var(--gradient-warm)" }} />
+            </div>
+            <div className="surface-muted p-4">
+              <p className="data-label">남은 항목</p>
+              <p className="mt-2 text-sm font-medium text-slate-700">{pendingItems.length}개</p>
+            </div>
           </div>
-        ) : (
-          <>
-            {/* Instructions */}
-            <div className="mb-6 p-4 bg-orange-500/10 border border-orange-500/30 rounded-lg">
-              <h3 className="font-medium text-orange-400 mb-2">검토 안내</h3>
-              <p className="text-sm text-slate-300">
-                아래 항목들은 신뢰도가 80% 미만이거나 추가 확인이 필요한 요구사항입니다.
-                각 항목을 검토하고 승인, 거부, 또는 수정 결정을 내려주세요.
-              </p>
-            </div>
+        }
+      />
 
-            {/* Pending Items */}
-            <div className="space-y-4">
-              {pendingItems.map((item) => (
-                <ReviewItemCard
-                  key={item.id}
-                  item={item}
-                  expanded={expandedItem === item.id}
-                  onToggle={() =>
-                    setExpandedItem(expandedItem === item.id ? null : item.id)
-                  }
-                  decision={decisions.get(item.id)}
-                  onDecision={(decision, notes) =>
-                    setDecision(item.id, decision, notes)
-                  }
-                />
-              ))}
-            </div>
+      <section className="grid gap-4 lg:grid-cols-3">
+        <MetricCard label="총 리뷰 항목" value={totalCount} note="이번 작업에 포함된 전체 검토 수" />
+        <MetricCard label="처리 완료" value={resolvedCount} note="이미 결정이 내려진 항목" accent="mint" />
+        <MetricCard label="남은 검토" value={pendingItems.length} note="지금 판단이 필요한 항목" accent="warm" />
+      </section>
 
-            {/* Submit Button */}
-            {decisions.size > 0 && (
-              <div className="mt-8 flex justify-end">
-                <button
-                  onClick={handleSubmitAll}
-                  disabled={submitting}
-                  className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {submitting ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Send className="w-5 h-5" />
-                  )}
-                  결정 제출 ({decisions.size}개)
+      {isLoading ? (
+        <FeedbackState
+          icon={<Loader2 className="h-10 w-10 animate-spin text-slate-400" />}
+          title="리뷰 항목을 불러오는 중입니다"
+          description="리뷰 보드를 준비하고 있습니다."
+        />
+      ) : error ? (
+        <FeedbackState
+          icon={<AlertCircle className="h-10 w-10 text-rose-500" />}
+          title="리뷰 항목을 불러오지 못했습니다"
+          description="API 연결 상태를 확인한 뒤 다시 시도해 주세요."
+        />
+      ) : pendingItems.length === 0 ? (
+        <FeedbackState
+          icon={<CheckCircle2 className="h-10 w-10 text-emerald-600" />}
+          title="검토할 항목이 없습니다"
+          description="아래 버튼으로 리뷰를 종료하고 최종 PRD로 이동할 수 있습니다."
+          action={
+            <button
+              onClick={handleCompleteReview}
+              disabled={completeReviewMutation.isPending}
+              className="brand-button disabled:opacity-50"
+            >
+              {completeReviewMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+              리뷰 완료
+            </button>
+          }
+        />
+      ) : (
+        <section className="section-card">
+          <SectionHeader
+            title="리뷰 보드"
+            description="각 카드에서 원문과 제안 방향을 비교하고, 결정과 메모를 바로 남길 수 있습니다."
+            action={
+              decisions.size ? (
+                <button onClick={handleSubmitAll} disabled={submitting} className="brand-button disabled:opacity-50">
+                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  결정 제출 ({decisions.size})
                 </button>
-              </div>
-            )}
-          </>
-        )}
-      </main>
-    </div>
+              ) : null
+            }
+          />
+          <div className="space-y-4">
+            {pendingItems.map((item) => (
+              <ReviewItemCard
+                key={item.id}
+                item={item}
+                expanded={expandedItem === item.id}
+                onToggle={() => setExpandedItem((current) => (current === item.id ? null : item.id))}
+                decision={decisions.get(item.id)}
+                onDecision={(decision, notes) => setDecision(item.id, decision, notes)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+    </AppShell>
+  );
+}
+
+function FeedbackState({ icon, title, description, action }: { icon: ReactNode; title: string; description: string; action?: ReactNode }) {
+  return (
+    <section className="section-card">
+      <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+        {icon}
+        <p className="mt-5 text-2xl font-semibold tracking-tight text-slate-900">{title}</p>
+        <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500">{description}</p>
+        {action ? <div className="mt-6">{action}</div> : null}
+      </div>
+    </section>
   );
 }
 
@@ -243,150 +232,114 @@ function ReviewItemCard({
   decision?: ReviewDecision;
   onDecision: (decision: Decision, notes?: string) => void;
 }) {
-  const [notes, setNotes] = useState("");
+  const [notes, setNotes] = useState(decision?.notes ?? "");
+  const issue = ISSUE_LABELS[item.issue_type] ?? { label: item.issue_type, tone: "bg-slate-100 text-slate-600" };
 
-  const issueTypeLabels: Record<string, { label: string; color: string }> = {
-    low_confidence: { label: "낮은 신뢰도", color: "text-yellow-400" },
-    ambiguous: { label: "모호함", color: "text-orange-400" },
-    incomplete: { label: "불완전", color: "text-red-400" },
-    conflict: { label: "충돌", color: "text-purple-400" },
-    missing_info: { label: "정보 부족", color: "text-blue-400" },
-  };
-
-  const issueInfo = issueTypeLabels[item.issue_type] || {
-    label: item.issue_type,
-    color: "text-slate-400",
-  };
+  const decisionTone =
+    decision?.decision === "approve"
+      ? "border-emerald-200 bg-emerald-50"
+      : decision?.decision === "reject"
+      ? "border-rose-200 bg-rose-50"
+      : decision?.decision === "modify"
+      ? "border-blue-200 bg-blue-50"
+      : "border-slate-200 bg-white/75";
 
   return (
-    <div
-      className={`rounded-xl border transition-all ${
-        decision
-          ? decision.decision === "approve"
-            ? "border-green-500/50 bg-green-500/10"
-            : decision.decision === "reject"
-            ? "border-red-500/50 bg-red-500/10"
-            : "border-blue-500/50 bg-blue-500/10"
-          : "border-slate-700 bg-slate-800/50"
-      }`}
-    >
-      {/* Header */}
-      <button
-        onClick={onToggle}
-        className="w-full p-4 flex items-start justify-between text-left"
-      >
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span
-              className={`px-2 py-0.5 rounded text-xs font-medium bg-slate-700 ${issueInfo.color}`}
-            >
-              {issueInfo.label}
-            </span>
-            <span className="text-xs text-slate-500">{item.requirement_id}</span>
+    <div className={`rounded-[28px] border p-5 transition ${decisionTone}`}>
+      <button onClick={onToggle} className="flex w-full items-start justify-between gap-4 text-left">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`pill-badge ${issue.tone}`}>{issue.label}</span>
+            <span className="pill-badge bg-slate-100 text-slate-500">{item.requirement_id}</span>
           </div>
-          <p className="font-medium">{item.description}</p>
+          <p className="mt-3 text-lg font-semibold tracking-tight text-slate-900">{item.description}</p>
         </div>
-        <div className="ml-4 flex items-center gap-2">
-          {decision && (
+        <div className="flex items-center gap-3">
+          {decision ? (
             <span
-              className={`px-2 py-1 rounded text-xs font-medium ${
+              className={`pill-badge ${
                 decision.decision === "approve"
-                  ? "bg-green-500/20 text-green-400"
+                  ? "bg-emerald-100 text-emerald-700"
                   : decision.decision === "reject"
-                  ? "bg-red-500/20 text-red-400"
-                  : "bg-blue-500/20 text-blue-400"
+                  ? "bg-rose-100 text-rose-700"
+                  : "bg-blue-100 text-blue-700"
               }`}
             >
-              {decision.decision === "approve"
-                ? "승인"
-                : decision.decision === "reject"
-                ? "거부"
-                : "수정"}
+              {decision.decision === "approve" ? "승인" : decision.decision === "reject" ? "반려" : "수정"}
             </span>
-          )}
-          {expanded ? (
-            <ChevronUp className="w-5 h-5 text-slate-400" />
-          ) : (
-            <ChevronDown className="w-5 h-5 text-slate-400" />
-          )}
+          ) : null}
+          {expanded ? <ChevronUp className="h-5 w-5 text-slate-400" /> : <ChevronDown className="h-5 w-5 text-slate-400" />}
         </div>
       </button>
 
-      {/* Expanded Content */}
-      {expanded && (
-        <div className="px-4 pb-4 border-t border-slate-700">
-          {/* Original Text */}
-          <div className="mt-4">
-            <h4 className="text-sm font-medium text-slate-300 mb-2">원본 텍스트</h4>
-            <div className="p-3 bg-slate-900/50 rounded-lg text-sm text-slate-400">
-              {item.original_text}
+      {expanded ? (
+        <div className="mt-5 border-t border-slate-200 pt-5">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <div className="surface-muted p-4">
+              <p className="data-label">원문</p>
+              <p className="mt-3 text-sm leading-6 text-slate-700">{item.original_text}</p>
+            </div>
+            <div className="surface-muted p-4">
+              <p className="data-label">권장 처리 방향</p>
+              <p className="mt-3 text-sm leading-6 text-slate-700">{item.suggested_resolution ?? "제안된 처리 방향이 없습니다."}</p>
             </div>
           </div>
 
-          {/* Suggested Resolution */}
-          {item.suggested_resolution && (
-            <div className="mt-4">
-              <h4 className="text-sm font-medium text-slate-300 mb-2">
-                제안된 해결책
-              </h4>
-              <div className="p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg text-sm text-blue-300">
-                {item.suggested_resolution}
-              </div>
-            </div>
-          )}
-
-          {/* Notes Input */}
           <div className="mt-4">
-            <label className="text-sm font-medium text-slate-300 mb-2 block">
-              메모 (선택사항)
-            </label>
+            <label className="data-label">리뷰 메모</label>
             <textarea
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="결정에 대한 메모를 입력하세요..."
-              className="w-full p-3 bg-slate-900/50 border border-slate-600 rounded-lg text-sm resize-none focus:outline-none focus:border-blue-500"
-              rows={2}
+              onChange={(event) => setNotes(event.target.value)}
+              rows={3}
+              placeholder="판단 근거나 수정 지시를 적어 주세요."
+              className="input-surface mt-2 resize-none"
             />
           </div>
 
-          {/* Decision Buttons */}
-          <div className="mt-4 flex gap-3">
-            <button
-              onClick={() => onDecision("approve", notes)}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                decision?.decision === "approve"
-                  ? "bg-green-600 text-white"
-                  : "bg-slate-700 hover:bg-green-600/50 text-slate-300"
-              }`}
-            >
-              <CheckCircle className="w-4 h-4" />
-              승인
-            </button>
-            <button
-              onClick={() => onDecision("reject", notes)}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                decision?.decision === "reject"
-                  ? "bg-red-600 text-white"
-                  : "bg-slate-700 hover:bg-red-600/50 text-slate-300"
-              }`}
-            >
-              <XCircle className="w-4 h-4" />
-              거부
-            </button>
-            <button
-              onClick={() => onDecision("modify", notes)}
-              className={`flex-1 flex items-center justify-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                decision?.decision === "modify"
-                  ? "bg-blue-600 text-white"
-                  : "bg-slate-700 hover:bg-blue-600/50 text-slate-300"
-              }`}
-            >
-              <Edit3 className="w-4 h-4" />
-              수정
-            </button>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <DecisionButton active={decision?.decision === "approve"} tone="approve" icon={<CheckCircle2 className="h-4 w-4" />} label="승인" onClick={() => onDecision("approve", notes)} />
+            <DecisionButton active={decision?.decision === "reject"} tone="reject" icon={<XCircle className="h-4 w-4" />} label="반려" onClick={() => onDecision("reject", notes)} />
+            <DecisionButton active={decision?.decision === "modify"} tone="modify" icon={<Edit3 className="h-4 w-4" />} label="수정 요청" onClick={() => onDecision("modify", notes)} />
           </div>
         </div>
-      )}
+      ) : null}
     </div>
+  );
+}
+
+function DecisionButton({
+  active,
+  tone,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  tone: "approve" | "reject" | "modify";
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  const toneClass =
+    tone === "approve"
+      ? active
+        ? "bg-emerald-600 text-white"
+        : "bg-emerald-50 text-emerald-700"
+      : tone === "reject"
+      ? active
+        ? "bg-rose-600 text-white"
+        : "bg-rose-50 text-rose-700"
+      : active
+      ? "bg-blue-600 text-white"
+      : "bg-blue-50 text-blue-700";
+
+  return (
+    <button
+      onClick={onClick}
+      className={`inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${toneClass}`}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

@@ -188,6 +188,9 @@ class ClaudeClient:
         """Claude CLI 실행을 위한 환경 변수 설정 (명령어 경로 등)"""
         env = os.environ.copy()
 
+        # 중첩 세션 방지 변수 제거 (별도 프로세스이므로 안전)
+        env.pop("CLAUDECODE", None)
+
         if sys.platform == "win32":
             extra_paths = [
                 os.path.expanduser("~\\AppData\\Roaming\\npm"),
@@ -205,7 +208,10 @@ class ClaudeClient:
         return env
 
     def _run_claude_sync(self, prompt: str) -> str:
-        """실제로 Claude CLI 명령어를 실행하는 함수 (동기 방식)"""
+        """실제로 Claude CLI 명령어를 실행하는 함수 (동기 방식)
+
+        프롬프트를 stdin으로 전달하여 Windows 명령줄 길이 제한(~8191자)을 회피합니다.
+        """
         env = self._get_env()
 
         prompt_len = len(prompt)
@@ -222,18 +228,31 @@ class ClaudeClient:
             # --dangerously-skip-permissions: 권한 체크 스킵
             # --setting-sources user: 프로젝트 설정(CLAUDE.md) 무시
             # --no-session-persistence: 세션 저장 안함
-            result = subprocess.run(
-                ["claude", "-p", prompt, "--output-format", "text",
-                 "--dangerously-skip-permissions", "--setting-sources", "user",
-                 "--no-session-persistence"],
-                capture_output=True,
-                text=True,
-                timeout=240,  # 4분 제한 (대형 프롬프트 대응)
-                env=env,
-                shell=use_shell,
-                encoding='utf-8',
-                cwd=temp_dir,  # 임시 디렉토리에서 실행
+            # 프롬프트를 임시파일 → stdin 파이핑으로 Windows 명령줄 길이 제한 회피
+            prompt_file = tempfile.NamedTemporaryFile(
+                mode='w', suffix='.txt', delete=False, encoding='utf-8'
             )
+            prompt_file.write(prompt)
+            prompt_file.close()
+            prompt_file_path = prompt_file.name
+
+            try:
+                with open(prompt_file_path, 'r', encoding='utf-8') as pf:
+                    result = subprocess.run(
+                        ["claude", "-p", "--output-format", "text",
+                         "--dangerously-skip-permissions", "--setting-sources", "user",
+                         "--no-session-persistence"],
+                        stdin=pf,
+                        capture_output=True,
+                        text=True,
+                        timeout=240,  # 4분 제한 (대형 프롬프트 대응)
+                        env=env,
+                        shell=use_shell,
+                        encoding='utf-8',
+                        cwd=temp_dir,  # 임시 디렉토리에서 실행
+                    )
+            finally:
+                os.unlink(prompt_file_path)
 
             elapsed = (datetime.now() - start_time).total_seconds()
             logger.info(f"[CLI] 완료: {elapsed:.1f}초, 상태코드={result.returncode}")
@@ -252,25 +271,39 @@ class ClaudeClient:
             raise
 
     def _run_claude_sync_with_files(self, prompt: str, file_paths: list[str]) -> str:
-        """파일 첨부와 함께 Claude CLI 실행"""
+        """파일 첨부와 함께 Claude CLI 실행 (stdin 파이핑)"""
         env = self._get_env()
 
-        cmd = ["claude", "-p", prompt, "--output-format", "text",
+        cmd = ["claude", "-p", "--output-format", "text",
                "--dangerously-skip-permissions", "--setting-sources", "user",
                "--no-session-persistence"]
         for file_path in file_paths:
             cmd.extend(["--file", file_path])
 
         use_shell = sys.platform == "win32"
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=240,  # 4분 제한 (대형 프롬프트 대응)
-            env=env,
-            shell=use_shell,
-            encoding='utf-8',
+
+        # 프롬프트를 임시파일 → stdin 파이핑으로 Windows 명령줄 길이 제한 회피
+        prompt_file = tempfile.NamedTemporaryFile(
+            mode='w', suffix='.txt', delete=False, encoding='utf-8'
         )
+        prompt_file.write(prompt)
+        prompt_file.close()
+        prompt_file_path = prompt_file.name
+
+        try:
+            with open(prompt_file_path, 'r', encoding='utf-8') as pf:
+                result = subprocess.run(
+                    cmd,
+                    stdin=pf,
+                    capture_output=True,
+                    text=True,
+                    timeout=240,  # 4분 제한 (대형 프롬프트 대응)
+                    env=env,
+                    shell=use_shell,
+                    encoding='utf-8',
+                )
+        finally:
+            os.unlink(prompt_file_path)
 
         if result.returncode != 0:
             error_msg = result.stderr or "Unknown error"

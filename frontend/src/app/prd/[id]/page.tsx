@@ -1,29 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Layers,
-  Download,
-  FileText,
-  CheckCircle,
-  AlertCircle,
-  ChevronDown,
-  ChevronRight,
-  Target,
-  Shield,
-  Lock,
-  Flag,
-} from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Download, Flag, Lock, Shield, Target, Users } from "lucide-react";
 import { api, type Requirement } from "@/lib/api";
+import { AppShell, HeroPanel, MetricCard, SectionHeader, TopBar, formatDate, scoreBadge } from "@/components/app-shell";
+
+type TabKey = "overview" | "requirements" | "milestones" | "unresolved";
+
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: "overview", label: "개요" },
+  { key: "requirements", label: "요구사항" },
+  { key: "milestones", label: "마일스톤" },
+  { key: "unresolved", label: "미해결 이슈" },
+];
+
+const PRIORITY_STYLE: Record<string, string> = {
+  HIGH: "bg-rose-100 text-rose-700",
+  MEDIUM: "bg-amber-100 text-amber-700",
+  LOW: "bg-slate-100 text-slate-600",
+};
 
 export default function PRDViewerPage() {
   const params = useParams();
   const prdId = params.id as string;
-  const [activeTab, setActiveTab] = useState<"overview" | "requirements" | "milestones" | "unresolved">("overview");
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [expandedReqs, setExpandedReqs] = useState<Set<string>>(new Set());
 
   const { data: prd, isLoading, error } = useQuery({
@@ -31,326 +34,272 @@ export default function PRDViewerPage() {
     queryFn: () => api.getPRD(prdId),
   });
 
-  const handleExport = async (format: "markdown" | "json" | "html") => {
+  const allRequirements = useMemo(() => {
+    if (!prd) return [];
+    return [...prd.functional_requirements, ...prd.non_functional_requirements, ...prd.constraints];
+  }, [prd]);
+
+  async function handleExport(format: "markdown" | "json" | "html") {
     const data = await api.exportPRD(prdId, format);
     const blob = new Blob([typeof data === "string" ? data : JSON.stringify(data, null, 2)], {
       type: format === "json" ? "application/json" : "text/plain",
     });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${prd?.title || "prd"}.${format === "markdown" ? "md" : format}`;
-    a.click();
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${prd?.title ?? "prd"}.${format === "markdown" ? "md" : format}`;
+    anchor.click();
     URL.revokeObjectURL(url);
-  };
+  }
 
-  const toggleReq = (id: string) => {
-    setExpandedReqs((prev) => {
-      const next = new Set(prev);
+  function toggleReq(id: string) {
+    setExpandedReqs((current) => {
+      const next = new Set(current);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
-  };
+  }
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full" />
-      </div>
+      <AppShell header={<TopBar title="PRD 상세" subtitle="문서를 불러오는 중입니다" href="/history" />}>
+        <section className="section-card flex items-center justify-center py-20">
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
+        </section>
+      </AppShell>
     );
   }
 
   if (error || !prd) {
     return (
-      <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
-          <p className="text-red-400">PRD를 불러올 수 없습니다</p>
-          <Link href="/" className="text-blue-400 hover:underline mt-4 inline-block">
-            홈으로 돌아가기
-          </Link>
-        </div>
-      </div>
+      <AppShell header={<TopBar title="PRD 상세" subtitle="문서를 찾을 수 없습니다" href="/history" />}>
+        <section className="section-card">
+          <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
+            <AlertCircle className="h-10 w-10 text-rose-500" />
+            <p className="mt-4 text-2xl font-semibold tracking-tight text-slate-900">PRD를 불러오지 못했습니다</p>
+            <Link href="/history" className="mt-6 brand-button">
+              아카이브로 돌아가기
+            </Link>
+          </div>
+        </section>
+      </AppShell>
     );
   }
 
-  const allRequirements = [
-    ...prd.functional_requirements,
-    ...prd.non_functional_requirements,
-    ...prd.constraints,
-  ];
-  const confidencePercent = Math.round(prd.metadata.overall_confidence * 100);
+  const confidence = scoreBadge(prd.metadata.overall_confidence);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header */}
-      <header className="border-b border-slate-700 bg-slate-900/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Link href="/" className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
-                <ArrowLeft className="w-5 h-5" />
-              </Link>
-              <div>
-                <h1 className="text-xl font-bold">{prd.title}</h1>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="text-xs text-slate-400">v{prd.metadata.version}</span>
-                  <span className={`px-2 py-0.5 rounded text-xs ${
-                    prd.metadata.status === "approved"
-                      ? "bg-green-500/20 text-green-400"
-                      : prd.metadata.status === "review"
-                      ? "bg-yellow-500/20 text-yellow-400"
-                      : "bg-slate-500/20 text-slate-400"
-                  }`}>
-                    {prd.metadata.status}
-                  </span>
-                  <ConfidenceBadge score={prd.metadata.overall_confidence} />
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleExport("markdown")}
-                className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm"
-              >
-                <Download className="w-4 h-4" />
+    <AppShell
+      header={
+        <TopBar
+          title={prd.title}
+          subtitle={`버전 ${prd.metadata.version} · ${formatDate(prd.metadata.created_at)}`}
+          href="/history"
+          action={
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => handleExport("markdown")} className="secondary-button !rounded-full !px-4 !py-2">
+                <Download className="h-4 w-4" />
                 MD
               </button>
-              <button
-                onClick={() => handleExport("json")}
-                className="flex items-center gap-2 px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm"
-              >
-                <Download className="w-4 h-4" />
+              <button onClick={() => handleExport("json")} className="secondary-button !rounded-full !px-4 !py-2">
+                <Download className="h-4 w-4" />
                 JSON
               </button>
+              <button onClick={() => handleExport("html")} className="secondary-button !rounded-full !px-4 !py-2">
+                <Download className="h-4 w-4" />
+                HTML
+              </button>
+            </div>
+          }
+        />
+      }
+    >
+      <HeroPanel
+        kicker="문서 리더"
+        title={prd.title}
+        description="개요부터 요구사항, 마일스톤, 미해결 이슈까지 한 흐름으로 읽을 수 있게 문서형 화면으로 다시 구성했습니다. 중요한 메타 정보는 우측 패널에 모아두고, 세부 내용은 탭 기반으로 정리했습니다."
+        aside={
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-2">
+              <span className={`pill-badge ${confidence.className}`}>신뢰도 {confidence.label}</span>
+              <span className="pill-badge bg-slate-100 text-slate-600">{prd.metadata.status}</span>
+              {prd.metadata.requires_pm_review ? (
+                <span className="pill-badge bg-amber-100 text-amber-700">PM 검토 필요</span>
+              ) : (
+                <span className="pill-badge bg-emerald-100 text-emerald-700">즉시 사용 가능</span>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <InfoTile label="기능 요구사항" value={prd.functional_requirements.length} />
+              <InfoTile label="비기능 요구사항" value={prd.non_functional_requirements.length} />
+              <InfoTile label="제약 조건" value={prd.constraints.length} />
+              <InfoTile label="마일스톤" value={prd.milestones.length} />
             </div>
           </div>
-        </div>
-      </header>
+        }
+      />
 
-      <main className="max-w-6xl mx-auto px-6 py-8">
-        {/* Tabs */}
-        <div className="flex gap-1 mb-6 border-b border-slate-700">
-          {[
-            { key: "overview", label: "개요" },
-            { key: "requirements", label: `요구사항 (${allRequirements.length})` },
-            { key: "milestones", label: `마일스톤 (${prd.milestones.length})` },
-            { key: "unresolved", label: `미해결 (${prd.unresolved_items.length})` },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key as typeof activeTab)}
-              className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 -mb-px ${
-                activeTab === tab.key
-                  ? "border-blue-500 text-blue-400"
-                  : "border-transparent text-slate-400 hover:text-slate-200"
-              }`}
-            >
+      <section className="grid gap-4 lg:grid-cols-4">
+        <MetricCard label="총 요구사항" value={allRequirements.length} note="기능, 비기능, 제약 조건 합계" />
+        <MetricCard label="미해결 이슈" value={prd.unresolved_items.length} note="추가 검토가 필요한 항목" accent="warm" />
+        <MetricCard label="목표 수" value={prd.overview.goals.length} note="문서에 정의된 핵심 목표" accent="mint" />
+        <MetricCard label="대상 사용자" value={prd.overview.target_users.length} note="핵심 사용자 세그먼트" />
+      </section>
+
+      <section className="section-card">
+        <div className="mb-6 flex flex-wrap gap-2">
+          {TABS.map((tab) => (
+            <button key={tab.key} onClick={() => setActiveTab(tab.key)} className={`tab-button ${activeTab === tab.key ? "tab-button-active" : "tab-button-idle"}`}>
               {tab.label}
+              {tab.key === "requirements" ? ` (${allRequirements.length})` : ""}
+              {tab.key === "milestones" ? ` (${prd.milestones.length})` : ""}
+              {tab.key === "unresolved" ? ` (${prd.unresolved_items.length})` : ""}
             </button>
           ))}
         </div>
 
-        {/* Tab Content */}
-        {activeTab === "overview" && (
-          <div className="space-y-6 animate-fadeIn">
-            <Section title="배경">
-              <p className="text-slate-300 leading-relaxed">{prd.overview.background}</p>
-            </Section>
-            <Section title="목표">
-              <ul className="space-y-2">
-                {prd.overview.goals.map((goal, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <Target className="w-4 h-4 text-blue-400 mt-1 flex-shrink-0" />
-                    <span className="text-slate-300">{goal}</span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-            <Section title="범위">
-              <p className="text-slate-300 leading-relaxed">{prd.overview.scope}</p>
-              {prd.overview.out_of_scope.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-medium text-slate-400 mb-2">범위 외:</h4>
-                  <ul className="space-y-1">
-                    {prd.overview.out_of_scope.map((item, i) => (
-                      <li key={i} className="text-slate-400 text-sm">• {item}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-            </Section>
-            {prd.overview.target_users.length > 0 && (
-              <Section title="대상 사용자">
-                <div className="flex flex-wrap gap-2">
-                  {prd.overview.target_users.map((user, i) => (
-                    <span key={i} className="px-3 py-1 bg-slate-700 rounded-full text-sm">
-                      {user}
-                    </span>
-                  ))}
-                </div>
-              </Section>
-            )}
-            {prd.overview.success_metrics.length > 0 && (
-              <Section title="성공 지표">
-                <ul className="space-y-2">
-                  {prd.overview.success_metrics.map((metric, i) => (
-                    <li key={i} className="flex items-start gap-2">
-                      <CheckCircle className="w-4 h-4 text-green-400 mt-1 flex-shrink-0" />
-                      <span className="text-slate-300">{metric}</span>
-                    </li>
-                  ))}
-                </ul>
-              </Section>
-            )}
-          </div>
-        )}
+        {activeTab === "overview" ? <OverviewTab prd={prd} /> : null}
+        {activeTab === "requirements" ? <RequirementsTab prd={prd} expandedReqs={expandedReqs} onToggle={toggleReq} /> : null}
+        {activeTab === "milestones" ? <MilestonesTab prd={prd} /> : null}
+        {activeTab === "unresolved" ? <UnresolvedTab prd={prd} /> : null}
+      </section>
+    </AppShell>
+  );
+}
 
-        {activeTab === "requirements" && (
-          <div className="space-y-4 animate-fadeIn">
-            {/* FR */}
-            {prd.functional_requirements.length > 0 && (
-              <div>
-                <h3 className="text-sm font-medium text-blue-400 mb-3 flex items-center gap-2">
-                  <Target className="w-4 h-4" />
-                  기능 요구사항 (FR)
-                </h3>
-                <div className="space-y-2">
-                  {prd.functional_requirements.map((req) => (
-                    <RequirementCard
-                      key={req.id}
-                      req={req}
-                      expanded={expandedReqs.has(req.id)}
-                      onToggle={() => toggleReq(req.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* NFR */}
-            {prd.non_functional_requirements.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-sm font-medium text-purple-400 mb-3 flex items-center gap-2">
-                  <Shield className="w-4 h-4" />
-                  비기능 요구사항 (NFR)
-                </h3>
-                <div className="space-y-2">
-                  {prd.non_functional_requirements.map((req) => (
-                    <RequirementCard
-                      key={req.id}
-                      req={req}
-                      expanded={expandedReqs.has(req.id)}
-                      onToggle={() => toggleReq(req.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Constraints */}
-            {prd.constraints.length > 0 && (
-              <div className="mt-6">
-                <h3 className="text-sm font-medium text-amber-400 mb-3 flex items-center gap-2">
-                  <Lock className="w-4 h-4" />
-                  제약조건
-                </h3>
-                <div className="space-y-2">
-                  {prd.constraints.map((req) => (
-                    <RequirementCard
-                      key={req.id}
-                      req={req}
-                      expanded={expandedReqs.has(req.id)}
-                      onToggle={() => toggleReq(req.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === "milestones" && (
-          <div className="space-y-4 animate-fadeIn">
-            {prd.milestones.map((ms, i) => (
-              <div
-                key={ms.id}
-                className="p-4 bg-slate-800/50 rounded-lg border border-slate-700"
-              >
-                <div className="flex items-center gap-3 mb-2">
-                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm font-bold">
-                    {i + 1}
-                  </div>
-                  <h3 className="font-semibold">{ms.name}</h3>
-                </div>
-                <p className="text-slate-400 text-sm ml-11">{ms.description}</p>
-                {ms.deliverables.length > 0 && (
-                  <div className="mt-3 ml-11">
-                    <h4 className="text-xs text-slate-500 mb-1">산출물:</h4>
-                    <ul className="space-y-1">
-                      {ms.deliverables.map((d, j) => (
-                        <li key={j} className="text-sm text-slate-300">• {d}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {activeTab === "unresolved" && (
-          <div className="space-y-3 animate-fadeIn">
-            {prd.unresolved_items.length === 0 ? (
-              <div className="text-center py-8 text-slate-400">
-                <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-400" />
-                <p>미해결 사항이 없습니다</p>
-              </div>
-            ) : (
-              prd.unresolved_items.map((item) => (
-                <div
-                  key={item.id}
-                  className="p-4 bg-slate-800/50 rounded-lg border border-slate-700"
-                >
-                  <div className="flex items-start gap-3">
-                    <span className={`px-2 py-0.5 rounded text-xs uppercase ${
-                      item.type === "question" ? "bg-blue-500/20 text-blue-400" :
-                      item.type === "decision" ? "bg-purple-500/20 text-purple-400" :
-                      item.type === "risk" ? "bg-red-500/20 text-red-400" :
-                      "bg-slate-500/20 text-slate-400"
-                    }`}>
-                      {item.type}
-                    </span>
-                    <div className="flex-1">
-                      <p className="text-slate-200">{item.description}</p>
-                      {item.suggested_action && (
-                        <p className="text-sm text-slate-400 mt-1">
-                          제안: {item.suggested_action}
-                        </p>
-                      )}
-                    </div>
-                    <span className={`text-xs ${
-                      item.priority === "HIGH" ? "text-red-400" :
-                      item.priority === "LOW" ? "text-slate-400" :
-                      "text-yellow-400"
-                    }`}>
-                      {item.priority}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-      </main>
+function InfoTile({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="surface-muted px-4 py-3">
+      <p className="data-label">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
     </div>
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function OverviewTab({ prd }: { prd: Awaited<ReturnType<typeof api.getPRD>> }) {
   return (
-    <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
-      <h3 className="text-lg font-semibold mb-4">{title}</h3>
-      {children}
+    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-6">
+        <ReadingBlock title="배경">{prd.overview.background}</ReadingBlock>
+        <ReadingBlock title="범위">{prd.overview.scope}</ReadingBlock>
+        {prd.overview.out_of_scope.length ? <ReadingListBlock title="범위 외 항목" items={prd.overview.out_of_scope} /> : null}
+      </div>
+
+      <aside className="space-y-4">
+        <CompactInfoBlock title="목표" icon={<Target className="h-4 w-4 text-blue-600" />} items={prd.overview.goals} emptyLabel="등록된 목표가 없습니다." />
+        <CompactInfoBlock title="대상 사용자" icon={<Users className="h-4 w-4 text-violet-600" />} items={prd.overview.target_users} emptyLabel="등록된 대상 사용자가 없습니다." />
+        <CompactInfoBlock title="성공 지표" icon={<Flag className="h-4 w-4 text-emerald-600" />} items={prd.overview.success_metrics} emptyLabel="등록된 성공 지표가 없습니다." />
+      </aside>
+    </div>
+  );
+}
+
+function RequirementsTab({
+  prd,
+  expandedReqs,
+  onToggle,
+}: {
+  prd: Awaited<ReturnType<typeof api.getPRD>>;
+  expandedReqs: Set<string>;
+  onToggle: (id: string) => void;
+}) {
+  return (
+    <div className="space-y-8">
+      <RequirementGroup title="기능 요구사항" icon={<Target className="h-4 w-4 text-blue-600" />}>
+        {prd.functional_requirements.map((req) => (
+          <RequirementCard key={req.id} req={req} expanded={expandedReqs.has(req.id)} onToggle={() => onToggle(req.id)} />
+        ))}
+      </RequirementGroup>
+      <RequirementGroup title="비기능 요구사항" icon={<Shield className="h-4 w-4 text-violet-600" />}>
+        {prd.non_functional_requirements.map((req) => (
+          <RequirementCard key={req.id} req={req} expanded={expandedReqs.has(req.id)} onToggle={() => onToggle(req.id)} />
+        ))}
+      </RequirementGroup>
+      <RequirementGroup title="제약 조건" icon={<Lock className="h-4 w-4 text-amber-600" />}>
+        {prd.constraints.map((req) => (
+          <RequirementCard key={req.id} req={req} expanded={expandedReqs.has(req.id)} onToggle={() => onToggle(req.id)} />
+        ))}
+      </RequirementGroup>
+    </div>
+  );
+}
+
+function MilestonesTab({ prd }: { prd: Awaited<ReturnType<typeof api.getPRD>> }) {
+  if (!prd.milestones.length) {
+    return <EmptyPanel title="등록된 마일스톤이 없습니다" />;
+  }
+
+  return (
+    <div className="grid gap-4">
+      {prd.milestones
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((milestone, index) => (
+          <div key={milestone.id} className="list-card">
+            <div className="flex items-start gap-4">
+              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] bg-slate-900 text-lg font-bold text-white">
+                {index + 1}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xl font-bold tracking-[-0.04em] text-slate-900">{milestone.name}</p>
+                <p className="mt-3 text-sm leading-7 text-slate-600">{milestone.description}</p>
+                {milestone.deliverables.length ? (
+                  <div className="mt-4">
+                    <p className="data-label">산출물</p>
+                    <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+                      {milestone.deliverables.map((deliverable) => (
+                        <li key={deliverable}>- {deliverable}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+function UnresolvedTab({ prd }: { prd: Awaited<ReturnType<typeof api.getPRD>> }) {
+  if (!prd.unresolved_items.length) {
+    return (
+      <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+        <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+        <p className="mt-4 text-xl font-semibold tracking-tight text-slate-900">미해결 이슈가 없습니다</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {prd.unresolved_items.map((item) => (
+        <div key={item.id} className="list-card">
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="pill-badge bg-slate-100 text-slate-600">{item.type}</span>
+                <span className={`pill-badge ${PRIORITY_STYLE[item.priority] ?? PRIORITY_STYLE.MEDIUM}`}>{item.priority}</span>
+              </div>
+              <p className="mt-3 text-base font-semibold text-slate-900">{item.description}</p>
+              {item.suggested_action ? <p className="mt-2 text-sm leading-6 text-slate-600">권장 조치: {item.suggested_action}</p> : null}
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RequirementGroup({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
+  return (
+    <div>
+      <div className="mb-3 flex items-center gap-2">
+        {icon}
+        <h3 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h3>
+      </div>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }
@@ -364,104 +313,120 @@ function RequirementCard({
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const confidencePercent = Math.round(req.confidence_score * 100);
+  const confidence = scoreBadge(req.confidence_score);
 
   return (
-    <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
-      <button
-        onClick={onToggle}
-        className="w-full p-4 text-left flex items-start gap-3 hover:bg-slate-700/30 transition-colors"
-      >
-        {expanded ? (
-          <ChevronDown className="w-4 h-4 mt-1 text-slate-400" />
-        ) : (
-          <ChevronRight className="w-4 h-4 mt-1 text-slate-400" />
-        )}
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-xs text-slate-500">{req.id}</span>
-            <span className={`px-1.5 py-0.5 rounded text-xs ${
-              req.priority === "HIGH" ? "bg-red-500/20 text-red-400" :
-              req.priority === "LOW" ? "bg-slate-500/20 text-slate-400" :
-              "bg-yellow-500/20 text-yellow-400"
-            }`}>
-              {req.priority}
-            </span>
+    <div className="rounded-[26px] border border-slate-200 bg-white/70">
+      <button onClick={onToggle} className="flex w-full items-start gap-4 p-5 text-left">
+        <div className="mt-1 text-slate-400">{expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="pill-badge bg-slate-100 text-slate-600">{req.id}</span>
+            <span className={`pill-badge ${PRIORITY_STYLE[req.priority] ?? PRIORITY_STYLE.MEDIUM}`}>{req.priority}</span>
+            <span className={`pill-badge ${confidence.className}`}>{confidence.label}</span>
           </div>
-          <h4 className="font-medium">{req.title}</h4>
+          <p className="mt-3 text-lg font-semibold tracking-tight text-slate-900">{req.title}</p>
         </div>
-        <ConfidenceBadge score={req.confidence_score} />
       </button>
 
-      {expanded && (
-        <div className="px-4 pb-4 pl-11 space-y-4 animate-fadeIn">
-          <div>
-            <h5 className="text-xs text-slate-500 mb-1">설명</h5>
-            <p className="text-sm text-slate-300">{req.description}</p>
+      {expanded ? (
+        <div className="border-t border-slate-200 px-5 pb-5 pl-14 pt-5">
+          <div className="grid gap-4 lg:grid-cols-2">
+            <DetailBlock title="설명">{req.description}</DetailBlock>
+            <DetailBlock title="신뢰도 근거">{req.confidence_reason || "기록된 근거가 없습니다."}</DetailBlock>
+            {req.user_story ? <DetailBlock title="사용자 스토리">{req.user_story}</DetailBlock> : null}
+            <ListBlock title="인수 기준" items={req.acceptance_criteria} />
+            <ListBlock title="가정 사항" items={req.assumptions} />
+            <ListBlock title="누락 정보" items={req.missing_info} />
           </div>
-          {req.user_story && (
-            <div>
-              <h5 className="text-xs text-slate-500 mb-1">User Story</h5>
-              <p className="text-sm text-slate-300 italic">{req.user_story}</p>
-            </div>
-          )}
-          {req.acceptance_criteria.length > 0 && (
-            <div>
-              <h5 className="text-xs text-slate-500 mb-1">Acceptance Criteria</h5>
-              <ul className="space-y-1">
-                {req.acceptance_criteria.map((ac, i) => (
-                  <li key={i} className="text-sm text-slate-300 flex items-start gap-2">
-                    <CheckCircle className="w-3 h-3 mt-1 text-green-400 flex-shrink-0" />
-                    {ac}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {req.assumptions.length > 0 && (
-            <div>
-              <h5 className="text-xs text-slate-500 mb-1">가정사항</h5>
-              <ul className="space-y-1">
-                {req.assumptions.map((a, i) => (
-                  <li key={i} className="text-sm text-amber-400">• {a}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {req.missing_info.length > 0 && (
-            <div>
-              <h5 className="text-xs text-slate-500 mb-1">누락 정보</h5>
-              <ul className="space-y-1">
-                {req.missing_info.map((m, i) => (
-                  <li key={i} className="text-sm text-red-400">• {m}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {req.confidence_reason && (
-            <div>
-              <h5 className="text-xs text-slate-500 mb-1">신뢰도 이유</h5>
-              <p className="text-sm text-slate-400">{req.confidence_reason}</p>
-            </div>
-          )}
         </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ReadingBlock({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="glass-panel-strong p-6">
+      <SectionHeader title={title} />
+      <div className="text-sm leading-8 text-slate-700">{children}</div>
+    </div>
+  );
+}
+
+function ReadingListBlock({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="surface-muted p-5">
+      <SectionHeader title={title} />
+      <ul className="space-y-2 text-sm leading-7 text-slate-700">
+        {items.map((item) => (
+          <li key={item}>- {item}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function CompactInfoBlock({
+  title,
+  icon,
+  items,
+  emptyLabel,
+}: {
+  title: string;
+  icon: ReactNode;
+  items: string[];
+  emptyLabel: string;
+}) {
+  return (
+    <div className="surface-muted p-5">
+      <div className="mb-3 flex items-center gap-2">
+        {icon}
+        <p className="text-base font-semibold text-slate-900">{title}</p>
+      </div>
+      {items.length ? (
+        <ul className="space-y-2 text-sm leading-6 text-slate-700">
+          {items.map((item) => (
+            <li key={item}>- {item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-sm text-slate-500">{emptyLabel}</p>
       )}
     </div>
   );
 }
 
-function ConfidenceBadge({ score }: { score: number }) {
-  const percent = Math.round(score * 100);
-  const color =
-    percent >= 80
-      ? "bg-green-500/20 text-green-400"
-      : percent >= 60
-      ? "bg-yellow-500/20 text-yellow-400"
-      : "bg-red-500/20 text-red-400";
-
+function DetailBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <span className={`px-2 py-1 rounded text-xs font-medium ${color}`}>
-      {percent}%
-    </span>
+    <div className="surface-muted p-4">
+      <p className="data-label">{title}</p>
+      <div className="mt-3 text-sm leading-7 text-slate-700">{children}</div>
+    </div>
+  );
+}
+
+function ListBlock({ title, items }: { title: string; items: string[] }) {
+  return (
+    <div className="surface-muted p-4">
+      <p className="data-label">{title}</p>
+      {items.length ? (
+        <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
+          {items.map((item) => (
+            <li key={item}>- {item}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-slate-500">없음</p>
+      )}
+    </div>
+  );
+}
+
+function EmptyPanel({ title }: { title: string }) {
+  return (
+    <div className="surface-muted flex items-center justify-center rounded-[28px] px-6 py-16 text-center">
+      <p className="text-base font-semibold text-slate-700">{title}</p>
+    </div>
   );
 }

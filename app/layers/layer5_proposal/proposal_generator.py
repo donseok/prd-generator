@@ -508,7 +508,15 @@ class ProposalGenerator(BaseGenerator[PRDDocument, ProposalDocument, ProposalCon
                 "데이터 기반 의사결정 지원",
             ])
 
-        return list(dict.fromkeys(benefits))[:8]
+        # benefits에 dict 객체가 포함될 수 있으므로 문자열로 정규화 후 중복 제거
+        normalized = []
+        seen = set()
+        for b in benefits:
+            text = b if isinstance(b, str) else (b.get("benefit") or b.get("title") or str(b))
+            if text not in seen:
+                seen.add(text)
+                normalized.append(text)
+        return normalized[:8]
 
     async def _generate_executive_summary(
         self,

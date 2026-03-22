@@ -55,7 +55,8 @@ python -m app.scripts.auto_doc
 # 개별 문서 생성
 python -m app.scripts.prd_maker                    # PRD
 python -m app.scripts.trd_maker                    # TRD
-python -m app.scripts.wbs_maker                    # WBS
+python -m app.scripts.wbs_maker                    # WBS (MD+JSON)
+python -m app.scripts.wbs_excel_maker              # WBS Excel 업로드 양식 (XLSX)
 python -m app.scripts.pro_maker                    # 제안서
 python -m app.scripts.pro_maker --client "고객사명"  # 고객사명 지정
 python -m app.scripts.ppt_maker                    # PPT (제안서 기반, ~23 슬라이드)
@@ -72,6 +73,7 @@ python -m app.scripts.arch_diagram                 # 아키텍처 다이어그�
 | `/prd:prd-maker` | `workspace/inputs/projects/*` | PRD MD+JSON |
 | `/trd:trd-maker` | 최신 PRD JSON | TRD MD+JSON |
 | `/wbs:wbs-maker` | 최신 PRD+TRD JSON | WBS MD+JSON |
+| `/wbs:wbs-excel` | 최신 WBS JSON | WBS 업로드 양식 XLSX |
 | `/pro:pro-maker` | 최신 PRD+TRD+WBS JSON | 제안서 MD+JSON |
 | `/ppt:ppt-maker` | 최신 PROP JSON | PPTX |
 | `/diagram:arch-diagram` | 최신 TRD JSON | 아키텍처 PNG |

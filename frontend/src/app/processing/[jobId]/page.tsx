@@ -1,205 +1,263 @@
 "use client";
 
-import { useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useEffect, type ReactNode } from "react";
+import { useParams, useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import {
-  ArrowLeft,
-  Layers,
-  Settings,
-  Zap,
-  CheckCircle,
-  Target,
-  Loader2,
   AlertCircle,
+  CheckCircle2,
+  FileText,
+  Loader2,
+  ScanSearch,
+  Sparkles,
+  Target,
+  Wand2,
 } from "lucide-react";
 import { api } from "@/lib/api";
+import { AppShell, HeroPanel, SectionHeader, TopBar, formatDate } from "@/components/app-shell";
 
 const LAYERS = [
-  { key: "parsing", name: "Layer 1: 파싱", icon: Settings, color: "blue" },
-  { key: "normalizing", name: "Layer 2: 정규화", icon: Zap, color: "purple" },
-  { key: "validating", name: "Layer 3: 검증", icon: CheckCircle, color: "amber" },
-  { key: "generating", name: "Layer 4: 생성", icon: Target, color: "emerald" },
+  {
+    key: "parsing",
+    name: "입력 해석",
+    description: "원본 문서에서 텍스트와 구조, 첨부 단서를 추출합니다.",
+    icon: ScanSearch,
+    accent: "bg-blue-600",
+    ring: "ring-blue-200",
+    surface: "bg-blue-50 border-blue-200",
+  },
+  {
+    key: "normalizing",
+    name: "요구사항 정규화",
+    description: "중복 표현을 합치고 의미 단위를 요구사항 구조로 정리합니다.",
+    icon: Wand2,
+    accent: "bg-violet-600",
+    ring: "ring-violet-200",
+    surface: "bg-violet-50 border-violet-200",
+  },
+  {
+    key: "validating",
+    name: "검증 및 리뷰 분기",
+    description: "신뢰도와 누락 정보, 충돌 가능성을 점검합니다.",
+    icon: CheckCircle2,
+    accent: "bg-amber-500",
+    ring: "ring-amber-200",
+    surface: "bg-amber-50 border-amber-200",
+  },
+  {
+    key: "generating",
+    name: "문서 생성",
+    description: "최종 PRD와 후속 산출물을 생성합니다.",
+    icon: Sparkles,
+    accent: "bg-emerald-600",
+    ring: "ring-emerald-200",
+    surface: "bg-emerald-50 border-emerald-200",
+  },
 ];
 
 export default function ProcessingPage() {
-  /**
-   * 처리 상태 페이지 컴포넌트입니다.
-   * AI 파이프라인의 실시간 진행률과 현재 단계를 보여줍니다.
-   */
   const router = useRouter();
   const params = useParams();
   const jobId = params.jobId as string;
 
-  // 서버에서 작업 상태를 주기적으로 가져옵니다 (폴링)
   const { data: status, error } = useQuery({
     queryKey: ["processing", jobId],
     queryFn: () => api.getProcessingStatus(jobId),
     refetchInterval: (query) => {
-      const data = query.state.data;
-      // 완료되었거나, 실패했거나, 리뷰가 필요하면 폴링 중단
-      if (data?.status === "completed" || data?.status === "failed" || data?.status === "pm_review") {
-        return false;
-      }
-      return 2000; // 2초마다 갱신
+      const current = query.state.data;
+      if (!current) return 2000;
+      if (current.status === "completed" || current.status === "failed" || current.status === "pm_review") return false;
+      return 2000;
     },
   });
 
-  // 상태 변경에 따른 자동 이동
   useEffect(() => {
     if (status?.status === "completed" && status.prd_id) {
-      // 완료되면 PRD 상세 페이지로 이동
       router.push(`/prd/${status.prd_id}`);
-    } else if (status?.status === "pm_review") {
-      // 검토가 필요하면 리뷰 페이지로 이동
+      return;
+    }
+    if (status?.status === "pm_review") {
       router.push(`/review/${jobId}`);
     }
-  }, [status, jobId, router]);
+  }, [jobId, router, status]);
 
-  const currentLayerIndex = LAYERS.findIndex(
-    (l) => l.key === status?.current_layer
-  );
+  const currentLayerIndex = LAYERS.findIndex((layer) => layer.key === status?.current_layer);
+  const progress = status?.progress_percent ?? 0;
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Header */}
-      <header className="border-b border-slate-700 bg-slate-900/50 backdrop-blur-sm">
-        <div className="max-w-4xl mx-auto px-6 py-4">
-          <div className="flex items-center gap-4">
-            <Link href="/" className="p-2 hover:bg-slate-700 rounded-lg transition-colors">
-              <ArrowLeft className="w-5 h-5" />
-            </Link>
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-br from-blue-500 to-purple-500 rounded-lg">
-                <Layers className="w-5 h-5" />
-              </div>
-              <div>
-                <h1 className="text-lg font-bold">PRD 생성 중</h1>
-                <p className="text-xs text-slate-400">{jobId}</p>
-              </div>
+    <AppShell header={<TopBar title="처리 상태" subtitle={jobId} href="/upload" />}>
+      <HeroPanel
+        kicker="실시간 파이프라인"
+        title="문서 생성 과정을 단계별로 추적하고 있습니다"
+        description="현재 레이어를 크게 강조하고, 다음 화면 이동까지 자연스럽게 이어지도록 처리 보드를 다시 구성했습니다. 완료 시에는 상세 문서로, 검토가 필요한 경우에는 리뷰 화면으로 자동 이동합니다."
+        aside={
+          <div className="space-y-4">
+            <div>
+              <p className="data-label">진행률</p>
+              <p className="mt-2 text-4xl font-semibold tracking-tight text-slate-900">{progress}%</p>
             </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-4xl mx-auto px-6 py-12">
-        {error ? (
-          <div className="text-center py-12">
-            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
-            <p className="text-red-400">상태를 불러올 수 없습니다</p>
-          </div>
-        ) : !status ? (
-          <div className="text-center py-12">
-            <Loader2 className="w-12 h-12 mx-auto mb-4 animate-spin text-blue-400" />
-            <p className="text-slate-400">로딩 중...</p>
-          </div>
-        ) : status.status === "failed" ? (
-          <div className="text-center py-12">
-            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-red-400" />
-            <p className="text-xl font-semibold text-red-400 mb-2">처리 실패</p>
-            <p className="text-slate-400">{status.error}</p>
-            <Link
-              href="/upload"
-              className="inline-block mt-6 px-4 py-2 bg-blue-600 hover:bg-blue-500 rounded-lg"
-            >
-              다시 시도
-            </Link>
-          </div>
-        ) : (
-          <>
-            {/* 진행률 바 */}
-            <div className="mb-12">
-              <div className="flex justify-between text-sm mb-2">
-                <span className="text-slate-400">진행률</span>
-                <span className="text-white font-medium">{status.progress_percent}%</span>
-              </div>
-              <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-500 via-purple-500 to-emerald-500 transition-all duration-500"
-                  style={{ width: `${status.progress_percent}%` }}
-                />
-              </div>
+            <div className="h-3 overflow-hidden rounded-full bg-slate-200">
+              <div className="h-full rounded-full" style={{ width: `${progress}%`, background: "var(--gradient-brand)" }} />
             </div>
+            {status ? (
+              <div className="surface-muted p-4">
+                <p className="data-label">마지막 업데이트</p>
+                <p className="mt-2 text-sm font-medium text-slate-700">{formatDate(status.updated_at)}</p>
+              </div>
+            ) : null}
+          </div>
+        }
+      />
 
-            {/* 단계별 상태 시각화 */}
+      {error ? (
+        <StateMessage
+          icon={<AlertCircle className="h-10 w-10 text-rose-500" />}
+          title="작업 상태를 불러오지 못했습니다"
+          description="잠시 후 다시 시도하거나 새 업로드 작업을 시작해 주세요."
+          action={
+            <Link href="/upload" className="brand-button">
+              새 작업 시작
+            </Link>
+          }
+        />
+      ) : !status ? (
+        <StateMessage
+          icon={<Loader2 className="h-10 w-10 animate-spin text-slate-400" />}
+          title="작업 상태를 연결하는 중입니다"
+          description="처음 응답을 기다리고 있습니다."
+        />
+      ) : status.status === "failed" ? (
+        <StateMessage
+          icon={<AlertCircle className="h-10 w-10 text-rose-500" />}
+          title="처리 작업이 실패했습니다"
+          description={status.error ?? "알 수 없는 오류로 작업이 중단되었습니다."}
+          action={
+            <Link href="/upload" className="brand-button">
+              다시 업로드
+            </Link>
+          }
+        />
+      ) : (
+        <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="section-card">
+            <SectionHeader
+              title="레이어 진행 보드"
+              description="완료 단계와 현재 진행 단계가 확실히 보이도록 카드 보드로 정리했습니다."
+            />
             <div className="space-y-4">
               {LAYERS.map((layer, index) => {
-                const isComplete = index < currentLayerIndex || status.status === "completed";
+                const isComplete = status.status === "completed" || index < currentLayerIndex;
                 const isCurrent = index === currentLayerIndex && status.status !== "completed";
-                const isPending = index > currentLayerIndex;
-
                 const Icon = layer.icon;
 
                 return (
                   <div
                     key={layer.key}
-                    className={`
-                      p-6 rounded-xl border transition-all
-                      ${isComplete
-                        ? "bg-slate-800/80 border-green-500/30"
-                        : isCurrent
-                        ? `bg-gradient-to-r from-${layer.color}-500/20 to-${layer.color}-600/20 border-${layer.color}-500/50 ring-2 ring-${layer.color}-500/30`
-                        : "bg-slate-800/30 border-slate-700 opacity-50"
-                      }
-                    `}
+                    className={`rounded-[28px] border p-5 transition ${
+                      isCurrent
+                        ? `${layer.surface} ring-4 ${layer.ring}`
+                        : isComplete
+                        ? "border-emerald-200 bg-emerald-50"
+                        : "border-slate-200 bg-white/65"
+                    }`}
                   >
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-start gap-4">
                       <div
-                        className={`
-                          p-3 rounded-lg
-                          ${isComplete
-                            ? "bg-green-500"
-                            : isCurrent
-                            ? `bg-${layer.color}-500`
-                            : "bg-slate-700"
-                          }
-                        `}
+                        className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] text-white ${
+                          isComplete ? "bg-emerald-600" : isCurrent ? layer.accent : "bg-slate-300"
+                        }`}
                       >
-                        {isComplete ? (
-                          <CheckCircle className="w-6 h-6" />
-                        ) : isCurrent ? (
-                          <Loader2 className="w-6 h-6 animate-spin" />
+                        {isCurrent ? (
+                          <Loader2 className="h-5 w-5 animate-spin" />
+                        ) : isComplete ? (
+                          <CheckCircle2 className="h-5 w-5" />
                         ) : (
-                          <Icon className="w-6 h-6" />
+                          <Icon className="h-5 w-5" />
                         )}
                       </div>
-                      <div className="flex-1">
-                        <h3 className="font-semibold">{layer.name}</h3>
-                        <p className="text-sm text-slate-400">
-                          {isComplete
-                            ? "완료"
-                            : isCurrent
-                            ? "처리 중..."
-                            : "대기 중"}
-                        </p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-lg font-semibold tracking-tight text-slate-900">{layer.name}</p>
+                          <span
+                            className={`pill-badge ${
+                              isComplete
+                                ? "bg-emerald-100 text-emerald-700"
+                                : isCurrent
+                                ? "bg-slate-900 text-white"
+                                : "bg-slate-100 text-slate-500"
+                            }`}
+                          >
+                            {isComplete ? "완료" : isCurrent ? "진행 중" : "대기"}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-slate-600">{layer.description}</p>
                       </div>
-                      {isComplete && (
-                        <CheckCircle className="w-5 h-5 text-green-400" />
-                      )}
                     </div>
                   </div>
                 );
               })}
             </div>
+          </div>
 
-            {/* 처리 중인 문서 목록 */}
-            <div className="mt-8 p-4 bg-slate-800/30 rounded-lg border border-slate-700">
-              <h4 className="text-sm font-medium text-slate-300 mb-2">처리 중인 문서</h4>
-              <div className="flex flex-wrap gap-2">
-                {status.documents?.map((doc, i) => (
-                  <span
-                    key={i}
-                    className="px-3 py-1 bg-slate-700 rounded-full text-sm"
-                  >
-                    {doc}
-                  </span>
-                ))}
+          <aside className="section-card">
+            <SectionHeader title="입력 문서" description="현재 작업에 포함된 원본 파일입니다." />
+            <div className="space-y-3">
+              {status.documents?.length ? (
+                status.documents.map((document) => (
+                  <div key={document} className="surface-muted flex items-center gap-3 px-4 py-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-900 text-white">
+                      <FileText className="h-4 w-4" />
+                    </div>
+                    <p className="min-w-0 truncate text-sm font-medium text-slate-700">{document}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="surface-muted px-4 py-5 text-sm text-slate-500">등록된 파일이 없습니다.</div>
+              )}
+            </div>
+
+            <div className="mt-6 grid gap-4">
+              <div className="surface-muted p-5">
+                <p className="data-label">다음 이동</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">
+                  작업이 완료되면 상세 PRD 화면으로 이동하고, 사람이 판단해야 할 항목이 있으면 PM 리뷰 화면으로 자동 전환됩니다.
+                </p>
+              </div>
+              <div className="surface-muted p-5">
+                <p className="data-label">현재 상태</p>
+                <div className="mt-3 flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <Target className="h-4 w-4 text-blue-600" />
+                  {status.status}
+                </div>
               </div>
             </div>
-          </>
-        )}
-      </main>
-    </div>
+          </aside>
+        </section>
+      )}
+    </AppShell>
+  );
+}
+
+function StateMessage({
+  icon,
+  title,
+  description,
+  action,
+}: {
+  icon: ReactNode;
+  title: string;
+  description: string;
+  action?: ReactNode;
+}) {
+  return (
+    <section className="section-card">
+      <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
+        {icon}
+        <p className="mt-5 text-2xl font-semibold tracking-tight text-slate-900">{title}</p>
+        <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500">{description}</p>
+        {action ? <div className="mt-6">{action}</div> : null}
+      </div>
+    </section>
   );
 }
