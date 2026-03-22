@@ -18,10 +18,17 @@ const TABS: Array<{ key: TabKey; label: string }> = [
 ];
 
 const PRIORITY_STYLE: Record<string, string> = {
-  HIGH: "bg-rose-100 text-rose-700",
-  MEDIUM: "bg-amber-100 text-amber-700",
+  HIGH: "bg-gradient-to-r from-rose-100 to-rose-50 text-rose-700",
+  MEDIUM: "bg-gradient-to-r from-amber-100 to-amber-50 text-amber-700",
   LOW: "bg-slate-100 text-slate-600",
 };
+
+const INFO_TILE_ACCENTS = [
+  "from-[#6366F1] to-[#818CF8]",
+  "from-[#8B5CF6] to-[#A78BFA]",
+  "from-[#F59E0B] to-[#FBBF24]",
+  "from-[#10B981] to-[#34D399]",
+];
 
 export default function PRDViewerPage() {
   const params = useParams();
@@ -65,7 +72,7 @@ export default function PRDViewerPage() {
     return (
       <AppShell header={<TopBar title="PRD 상세" subtitle="문서를 불러오는 중입니다" href="/history" />}>
         <section className="section-card flex items-center justify-center py-20">
-          <div className="h-10 w-10 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
+          <div className="h-10 w-10 animate-spin rounded-full border-2 border-[#6366F1]/30 border-t-[#6366F1]" />
         </section>
       </AppShell>
     );
@@ -76,8 +83,8 @@ export default function PRDViewerPage() {
       <AppShell header={<TopBar title="PRD 상세" subtitle="문서를 찾을 수 없습니다" href="/history" />}>
         <section className="section-card">
           <div className="flex flex-col items-center justify-center px-6 py-20 text-center">
-            <AlertCircle className="h-10 w-10 text-rose-500" />
-            <p className="mt-4 text-2xl font-semibold tracking-tight text-slate-900">PRD를 불러오지 못했습니다</p>
+            <AlertCircle className="h-10 w-10 text-[#F43F5E]" />
+            <p className="mt-4 text-xl font-semibold tracking-tight text-slate-900">PRD를 불러오지 못했습니다</p>
             <Link href="/history" className="mt-6 brand-button">
               아카이브로 돌아가기
             </Link>
@@ -98,15 +105,15 @@ export default function PRDViewerPage() {
           href="/history"
           action={
             <div className="flex flex-wrap gap-2">
-              <button onClick={() => handleExport("markdown")} className="secondary-button !rounded-full !px-4 !py-2">
+              <button onClick={() => handleExport("markdown")} className="secondary-button !rounded-xl !px-3 !py-1.5">
                 <Download className="h-4 w-4" />
                 MD
               </button>
-              <button onClick={() => handleExport("json")} className="secondary-button !rounded-full !px-4 !py-2">
+              <button onClick={() => handleExport("json")} className="secondary-button !rounded-xl !px-3 !py-1.5">
                 <Download className="h-4 w-4" />
                 JSON
               </button>
-              <button onClick={() => handleExport("html")} className="secondary-button !rounded-full !px-4 !py-2">
+              <button onClick={() => handleExport("html")} className="secondary-button !rounded-xl !px-3 !py-1.5">
                 <Download className="h-4 w-4" />
                 HTML
               </button>
@@ -131,10 +138,10 @@ export default function PRDViewerPage() {
               )}
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <InfoTile label="기능 요구사항" value={prd.functional_requirements.length} />
-              <InfoTile label="비기능 요구사항" value={prd.non_functional_requirements.length} />
-              <InfoTile label="제약 조건" value={prd.constraints.length} />
-              <InfoTile label="마일스톤" value={prd.milestones.length} />
+              <InfoTile label="기능 요구사항" value={prd.functional_requirements.length} index={0} />
+              <InfoTile label="비기능 요구사항" value={prd.non_functional_requirements.length} index={1} />
+              <InfoTile label="제약 조건" value={prd.constraints.length} index={2} />
+              <InfoTile label="마일스톤" value={prd.milestones.length} index={3} />
             </div>
           </div>
         }
@@ -168,11 +175,14 @@ export default function PRDViewerPage() {
   );
 }
 
-function InfoTile({ label, value }: { label: string; value: number }) {
+function InfoTile({ label, value, index = 0 }: { label: string; value: number; index?: number }) {
+  const accent = INFO_TILE_ACCENTS[index % INFO_TILE_ACCENTS.length];
+
   return (
-    <div className="surface-muted px-4 py-3">
+    <div className="surface-muted relative overflow-hidden px-4 py-3">
+      <div className={`absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r ${accent}`} />
       <p className="data-label">{label}</p>
-      <p className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">{value}</p>
+      <p className="mt-2 text-xl font-bold tracking-tight text-slate-900">{value}</p>
     </div>
   );
 }
@@ -187,9 +197,9 @@ function OverviewTab({ prd }: { prd: Awaited<ReturnType<typeof api.getPRD>> }) {
       </div>
 
       <aside className="space-y-4">
-        <CompactInfoBlock title="목표" icon={<Target className="h-4 w-4 text-blue-600" />} items={prd.overview.goals} emptyLabel="등록된 목표가 없습니다." />
-        <CompactInfoBlock title="대상 사용자" icon={<Users className="h-4 w-4 text-violet-600" />} items={prd.overview.target_users} emptyLabel="등록된 대상 사용자가 없습니다." />
-        <CompactInfoBlock title="성공 지표" icon={<Flag className="h-4 w-4 text-emerald-600" />} items={prd.overview.success_metrics} emptyLabel="등록된 성공 지표가 없습니다." />
+        <CompactInfoBlock title="목표" icon={<Target className="h-4 w-4 text-[#6366F1]" />} items={prd.overview.goals} emptyLabel="등록된 목표가 없습니다." />
+        <CompactInfoBlock title="대상 사용자" icon={<Users className="h-4 w-4 text-[#8B5CF6]" />} items={prd.overview.target_users} emptyLabel="등록된 대상 사용자가 없습니다." />
+        <CompactInfoBlock title="성공 지표" icon={<Flag className="h-4 w-4 text-[#10B981]" />} items={prd.overview.success_metrics} emptyLabel="등록된 성공 지표가 없습니다." />
       </aside>
     </div>
   );
@@ -206,17 +216,17 @@ function RequirementsTab({
 }) {
   return (
     <div className="space-y-8">
-      <RequirementGroup title="기능 요구사항" icon={<Target className="h-4 w-4 text-blue-600" />}>
+      <RequirementGroup title="기능 요구사항" icon={<Target className="h-4 w-4 text-[#6366F1]" />}>
         {prd.functional_requirements.map((req) => (
           <RequirementCard key={req.id} req={req} expanded={expandedReqs.has(req.id)} onToggle={() => onToggle(req.id)} />
         ))}
       </RequirementGroup>
-      <RequirementGroup title="비기능 요구사항" icon={<Shield className="h-4 w-4 text-violet-600" />}>
+      <RequirementGroup title="비기능 요구사항" icon={<Shield className="h-4 w-4 text-[#8B5CF6]" />}>
         {prd.non_functional_requirements.map((req) => (
           <RequirementCard key={req.id} req={req} expanded={expandedReqs.has(req.id)} onToggle={() => onToggle(req.id)} />
         ))}
       </RequirementGroup>
-      <RequirementGroup title="제약 조건" icon={<Lock className="h-4 w-4 text-amber-600" />}>
+      <RequirementGroup title="제약 조건" icon={<Lock className="h-4 w-4 text-[#F59E0B]" />}>
         {prd.constraints.map((req) => (
           <RequirementCard key={req.id} req={req} expanded={expandedReqs.has(req.id)} onToggle={() => onToggle(req.id)} />
         ))}
@@ -238,12 +248,12 @@ function MilestonesTab({ prd }: { prd: Awaited<ReturnType<typeof api.getPRD>> })
         .map((milestone, index) => (
           <div key={milestone.id} className="list-card">
             <div className="flex items-start gap-4">
-              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[22px] bg-slate-900 text-lg font-bold text-white">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-slate-700 to-slate-900 text-base font-bold text-white">
                 {index + 1}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-xl font-bold tracking-[-0.04em] text-slate-900">{milestone.name}</p>
-                <p className="mt-3 text-sm leading-7 text-slate-600">{milestone.description}</p>
+                <p className="text-lg font-bold tracking-[-0.03em] text-slate-900">{milestone.name}</p>
+                <p className="mt-2.5 text-sm leading-7 text-slate-600">{milestone.description}</p>
                 {milestone.deliverables.length ? (
                   <div className="mt-4">
                     <p className="data-label">산출물</p>
@@ -266,7 +276,7 @@ function UnresolvedTab({ prd }: { prd: Awaited<ReturnType<typeof api.getPRD>> })
   if (!prd.unresolved_items.length) {
     return (
       <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
-        <CheckCircle2 className="h-10 w-10 text-emerald-600" />
+        <CheckCircle2 className="h-10 w-10 text-[#10B981]" />
         <p className="mt-4 text-xl font-semibold tracking-tight text-slate-900">미해결 이슈가 없습니다</p>
       </div>
     );
@@ -282,7 +292,7 @@ function UnresolvedTab({ prd }: { prd: Awaited<ReturnType<typeof api.getPRD>> })
                 <span className="pill-badge bg-slate-100 text-slate-600">{item.type}</span>
                 <span className={`pill-badge ${PRIORITY_STYLE[item.priority] ?? PRIORITY_STYLE.MEDIUM}`}>{item.priority}</span>
               </div>
-              <p className="mt-3 text-base font-semibold text-slate-900">{item.description}</p>
+              <p className="mt-2.5 text-base font-semibold text-slate-900">{item.description}</p>
               {item.suggested_action ? <p className="mt-2 text-sm leading-6 text-slate-600">권장 조치: {item.suggested_action}</p> : null}
             </div>
           </div>
@@ -297,7 +307,7 @@ function RequirementGroup({ title, icon, children }: { title: string; icon: Reac
     <div>
       <div className="mb-3 flex items-center gap-2">
         {icon}
-        <h3 className="text-lg font-semibold tracking-tight text-slate-900">{title}</h3>
+        <h3 className="text-base font-semibold tracking-tight text-slate-900">{title}</h3>
       </div>
       <div className="space-y-3">{children}</div>
     </div>
@@ -316,7 +326,7 @@ function RequirementCard({
   const confidence = scoreBadge(req.confidence_score);
 
   return (
-    <div className="rounded-[26px] border border-slate-200 bg-white/70">
+    <div className="rounded-2xl border border-[var(--line-soft)] bg-[var(--bg-panel)]">
       <button onClick={onToggle} className="flex w-full items-start gap-4 p-5 text-left">
         <div className="mt-1 text-slate-400">{expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}</div>
         <div className="min-w-0 flex-1">
@@ -325,12 +335,12 @@ function RequirementCard({
             <span className={`pill-badge ${PRIORITY_STYLE[req.priority] ?? PRIORITY_STYLE.MEDIUM}`}>{req.priority}</span>
             <span className={`pill-badge ${confidence.className}`}>{confidence.label}</span>
           </div>
-          <p className="mt-3 text-lg font-semibold tracking-tight text-slate-900">{req.title}</p>
+          <p className="mt-2.5 text-base font-semibold tracking-tight text-slate-900">{req.title}</p>
         </div>
       </button>
 
       {expanded ? (
-        <div className="border-t border-slate-200 px-5 pb-5 pl-14 pt-5">
+        <div className="border-t border-[var(--line-soft)] px-5 pb-5 pl-14 pt-5">
           <div className="grid gap-4 lg:grid-cols-2">
             <DetailBlock title="설명">{req.description}</DetailBlock>
             <DetailBlock title="신뢰도 근거">{req.confidence_reason || "기록된 근거가 없습니다."}</DetailBlock>
@@ -347,7 +357,7 @@ function RequirementCard({
 
 function ReadingBlock({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <div className="glass-panel-strong p-6">
+    <div className="glass-panel-strong rounded-2xl p-6">
       <SectionHeader title={title} />
       <div className="text-sm leading-8 text-slate-700">{children}</div>
     </div>
@@ -425,7 +435,7 @@ function ListBlock({ title, items }: { title: string; items: string[] }) {
 
 function EmptyPanel({ title }: { title: string }) {
   return (
-    <div className="surface-muted flex items-center justify-center rounded-[28px] px-6 py-16 text-center">
+    <div className="surface-muted flex items-center justify-center rounded-2xl px-6 py-16 text-center">
       <p className="text-base font-semibold text-slate-700">{title}</p>
     </div>
   );

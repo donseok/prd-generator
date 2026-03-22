@@ -1,6 +1,6 @@
 """
 문서 생성 통합 오케스트레이터 서비스입니다.
-PRD, TRD, WBS, 제안서, PPT 5종 문서 전체 생성 과정을 순서대로 관리합니다.
+PRD, TRD, WBS, 제안서, PPT, 에이전트 팀 6종 문서 전체 생성 과정을 순서대로 관리합니다.
 
 생성 순서:
 1. PRD (제품 요구사항) 생성
@@ -8,6 +8,7 @@ PRD, TRD, WBS, 제안서, PPT 5종 문서 전체 생성 과정을 순서대로 �
 3. WBS (작업 분해) 생성
 4. 제안서 생성
 5. PPT 생성
+6. 에이전트 팀 구성 생성
 """
 
 import asyncio
@@ -55,14 +56,15 @@ class DocumentBundle:
     wbs_path: Optional[Path] = None  # WBS 파일 경로
     proposal_path: Optional[Path] = None  # 제안서 파일 경로
     ppt_path: Optional[Path] = None  # PPT 파일 경로
+    agent_team_path: Optional[Path] = None  # 에이전트 팀 구성 파일 경로
 
     total_time_seconds: float = 0.0  # 총 소요 시간
     errors: List[str] = field(default_factory=list)  # 발생한 에러 목록
 
     def is_complete(self) -> bool:
-        """5종 문서(PRD, TRD, WBS, 제안서, PPT)가 모두 생성되었는지 확인합니다."""
+        """6종 문서(PRD, TRD, WBS, 제안서, PPT, 에이전트 팀)가 모두 생성되었는지 확인합니다."""
         return all([self.prd_path, self.trd_path, self.wbs_path,
-                     self.proposal_path, self.ppt_path])
+                     self.proposal_path, self.ppt_path, self.agent_team_path])
 
 
 class DocumentOrchestrator:
@@ -92,6 +94,7 @@ class DocumentOrchestrator:
         self.wbs_dir = self.output_base_dir / "wbs"
         self.proposal_dir = self.output_base_dir / "proposals"
         self.ppt_dir = self.output_base_dir / "ppt"
+        self.agent_team_dir = self.output_base_dir / "agent-team"
     
     async def generate_all(
         self,
@@ -99,7 +102,7 @@ class DocumentOrchestrator:
         on_step: Optional[Callable[[str, int, int], None]] = None,
     ) -> DocumentBundle:
         """
-        5종 문서(PRD, TRD, WBS, 제안서, PPT)를 순서대로 생성하는 메인 함수입니다.
+        6종 문서(PRD, TRD, WBS, 제안서, PPT, 에이전트 팀)를 순서대로 생성하는 메인 함수입니다.
 
         Args:
             verbose: 진행 상황을 화면에 출력할지 여부
@@ -111,13 +114,13 @@ class DocumentOrchestrator:
         bundle = DocumentBundle()
         total_start = time.time()
 
-        def notify_step(step_name: str, current: int, total: int = 5):
+        def notify_step(step_name: str, current: int, total: int = 6):
             if on_step:
                 on_step(step_name, current, total)
 
         if verbose:
             safe_print("\n" + "=" * 70)
-            safe_print("📋 전체 문서 생성 시작 (5종: PRD → TRD → WBS → 제안서 → PPT)")
+            safe_print("📋 전체 문서 생성 시작 (6종: PRD → TRD → WBS → 제안서 → PPT → 에이전트 팀)")
             safe_print(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
             safe_print("=" * 70)
 
@@ -125,7 +128,7 @@ class DocumentOrchestrator:
             # 1단계: PRD 생성
             notify_step("prd", 1)
             if verbose:
-                safe_print("\n[1/5] PRD (제품 요구사항 정의서) 생성 중...")
+                safe_print("\n[1/6] PRD (제품 요구사항 정의서) 생성 중...")
             bundle.prd_path = await self._generate_prd(verbose)
 
             if not bundle.prd_path:
@@ -135,7 +138,7 @@ class DocumentOrchestrator:
             # 2단계: TRD 생성
             notify_step("trd", 2)
             if verbose:
-                safe_print("\n[2/5] TRD (기술 요구사항 정의서) 생성 중...")
+                safe_print("\n[2/6] TRD (기술 요구사항 정의서) 생성 중...")
             bundle.trd_path = await self._generate_trd(bundle.prd_path, verbose)
 
             if not bundle.trd_path:
@@ -144,7 +147,7 @@ class DocumentOrchestrator:
             # 3단계: WBS 생성
             notify_step("wbs", 3)
             if verbose:
-                safe_print("\n[3/5] WBS (작업 분해 구조) 생성 중...")
+                safe_print("\n[3/6] WBS (작업 분해 구조) 생성 중...")
             bundle.wbs_path = await self._generate_wbs(bundle.prd_path, verbose)
 
             if not bundle.wbs_path:
@@ -153,7 +156,7 @@ class DocumentOrchestrator:
             # 4단계: 제안서 생성
             notify_step("proposal", 4)
             if verbose:
-                safe_print("\n[4/5] 프로젝트 제안서 생성 중...")
+                safe_print("\n[4/6] 프로젝트 제안서 생성 중...")
             bundle.proposal_path = await self._generate_proposal(
                 bundle.prd_path, "귀사", verbose
             )
@@ -165,7 +168,7 @@ class DocumentOrchestrator:
             notify_step("ppt", 5)
             if bundle.proposal_path:
                 if verbose:
-                    safe_print("\n[5/5] PPT 제안서 생성 중...")
+                    safe_print("\n[5/6] PPT 제안서 생성 중...")
                 bundle.ppt_path = await self._generate_ppt(
                     bundle.proposal_path, verbose
                 )
@@ -174,11 +177,112 @@ class DocumentOrchestrator:
                     bundle.errors.append("PPT 생성 실패")
             else:
                 if verbose:
-                    safe_print("\n[5/5] PPT 생성 건너뜀 (제안서 없음)")
+                    safe_print("\n[5/6] PPT 생성 건너뜀 (제안서 없음)")
                 bundle.errors.append("PPT 생성 건너뜀 (제안서 없음)")
+
+            # 6단계: 에이전트 팀 구성 생성
+            notify_step("agent_team", 6)
+            if bundle.prd_path:
+                if verbose:
+                    safe_print("\n[6/6] 에이전트 팀 구성 문서 생성 중...")
+                bundle.agent_team_path = await self._generate_agent_team(
+                    bundle.prd_path, bundle.trd_path, bundle.wbs_path, verbose
+                )
+
+                if not bundle.agent_team_path:
+                    bundle.errors.append("에이전트 팀 생성 실패")
+            else:
+                if verbose:
+                    safe_print("\n[6/6] 에이전트 팀 생성 건너뜀 (PRD 없음)")
+                bundle.errors.append("에이전트 팀 생성 건너뜀 (PRD 없음)")
 
         except Exception as e:
             logger.error(f"문서 생성 중 오류: {e}", exc_info=True)
+            bundle.errors.append(str(e))
+
+        bundle.total_time_seconds = time.time() - total_start
+
+        if verbose:
+            self._print_summary(bundle)
+
+        return bundle
+
+    async def generate_selected(
+        self,
+        doc_types: List[str],
+        verbose: bool = True,
+        on_step: Optional[Callable[[str, int, int], None]] = None,
+    ) -> DocumentBundle:
+        """선택한 문서 타입만 순서대로 생성한다."""
+        selected = [doc_type for doc_type in ["prd", "trd", "wbs", "proposal", "ppt"] if doc_type in doc_types]
+        if not selected:
+            raise ValueError("생성할 문서 타입이 없습니다.")
+
+        bundle = DocumentBundle()
+        total_start = time.time()
+        step_map = {name: index + 1 for index, name in enumerate(selected)}
+
+        def notify_step(step_name: str):
+            if on_step:
+                on_step(step_name, step_map[step_name], len(selected))
+
+        try:
+            if "prd" in selected:
+                notify_step("prd")
+                bundle.prd_path = await self._generate_prd(verbose)
+                if not bundle.prd_path:
+                    bundle.errors.append("PRD 생성 실패")
+                    return bundle
+
+            if "trd" in selected:
+                if not bundle.prd_path:
+                    bundle.errors.append("TRD 생성 실패: PRD가 먼저 필요합니다.")
+                else:
+                    notify_step("trd")
+                    bundle.trd_path = await self._generate_trd(bundle.prd_path, verbose)
+                    if not bundle.trd_path:
+                        bundle.errors.append("TRD 생성 실패")
+
+            if "wbs" in selected:
+                if not bundle.prd_path:
+                    bundle.errors.append("WBS 생성 실패: PRD가 먼저 필요합니다.")
+                else:
+                    notify_step("wbs")
+                    bundle.wbs_path = await self._generate_wbs(bundle.prd_path, verbose)
+                    if not bundle.wbs_path:
+                        bundle.errors.append("WBS 생성 실패")
+
+            if "proposal" in selected:
+                if not bundle.prd_path:
+                    bundle.errors.append("제안서 생성 실패: PRD가 먼저 필요합니다.")
+                else:
+                    notify_step("proposal")
+                    bundle.proposal_path = await self._generate_proposal(bundle.prd_path, "고객사", verbose)
+                    if not bundle.proposal_path:
+                        bundle.errors.append("제안서 생성 실패")
+
+            if "ppt" in selected:
+                if bundle.proposal_path:
+                    notify_step("ppt")
+                    bundle.ppt_path = await self._generate_ppt(bundle.proposal_path, verbose)
+                    if not bundle.ppt_path:
+                        bundle.errors.append("PPT 생성 실패")
+                elif "proposal" in selected:
+                    bundle.errors.append("PPT 생성 실패: 제안서가 필요합니다.")
+                elif bundle.prd_path:
+                    notify_step("proposal")
+                    bundle.proposal_path = await self._generate_proposal(bundle.prd_path, "고객사", verbose)
+                    if bundle.proposal_path:
+                        notify_step("ppt")
+                        bundle.ppt_path = await self._generate_ppt(bundle.proposal_path, verbose)
+                        if not bundle.ppt_path:
+                            bundle.errors.append("PPT 생성 실패")
+                    else:
+                        bundle.errors.append("PPT 생성 실패: 제안서 생성에 실패했습니다.")
+                else:
+                    bundle.errors.append("PPT 생성 실패: PRD가 먼저 필요합니다.")
+        except Exception as e:
+            logger.error(f"선택 문서 생성 중 오류: {e}", exc_info=True)
             bundle.errors.append(str(e))
 
         bundle.total_time_seconds = time.time() - total_start
@@ -412,6 +516,65 @@ class DocumentOrchestrator:
             logger.error(f"PPT 생성 오류: {e}", exc_info=True)
             return None
 
+    async def _generate_agent_team(
+        self,
+        prd_path: Path,
+        trd_path: Optional[Path],
+        wbs_path: Optional[Path],
+        verbose: bool,
+    ) -> Optional[Path]:
+        """에이전트 팀 구성 문서 생성 내부 함수."""
+        from app.scripts.team_maker import (
+            _load_json,
+            _extract_prd_summary,
+            _extract_trd_summary,
+            _extract_wbs_summary,
+            _build_prompt,
+        )
+        from app.services.claude_client import get_claude_client
+
+        try:
+            self.agent_team_dir.mkdir(parents=True, exist_ok=True)
+
+            # PRD 로드
+            prd_data = _load_json(prd_path)
+            prd_summary = _extract_prd_summary(prd_data)
+
+            # TRD 로드 (선택)
+            trd_summary = ""
+            if trd_path and trd_path.exists():
+                trd_data = _load_json(trd_path)
+                trd_summary = _extract_trd_summary(trd_data)
+
+            # WBS 로드 (선택)
+            wbs_summary = ""
+            if wbs_path and wbs_path.exists():
+                wbs_data = _load_json(wbs_path)
+                wbs_summary = _extract_wbs_summary(wbs_data)
+
+            # Claude CLI로 에이전트 팀 문서 생성
+            client = get_claude_client()
+            prompt = _build_prompt(prd_summary, trd_summary, wbs_summary, team_size=5)
+
+            result = await client.complete(
+                system_prompt="프로젝트 에이전트 팀 구성 문서를 Markdown 형식으로 생성하세요. 코드 블록 없이 순수 Markdown만 출력하세요.",
+                user_prompt=prompt,
+            )
+
+            # 저장
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            md_path = self.agent_team_dir / f"TEAM-{timestamp}.md"
+            md_path.write_text(result, encoding="utf-8")
+
+            if verbose:
+                safe_print(f"  ✅ 에이전트 팀 저장 완료: {md_path.name}")
+
+            return md_path
+
+        except Exception as e:
+            logger.error(f"에이전트 팀 생성 오류: {e}", exc_info=True)
+            return None
+
     def _get_input_files(self) -> List[Path]:
         """입력 폴더에서 처리할 파일들을 찾아서 반환합니다."""
         if not self.input_dir.exists():
@@ -449,7 +612,7 @@ class DocumentOrchestrator:
     def _print_summary(self, bundle: DocumentBundle):
         """작업 결과를 요약해서 출력합니다."""
         safe_print("\n" + "=" * 70)
-        safe_print("📋 문서 생성 작업 완료 (5종)")
+        safe_print("📋 문서 생성 작업 완료 (6종)")
         safe_print("=" * 70)
 
         docs = [
@@ -458,6 +621,7 @@ class DocumentOrchestrator:
             ("WBS", bundle.wbs_path),
             ("제안서", bundle.proposal_path),
             ("PPT", bundle.ppt_path),
+            ("에이전트 팀", bundle.agent_team_path),
         ]
 
         for name, path in docs:

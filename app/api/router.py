@@ -5,7 +5,7 @@ API 라우터 설정 파일입니다.
 
 from fastapi import APIRouter
 
-from app.api.endpoints import health, documents, processing, prd, review, outputs, auto_doc
+from app.api.endpoints import health, documents, processing, prd, review, outputs, auto_doc, projects
 
 # 메인 API 라우터 생성
 api_router = APIRouter()
@@ -57,4 +57,11 @@ api_router.include_router(
     auto_doc.router,
     prefix="/auto-doc",
     tags=["auto-doc"]
+)
+
+# 프로젝트 관리 엔드포인트: 문서를 프로젝트로 묶어 관리 (/projects)
+api_router.include_router(
+    projects.router,
+    prefix="/projects",
+    tags=["projects"]
 )

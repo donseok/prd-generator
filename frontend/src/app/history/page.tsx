@@ -94,14 +94,14 @@ export default function HistoryPage() {
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="surface-muted p-4">
                 <p className="data-label">현재 페이지</p>
-                <p className="mt-2 text-3xl font-black tracking-[-0.06em] text-slate-900">
+                <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-slate-900">
                   {totalPages ? page + 1 : 0}
                   <span className="ml-2 text-base font-medium text-slate-400">/ {totalPages || 0}</span>
                 </p>
               </div>
               <div className="surface-muted p-4">
                 <p className="data-label">페이지당 문서</p>
-                <p className="mt-2 text-3xl font-black tracking-[-0.06em] text-slate-900">{ITEMS_PER_PAGE}</p>
+                <p className="mt-2 text-2xl font-bold tracking-[-0.04em] text-slate-900">{ITEMS_PER_PAGE}</p>
               </div>
             </div>
             <div className="surface-muted flex items-center gap-3 px-4 py-3">
@@ -144,12 +144,12 @@ export default function HistoryPage() {
         <section className="section-card">
           <SectionHeader title="문서 목록" description="제목으로 검색하고 원하는 형식으로 바로 내보낼 수 있습니다." />
           <div className="relative mb-6">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-[#6366F1]/50" />
             <input
               value={searchQuery}
               onChange={(event) => setSearchQuery(event.target.value)}
               placeholder="문서 제목 검색"
-              className="input-surface pl-12"
+              className="input-surface pl-11"
             />
           </div>
 
@@ -189,18 +189,18 @@ export default function HistoryPage() {
                   <button
                     onClick={() => setPage((current) => Math.max(0, current - 1))}
                     disabled={page === 0}
-                    className="secondary-button disabled:cursor-not-allowed disabled:opacity-50"
+                    className="secondary-button !rounded-xl disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <ChevronLeft className="h-4 w-4" />
                     이전
                   </button>
-                  <span className="text-sm font-medium text-slate-500">
-                    {page + 1} / {totalPages}
+                  <span className="text-sm font-bold text-[#6366F1]">
+                    {page + 1} <span className="font-medium text-slate-400">/ {totalPages}</span>
                   </span>
                   <button
                     onClick={() => setPage((current) => Math.min(totalPages - 1, current + 1))}
                     disabled={page >= totalPages - 1}
-                    className="secondary-button disabled:cursor-not-allowed disabled:opacity-50"
+                    className="secondary-button !rounded-xl disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     다음
                     <ChevronRight className="h-4 w-4" />
@@ -220,16 +220,18 @@ function FeaturedCard({ prd }: { prd: PRDListItem }) {
 
   return (
     <Link href={`/prd/${prd.id}`} className="block">
-      <div className="glass-panel-strong overflow-hidden rounded-[30px] p-6">
-        <div className="mb-5 flex flex-wrap items-center gap-2">
-          <span className={`pill-badge ${badge.className}`}>신뢰도 {badge.label}</span>
-          <span className="pill-badge bg-slate-100 text-slate-600">{STATUS_LABELS[prd.status] ?? prd.status}</span>
+      <div className="glass-panel-strong overflow-hidden rounded-2xl border border-[#6366F1]/10 p-6">
+        {/* Decorative gradient bar */}
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#6366F1] via-[#8B5CF6] to-[#06B6D4]" />
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <span className={`pill-badge rounded-full ${badge.className}`}>신뢰도 {badge.label}</span>
+          <span className="pill-badge rounded-full bg-slate-100 text-slate-600">{STATUS_LABELS[prd.status] ?? prd.status}</span>
         </div>
-        <p className="text-2xl font-black tracking-[-0.05em] text-slate-900">{prd.title}</p>
-        <p className="mt-4 text-sm leading-7 text-slate-600">
+        <p className="text-xl font-bold tracking-[-0.03em] text-slate-900">{prd.title}</p>
+        <p className="mt-3 text-sm leading-7 text-slate-600">
           요구사항 {prd.requirements_count}개가 정리된 문서입니다. 상세 화면에서 개요, 마일스톤, 미해결 이슈까지 이어서 확인할 수 있습니다.
         </p>
-        <div className="mt-6 grid gap-3 sm:grid-cols-2">
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
           <div className="surface-muted p-4">
             <p className="data-label">생성일</p>
             <p className="mt-2 text-sm font-semibold text-slate-800">{formatDate(prd.created_at)}</p>
@@ -260,18 +262,18 @@ function PRDCard({
   const badge = scoreBadge(prd.overall_confidence);
 
   return (
-    <div className={`list-card ${isFeatured ? "ring-1 ring-blue-200/80" : ""}`}>
+    <div className={`list-card ${isFeatured ? "ring-1 ring-[#6366F1]/20" : ""}`}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            {isFeatured ? <span className="pill-badge bg-blue-100 text-blue-700">최근 문서</span> : null}
+            {isFeatured ? <span className="pill-badge bg-gradient-to-r from-indigo-500 to-violet-500 text-white">최근 문서</span> : null}
             <span className={`pill-badge ${badge.className}`}>{badge.label}</span>
             <span className="pill-badge bg-slate-100 text-slate-600">{STATUS_LABELS[prd.status] ?? prd.status}</span>
           </div>
-          <Link href={`/prd/${prd.id}`} className="mt-3 block">
-            <p className="truncate text-xl font-bold tracking-[-0.04em] text-slate-900">{prd.title}</p>
+          <Link href={`/prd/${prd.id}`} className="mt-2.5 block">
+            <p className="truncate text-lg font-bold tracking-[-0.03em] text-slate-900">{prd.title}</p>
           </Link>
-          <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-slate-500">
+          <div className="mt-2.5 flex flex-wrap items-center gap-3 text-sm text-slate-500">
             <span>{formatDate(prd.created_at)}</span>
             <span>요구사항 {prd.requirements_count}개</span>
           </div>
@@ -284,7 +286,7 @@ function PRDCard({
           <button
             onClick={onDelete}
             disabled={isDeleting}
-            className="secondary-button !rounded-full !px-4 !py-2 text-rose-600 disabled:opacity-50"
+            className="secondary-button !rounded-xl !px-3 !py-1.5 text-[#F43F5E] disabled:opacity-50"
           >
             <Trash2 className="h-4 w-4" />
             삭제
@@ -297,7 +299,7 @@ function PRDCard({
 
 function ExportButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button onClick={onClick} className="secondary-button !rounded-full !px-4 !py-2">
+    <button onClick={onClick} className="secondary-button !rounded-xl !px-3 !py-1.5">
       <Download className="h-4 w-4" />
       {label}
     </button>

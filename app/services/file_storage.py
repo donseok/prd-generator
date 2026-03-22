@@ -6,6 +6,7 @@
 1. PRD 문서 (JSON 파일)
 2. 작업 상태 정보 (Jobs)
 3. 업로드된 파일들 (Uploads)
+4. 프로젝트 (Projects) - 여러 문서를 묶어 관리
 """
 
 import json
@@ -18,7 +19,7 @@ from pathlib import Path
 from typing import Optional, TypeVar, Type
 from pydantic import BaseModel
 
-from app.models import PRDDocument, ProcessingJob, InputDocument
+from app.models import PRDDocument, ProcessingJob, InputDocument, Project
 from app.exceptions import StorageError
 
 logger = logging.getLogger(__name__)
@@ -36,13 +37,14 @@ class FileStorage:
         self.prd_path = self.base_path / "prd"
         self.jobs_path = self.base_path / "jobs"
         self.uploads_path = self.base_path / "uploads"
+        self.projects_path = self.base_path / "projects"
 
         # 필요한 폴더들이 없으면 만듭니다.
         self._ensure_directories()
 
     def _ensure_directories(self):
         """저장소 폴더 생성 함수"""
-        for path in [self.prd_path, self.jobs_path, self.uploads_path]:
+        for path in [self.prd_path, self.jobs_path, self.uploads_path, self.projects_path]:
             path.mkdir(parents=True, exist_ok=True)
 
     # ==================== PRD 문서 관련 기능 ====================
@@ -191,6 +193,73 @@ class FileStorage:
     def get_upload_path(self, document_id: str, filename: str) -> Path:
         """업로드된 파일의 경로를 반환합니다."""
         return self.uploads_path / document_id / filename
+
+    # ==================== 프로젝트 관련 기능 ====================
+
+    async def save_project(self, project: Project) -> str:
+        """프로젝트를 파일로 저장합니다."""
+        file_path = self.projects_path / f"{project.id}.json"
+        await self._save_model(file_path, project)
+        return project.id
+
+    async def get_project(self, project_id: str) -> Optional[Project]:
+        """ID로 프로젝트를 불러옵니다."""
+        file_path = self.projects_path / f"{project_id}.json"
+        return await self._load_model(file_path, Project)
+
+    async def list_projects(
+        self,
+        skip: int = 0,
+        limit: int = 20,
+        status: Optional[str] = None,
+    ) -> list[Project]:
+        """
+        저장된 프로젝트 목록을 페이지 단위로 가져옵니다.
+        최신 수정된 순서대로 정렬됩니다.
+        """
+        projects = []
+        # 파일들을 수정 시간 역순(최신순)으로 정렬
+        files = sorted(
+            self.projects_path.glob("*.json"),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )
+
+        for file_path in files:
+            project = await self._load_model(file_path, Project)
+            if project:
+                # 상태 필터가 있으면 해당 상태의 프로젝트만 포함
+                if status is None or project.status == status:
+                    projects.append(project)
+
+        # 페이지네이션 (원하는 범위만 자르기)
+        return projects[skip : skip + limit]
+
+    async def update_project(self, project: Project) -> bool:
+        """기존 프로젝트를 업데이트합니다."""
+        file_path = self.projects_path / f"{project.id}.json"
+        if not file_path.exists():
+            return False
+        project.updated_at = datetime.now()
+        await self._save_model(file_path, project)
+        return True
+
+    async def delete_project(self, project_id: str) -> bool:
+        """프로젝트를 삭제합니다."""
+        file_path = self.projects_path / f"{project_id}.json"
+        return self._delete_file(file_path)
+
+    async def count_projects(self, status: Optional[str] = None) -> int:
+        """프로젝트 총 개수를 반환합니다."""
+        count = 0
+        for file_path in self.projects_path.glob("*.json"):
+            if status is None:
+                count += 1
+            else:
+                project = await self._load_model(file_path, Project)
+                if project and project.status == status:
+                    count += 1
+        return count
 
     # ==================== 입력 문서 메타데이터 기능 ====================
 

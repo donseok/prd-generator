@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Clock3,
   Code2,
+  Eye,
   FileCode2,
   FileJson2,
   FileStack,
@@ -39,13 +40,13 @@ type DocTypeFilter = "all" | "PRD" | "TRD" | "WBS" | "Proposal" | "PPT";
 
 const DOC_TYPE_META: Record<
   Exclude<DocTypeFilter, "all">,
-  { label: string; shortLabel: string; icon: typeof FileText; tone: string; note: string }
+  { label: string; shortLabel: string; icon: typeof FileText; tone: string; shadowClass: string; note: string; dotColor: string }
 > = {
-  PRD: { label: "제품 요구사항 문서", shortLabel: "PRD", icon: FileText, tone: "from-blue-700 to-sky-400", note: "서비스 방향과 요구사항 정의" },
-  TRD: { label: "기술 요구사항 문서", shortLabel: "TRD", icon: FileCode2, tone: "from-indigo-700 to-blue-400", note: "구현 관점의 기술 설계" },
-  WBS: { label: "작업 분해 구조", shortLabel: "WBS", icon: LayoutDashboard, tone: "from-emerald-700 to-teal-400", note: "실행 일정과 작업 구조" },
-  Proposal: { label: "제안서", shortLabel: "제안서", icon: FileStack, tone: "from-orange-500 to-amber-300", note: "대외 공유용 문서" },
-  PPT: { label: "발표 자료", shortLabel: "PPT", icon: Presentation, tone: "from-rose-600 to-orange-300", note: "프레젠테이션 산출물" },
+  PRD: { label: "제품 요구사항 문서", shortLabel: "PRD", icon: FileText, tone: "bg-gradient-to-br from-indigo-500 to-indigo-600", shadowClass: "shadow-[0_4px_14px_rgba(99,102,241,0.25)]", note: "서비스 방향과 요구사항 정의", dotColor: "bg-indigo-500" },
+  TRD: { label: "기술 요구사항 문서", shortLabel: "TRD", icon: FileCode2, tone: "bg-gradient-to-br from-violet-500 to-purple-600", shadowClass: "shadow-[0_4px_14px_rgba(139,92,246,0.25)]", note: "구현 관점의 기술 설계", dotColor: "bg-violet-500" },
+  WBS: { label: "작업 분해 구조", shortLabel: "WBS", icon: LayoutDashboard, tone: "bg-gradient-to-br from-emerald-500 to-teal-600", shadowClass: "shadow-[0_4px_14px_rgba(16,185,129,0.25)]", note: "실행 일정과 작업 구조", dotColor: "bg-emerald-500" },
+  Proposal: { label: "제안서", shortLabel: "제안서", icon: FileStack, tone: "bg-gradient-to-br from-amber-400 to-orange-500", shadowClass: "shadow-[0_4px_14px_rgba(245,158,11,0.25)]", note: "대외 공유용 문서", dotColor: "bg-amber-500" },
+  PPT: { label: "발표 자료", shortLabel: "PPT", icon: Presentation, tone: "bg-gradient-to-br from-rose-400 to-red-500", shadowClass: "shadow-[0_4px_14px_rgba(244,63,94,0.25)]", note: "프레젠테이션 산출물", dotColor: "bg-rose-500" },
 };
 
 const FILTERS: DocTypeFilter[] = ["all", "PRD", "TRD", "WBS", "Proposal", "PPT"];
@@ -136,16 +137,16 @@ export default function MainPage() {
   return (
     <AppShell>
       <HeroPanel
-        kicker="문서 스튜디오"
+        kicker="DK 문서 스튜디오"
         title="생성된 산출물을 하나의 화면에서 선별하고 탐색합니다"
         description="결과 문서를 더 빠르게 훑고, 필요한 파일만 미리 본 뒤 바로 열 수 있도록 메인 대시보드를 다시 정리했습니다. 최근 산출물과 문서 타입 분포가 먼저 보이고, 아래에서는 아카이브를 바로 조작할 수 있습니다."
         actions={
           <>
-            <Link href="/upload" className="brand-button">
+            <Link href="/upload" className="brand-button !rounded-xl">
               <Sparkles className="h-4 w-4" />
               새 문서 생성
             </Link>
-            <button onClick={() => refetch()} className="secondary-button">
+            <button onClick={() => refetch()} className="secondary-button !rounded-xl">
               <RefreshCw className="h-4 w-4" />
               새로고침
             </button>
@@ -155,12 +156,12 @@ export default function MainPage() {
           <div className="space-y-5">
             <div className="flex items-center justify-between">
               <p className="data-label">최근 동기화</p>
-              <span className="pill-badge bg-emerald-100 text-emerald-700">
-                <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse-soft" />
+              <span className="pill-badge bg-indigo-100 text-indigo-700">
+                <span className="h-2 w-2 rounded-full bg-indigo-500 animate-pulse-soft" />
                 실시간
               </span>
             </div>
-            <p className="text-4xl font-black tracking-[-0.06em] text-slate-900">
+            <p className="text-3xl font-bold tracking-[-0.04em] text-[#6366F1]">
               {formatDate(new Date(dataUpdatedAt || Date.now()).toISOString(), {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -192,6 +193,7 @@ export default function MainPage() {
           <div className="section-card stagger-in">
             <p className="data-label">빠른 작업</p>
             <div className="mt-4 space-y-3">
+              <QuickLink href="/projects" title="프로젝트 관리" description="프로젝트별로 문서를 그룹화하고 관리합니다." />
               <QuickLink href="/upload" title="입력 파일 등록" description="원본 문서를 올리고 생성 파이프라인을 시작합니다." />
               <QuickLink href="/history" title="PRD 아카이브 열기" description="기존 PRD를 다시 확인하고 내보낼 수 있습니다." />
             </div>
@@ -204,11 +206,14 @@ export default function MainPage() {
                 const count = stats[type];
                 return (
                   <div key={type} className="surface-muted flex items-center justify-between px-4 py-3">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-900">{meta.label}</p>
-                      <p className="text-xs text-slate-500">{meta.note}</p>
+                    <div className="flex items-center gap-3">
+                      <span className={`h-1 w-1 shrink-0 rounded-full ${meta.dotColor}`} />
+                      <div>
+                        <p className="text-sm font-semibold text-slate-900">{meta.label}</p>
+                        <p className="text-xs text-slate-500">{meta.note}</p>
+                      </div>
                     </div>
-                    <span className="text-xl font-black tracking-[-0.05em] text-slate-900">{count}</span>
+                    <span className="text-xl font-bold tracking-[-0.04em] text-slate-900">{count}</span>
                   </div>
                 );
               })}
@@ -226,9 +231,9 @@ export default function MainPage() {
               <button
                 onClick={handleDeleteAll}
                 disabled={deleting || outputs.length === 0}
-                className="secondary-button !rounded-full !px-4 !py-2 disabled:cursor-not-allowed disabled:opacity-50"
+                className="secondary-button !rounded-xl !px-4 !py-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4 text-[#F43F5E]" />}
                 전체 삭제
               </button>
             }
@@ -245,7 +250,7 @@ export default function MainPage() {
                 <button key={filter} onClick={() => setDocFilter(filter)} className={`tab-button ${active ? "tab-button-active" : "tab-button-idle"}`}>
                   <Icon className="h-4 w-4" />
                   {filter === "all" ? "전체" : meta?.shortLabel}
-                  <span className={`rounded-full px-2 py-0.5 text-xs ${active ? "bg-white/20 text-white" : "bg-slate-100 text-slate-500"}`}>{count}</span>
+                  <span className={`rounded px-1.5 py-0.5 text-xs ${active ? "bg-white/25 text-white" : "bg-[var(--bg-panel-muted)] text-[var(--text-muted)]"}`}>{count}</span>
                 </button>
               );
             })}
@@ -270,15 +275,15 @@ export default function MainPage() {
         <aside className="section-card stagger-in">
           <SectionHeader title="작업 힌트" description="대시보드에서 바로 이어서 처리할 수 있는 흐름입니다." />
           <div className="space-y-4">
-            <div className="surface-muted p-4">
+            <div className="surface-muted border-t-2 border-t-[#6366F1] p-4">
               <p className="data-label">미리보기</p>
               <p className="mt-2 text-sm leading-6 text-slate-600">JSON과 Markdown은 모달에서 바로 열어 구조를 빠르게 확인할 수 있습니다.</p>
             </div>
-            <div className="surface-muted p-4">
+            <div className="surface-muted border-t-2 border-t-[#F59E0B] p-4">
               <p className="data-label">프레젠테이션</p>
               <p className="mt-2 text-sm leading-6 text-slate-600">PPTX 결과물은 외부 프로그램으로 곧바로 열 수 있도록 연결했습니다.</p>
             </div>
-            <div className="surface-muted p-4">
+            <div className="surface-muted border-t-2 border-t-[#F43F5E] p-4">
               <p className="data-label">정리 작업</p>
               <p className="mt-2 text-sm leading-6 text-slate-600">문서가 쌓이면 전체 삭제로 아카이브를 한 번에 정리할 수 있습니다.</p>
             </div>
@@ -307,13 +312,13 @@ export default function MainPage() {
 
 function QuickLink({ href, title, description }: { href: string; title: string; description: string }) {
   return (
-    <Link href={href} className="list-card block">
+    <Link href={href} className="list-card group block">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-base font-semibold text-slate-900">{title}</p>
           <p className="mt-1 text-sm text-slate-500">{description}</p>
         </div>
-        <ArrowUpRight className="h-5 w-5 text-slate-400" />
+        <ArrowUpRight className="h-5 w-5 text-[#6366F1] opacity-60 transition-opacity group-hover:opacity-100" />
       </div>
     </Link>
   );
@@ -332,24 +337,24 @@ function DocumentRow({
   const Icon = meta.icon;
 
   return (
-    <div className={`list-card ${priority ? "ring-1 ring-blue-200/70" : ""}`}>
+    <div className={`list-card ${priority ? "ring-1 ring-[#6366F1]/20" : ""}`}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-4">
-          <div className={`flex h-16 w-16 shrink-0 items-center justify-center rounded-[22px] bg-gradient-to-br ${meta.tone} text-white shadow-sm`}>
-            <Icon className="h-6 w-6" />
+          <div className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl ${meta.tone} ${meta.shadowClass} text-white`}>
+            <Icon className="h-5 w-5" />
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <span className="pill-badge bg-slate-100 text-slate-700">{meta.label}</span>
-              {priority ? <span className="pill-badge bg-blue-100 text-blue-700">최근 생성</span> : null}
+              {priority ? <span className="pill-badge bg-gradient-to-r from-indigo-500 to-violet-500 text-white">최근 생성</span> : null}
             </div>
-            <p className="mt-3 truncate text-xl font-bold tracking-[-0.04em] text-slate-900">{doc.title}</p>
+            <p className="mt-2.5 truncate text-lg font-bold tracking-[-0.03em] text-slate-900">{doc.title}</p>
             <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-slate-500">
               <span className="inline-flex items-center gap-1">
                 <Clock3 className="h-4 w-4" />
                 {formatDate(doc.created_at)}
               </span>
-              <span className="inline-flex items-center gap-1 text-emerald-700">
+              <span className="inline-flex items-center gap-1 text-[#10B981]">
                 <CheckCircle2 className="h-4 w-4" />
                 생성 완료
               </span>
@@ -358,14 +363,24 @@ function DocumentRow({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {/* 전용 뷰어 링크 (TRD, WBS, Proposal) */}
+          {doc.has_json && ["TRD", "WBS", "Proposal"].includes(doc.doc_type) ? (
+            <Link
+              href={`/doc/${doc.doc_type.toLowerCase()}/${doc.id}`}
+              className="brand-button !rounded-xl !px-3 !py-1.5"
+            >
+              <Eye className="h-4 w-4" />
+              상세 보기
+            </Link>
+          ) : null}
           {doc.has_json ? (
-            <button onClick={() => onViewContent(doc, "json")} className="secondary-button !rounded-full !px-4 !py-2">
+            <button onClick={() => onViewContent(doc, "json")} className="secondary-button !rounded-xl !px-3 !py-1.5">
               <FileJson2 className="h-4 w-4" />
               JSON
             </button>
           ) : null}
           {doc.has_md ? (
-            <button onClick={() => onViewContent(doc, "md")} className="secondary-button !rounded-full !px-4 !py-2">
+            <button onClick={() => onViewContent(doc, "md")} className="secondary-button !rounded-xl !px-3 !py-1.5">
               <Code2 className="h-4 w-4" />
               마크다운
             </button>
@@ -380,7 +395,7 @@ function DocumentRow({
                   alert("PPTX 파일을 열지 못했습니다.");
                 }
               }}
-              className="brand-button !rounded-full !px-4 !py-2"
+              className="brand-button !rounded-xl !px-3 !py-1.5"
             >
               <Presentation className="h-4 w-4" />
               PPTX 열기
@@ -403,8 +418,8 @@ function LoadingState() {
 
 function EmptyState({ title, description }: { title: string; description: string }) {
   return (
-    <div className="surface-muted flex flex-col items-center justify-center rounded-[28px] px-6 py-24 text-center">
-      <FolderOpen className="h-12 w-12 text-slate-300" />
+    <div className="flex flex-col items-center justify-center rounded-2xl bg-gradient-to-b from-[var(--bg-panel-muted)] to-[var(--bg-panel)] border border-[var(--line-soft)] px-6 py-24 text-center">
+      <FolderOpen className="h-14 w-14 text-slate-400" />
       <p className="mt-4 text-xl font-semibold tracking-tight text-slate-800">{title}</p>
       <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">{description}</p>
     </div>
@@ -423,14 +438,14 @@ function ContentViewerModal({ viewer, onClose }: { viewer: ViewerState; onClose:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 md:p-8">
-      <button className="absolute inset-0 bg-slate-900/35 backdrop-blur-sm" onClick={onClose} aria-label="모달 닫기" />
-      <div className="glass-panel-strong relative z-10 flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-[32px]">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+      <button className="absolute inset-0 bg-black/40 backdrop-blur-md" onClick={onClose} aria-label="모달 닫기" />
+      <div className="glass-panel-strong relative z-10 flex max-h-[88vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl shadow-[0_0_0_1px_var(--line-soft),0_24px_68px_rgba(0,0,0,0.12)]">
+        <div className="flex items-center justify-between border-b border-[var(--line-soft)] px-6 py-4">
           <div className="min-w-0">
             <p className="truncate text-lg font-semibold text-slate-900">{viewer.docTitle}</p>
-            <p className="mt-1 text-sm text-slate-500">{viewer.format.toUpperCase()} 미리보기</p>
+            <p className="mt-0.5 text-sm text-slate-500">{viewer.format.toUpperCase()} 미리보기</p>
           </div>
-          <button onClick={onClose} className="secondary-button !rounded-full !px-4 !py-2">
+          <button onClick={onClose} className="secondary-button !rounded-xl !px-3 !py-1.5">
             <X className="h-4 w-4" />
             닫기
           </button>
@@ -445,7 +460,7 @@ function ContentViewerModal({ viewer, onClose }: { viewer: ViewerState; onClose:
               <ReactMarkdown remarkPlugins={[remarkGfm]}>{viewer.content}</ReactMarkdown>
             </div>
           ) : (
-            <div className="surface-muted overflow-x-auto rounded-[28px] p-5">
+            <div className="surface-muted overflow-x-auto rounded-2xl p-5">
               <JsonViewer data={parsedJson} />
             </div>
           )}
@@ -464,12 +479,12 @@ function JsonViewer({ data }: { data: unknown }) {
 
   function renderValue(value: unknown, key: string): React.ReactNode {
     const palette = {
-      null: "text-slate-400",
-      boolean: "text-amber-700",
-      number: "text-sky-700",
-      string: "text-emerald-700",
-      property: "text-blue-700",
-      bracket: "text-slate-500",
+      null: "text-[#94A3B8]",
+      boolean: "text-[#F59E0B]",
+      number: "text-[#6366F1]",
+      string: "text-[#10B981]",
+      property: "text-[#8B5CF6]",
+      bracket: "text-[#6B6B6B]",
     };
 
     if (value === null) return <span className={palette.null}>null</span>;
@@ -482,13 +497,13 @@ function JsonViewer({ data }: { data: unknown }) {
       const isCollapsed = collapsed[key];
       return (
         <div className="inline">
-          <button onClick={() => toggleCollapse(key)} className="mr-1 text-slate-500 hover:text-slate-900">
+          <button onClick={() => toggleCollapse(key)} className="mr-1 text-[#6B6B6B] hover:text-[#37352F]">
             {isCollapsed ? ">" : "v"}
           </button>
           <span className={palette.bracket}>[</span>
-          <span className="ml-1 text-xs text-slate-400">{value.length}개 항목</span>
+          <span className="ml-1 text-xs text-[#94A3B8]">{value.length}개 항목</span>
           {!isCollapsed ? (
-            <div className="ml-4 border-l border-slate-200 pl-3">
+            <div className="ml-4 border-l border-[var(--line-soft)] pl-3">
               {value.map((item, index) => (
                 <div key={`${key}-${index}`} className="my-1">
                   {renderValue(item, `${key}-${index}`)}
@@ -508,13 +523,13 @@ function JsonViewer({ data }: { data: unknown }) {
       const isCollapsed = collapsed[key];
       return (
         <div className="inline">
-          <button onClick={() => toggleCollapse(key)} className="mr-1 text-slate-500 hover:text-slate-900">
+          <button onClick={() => toggleCollapse(key)} className="mr-1 text-[#6B6B6B] hover:text-[#37352F]">
             {isCollapsed ? ">" : "v"}
           </button>
           <span className={palette.bracket}>{"{"}</span>
-          <span className="ml-1 text-xs text-slate-400">{entries.length}개 필드</span>
+          <span className="ml-1 text-xs text-[#94A3B8]">{entries.length}개 필드</span>
           {!isCollapsed ? (
-            <div className="ml-4 border-l border-slate-200 pl-3">
+            <div className="ml-4 border-l border-[var(--line-soft)] pl-3">
               {entries.map(([entryKey, entryValue], index) => (
                 <div key={`${key}-${entryKey}`} className="my-1">
                   <span className={palette.property}>&quot;{entryKey}&quot;</span>

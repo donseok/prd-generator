@@ -49,7 +49,7 @@ python test_trd_wbs.py         # TRD/WBS 테스트
 ## CLI Scripts
 
 ```bash
-# 전체 문서 일괄 생성 (PRD→TRD→WBS→제안서→PPT)
+# 전체 문서 일괄 생성 (PRD→TRD→WBS→제안서→PPT→에이전트 팀)
 python -m app.scripts.auto_doc
 
 # 개별 문서 생성
@@ -60,6 +60,8 @@ python -m app.scripts.wbs_excel_maker              # WBS Excel 업로드 양식 
 python -m app.scripts.pro_maker                    # 제안서
 python -m app.scripts.pro_maker --client "고객사명"  # 고객사명 지정
 python -m app.scripts.ppt_maker                    # PPT (제안서 기반, ~23 슬라이드)
+python -m app.scripts.team_maker                   # 에이전트 팀 구성 (PRD+TRD+WBS 기반)
+python -m app.scripts.team_maker --team-size 7     # 팀 규모 지정
 python -m app.scripts.doc_maker                    # DOCX 전체 변환
 python -m app.scripts.doc_maker --type prd         # 개별 DOCX 변환 (prd|trd|wbs|proposal)
 python -m app.scripts.arch_diagram                 # 아키텍처 다이어그램 PNG 생성
@@ -76,6 +78,7 @@ python -m app.scripts.arch_diagram                 # 아키텍처 다이어그�
 | `/wbs:wbs-excel` | 최신 WBS JSON | WBS 업로드 양식 XLSX |
 | `/pro:pro-maker` | 최신 PRD+TRD+WBS JSON | 제안서 MD+JSON |
 | `/ppt:ppt-maker` | 최신 PROP JSON | PPTX |
+| `/team:team-maker` | 최신 PRD+TRD+WBS JSON | 에이전트 팀 MD |
 | `/diagram:arch-diagram` | 최신 TRD JSON | 아키텍처 PNG |
 
 ### 문서 변환
@@ -101,7 +104,7 @@ python -m app.scripts.arch_diagram                 # 아키텍처 다이어그�
 ### Agents
 | 에이전트 | 설명 |
 |----------|------|
-| `@auto-doc` | PRD→TRD→WBS→제안서→PPT 5종 순차 생성 (단계별 컨텍스트 클리어) |
+| `@auto-doc` | PRD→TRD→WBS→제안서→PPT→에이전트 팀 6종 순차 생성 (단계별 컨텍스트 클리어) |
 
 ### Git
 ```bash
@@ -154,6 +157,7 @@ CLI 스크립트는 **슬래시 커맨드와 1:1 대응**. 각 스크립트는 �
 - `workspace/outputs/wbs/` - WBS (MD + JSON)
 - `workspace/outputs/proposals/` - 제안서 (MD + JSON)
 - `workspace/outputs/ppt/` - PPT (PPTX)
+- `workspace/outputs/agent-team/` - 에이전트 팀 구성 (MD)
 - `workspace/outputs/doc/` - Word (DOCX)
 - `workspace/outputs/diagrams/` - 아키텍처 다이어그램 (PNG)
 

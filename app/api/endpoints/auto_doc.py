@@ -1,31 +1,33 @@
 """
-Auto-Doc 문서 생성 API입니다.
-로컬 폴더의 파일을 읽어 PRD, TRD, WBS, 제안서, PPT 5종 문서를 생성합니다.
+Auto-Doc 문서 생성 API.
+workspace/inputs/projects 폴더의 문서를 기반으로 선택한 생성기를 서버에서 실행한다.
 """
+
+from __future__ import annotations
 
 import logging
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import List
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel
+from typing import Any
 
-# PYTHONPATH 설정
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from pydantic import BaseModel, Field
+
+# 프로젝트 루트가 import path에 없을 수 있어 명시적으로 추가한다.
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# 프로젝트 루트 경로
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 INPUTS_PATH = PROJECT_ROOT / "workspace" / "inputs" / "projects"
 OUTPUTS_PATH = PROJECT_ROOT / "workspace" / "outputs"
+VALID_DOC_TYPES = ["prd", "trd", "wbs", "proposal", "ppt"]
 
 
 class InputFile(BaseModel):
-    """입력 파일 정보"""
     name: str
     path: str
     size: int
@@ -33,103 +35,89 @@ class InputFile(BaseModel):
 
 
 class InputFilesResponse(BaseModel):
-    """입력 파일 목록 응답"""
     total: int
     folder_path: str
-    files: List[InputFile]
+    files: list[InputFile]
 
 
 class GenerateRequest(BaseModel):
-    """문서 생성 요청"""
-    doc_types: List[str] = ["prd", "trd", "wbs", "proposal", "ppt"]
+    doc_types: list[str] = Field(default_factory=lambda: VALID_DOC_TYPES.copy())
 
 
 class GenerateResponse(BaseModel):
-    """문서 생성 응답"""
     job_id: str
     status: str
     message: str
-    doc_types: List[str]
+    doc_types: list[str]
 
 
-# 생성 작업 상태 저장 (간단한 인메모리 저장)
-generation_jobs = {}
+generation_jobs: dict[str, dict[str, Any]] = {}
 
 
 @router.get("/inputs", response_model=InputFilesResponse)
 async def list_input_files() -> InputFilesResponse:
-    """
-    workspace/inputs/projects 폴더의 파일 목록을 반환합니다.
-    """
-    files = []
-    
+    files: list[InputFile] = []
+
     if INPUTS_PATH.exists():
         for file_path in INPUTS_PATH.iterdir():
             if file_path.is_file() and not file_path.name.startswith("."):
-                files.append(InputFile(
-                    name=file_path.name,
-                    path=str(file_path),
-                    size=file_path.stat().st_size,
-                    extension=file_path.suffix.lower(),
-                ))
-    
-    # 이름순 정렬
-    files.sort(key=lambda f: f.name)
-    
-    return InputFilesResponse(
-        total=len(files),
-        folder_path=str(INPUTS_PATH),
-        files=files,
-    )
+                files.append(
+                    InputFile(
+                        name=file_path.name,
+                        path=str(file_path),
+                        size=file_path.stat().st_size,
+                        extension=file_path.suffix.lower(),
+                    )
+                )
+
+    files.sort(key=lambda item: item.name)
+
+    return InputFilesResponse(total=len(files), folder_path=str(INPUTS_PATH), files=files)
 
 
-async def run_generation(job_id: str, doc_types: List[str]):
-    """백그라운드에서 DocumentOrchestrator를 사용하여 5종 문서 생성 실행"""
+def _bundle_results(bundle: Any, requested_doc_types: list[str]) -> list[dict[str, str]]:
+    result_map = {
+        "prd": getattr(bundle, "prd_path", None),
+        "trd": getattr(bundle, "trd_path", None),
+        "wbs": getattr(bundle, "wbs_path", None),
+        "proposal": getattr(bundle, "proposal_path", None),
+        "ppt": getattr(bundle, "ppt_path", None),
+    }
+    results: list[dict[str, str]] = []
+    for doc_type in requested_doc_types:
+        path = result_map.get(doc_type)
+        if path:
+          results.append({"type": doc_type, "path": str(path)})
+    return results
+
+
+async def run_generation(job_id: str, doc_types: list[str]) -> None:
     from app.services.document_orchestrator import DocumentOrchestrator
 
     try:
         generation_jobs[job_id]["status"] = "processing"
         generation_jobs[job_id]["started_at"] = datetime.now().isoformat()
 
-        def on_step(step_name: str, current: int, total: int):
-            """단계별 진행 상황을 job 상태에 업데이트"""
+        def on_step(step_name: str, current: int, total: int) -> None:
             generation_jobs[job_id]["current_step"] = step_name
             generation_jobs[job_id]["current_step_number"] = current
             generation_jobs[job_id]["total_steps"] = total
+            generation_jobs[job_id]["progress_percent"] = round((current / max(total, 1)) * 100)
 
-        orchestrator = DocumentOrchestrator(
-            input_dir=INPUTS_PATH,
-            output_base_dir=OUTPUTS_PATH,
-        )
+        orchestrator = DocumentOrchestrator(input_dir=INPUTS_PATH, output_base_dir=OUTPUTS_PATH)
+        bundle = await orchestrator.generate_selected(doc_types=doc_types, verbose=True, on_step=on_step)
 
-        bundle = await orchestrator.generate_all(
-            verbose=True,
-            on_step=on_step,
-        )
-
-        # 결과 정리
-        results = []
-        if bundle.prd_path:
-            results.append({"type": "prd", "path": str(bundle.prd_path)})
-        if bundle.trd_path:
-            results.append({"type": "trd", "path": str(bundle.trd_path)})
-        if bundle.wbs_path:
-            results.append({"type": "wbs", "path": str(bundle.wbs_path)})
-        if bundle.proposal_path:
-            results.append({"type": "proposal", "path": str(bundle.proposal_path)})
-        if bundle.ppt_path:
-            results.append({"type": "ppt", "path": str(bundle.ppt_path)})
-
-        generation_jobs[job_id]["status"] = "completed"
-        generation_jobs[job_id]["results"] = results
+        generation_jobs[job_id]["status"] = "completed" if not bundle.errors else "completed_with_errors"
+        generation_jobs[job_id]["results"] = _bundle_results(bundle, doc_types)
         generation_jobs[job_id]["errors"] = bundle.errors
         generation_jobs[job_id]["total_time_seconds"] = bundle.total_time_seconds
         generation_jobs[job_id]["completed_at"] = datetime.now().isoformat()
-
-    except Exception as e:
-        logger.error(f"문서 생성 실패: {e}")
+        generation_jobs[job_id]["progress_percent"] = 100
+    except Exception as exc:  # pragma: no cover - defensive path
+        logger.error("문서 생성 실패: %s", exc, exc_info=True)
         generation_jobs[job_id]["status"] = "failed"
-        generation_jobs[job_id]["error"] = str(e)
+        generation_jobs[job_id]["error"] = str(exc)
+        generation_jobs[job_id]["completed_at"] = datetime.now().isoformat()
 
 
 @router.post("/generate", response_model=GenerateResponse)
@@ -137,53 +125,48 @@ async def generate_documents(
     request: GenerateRequest,
     background_tasks: BackgroundTasks,
 ) -> GenerateResponse:
-    """
-    문서 생성을 시작합니다.
-    백그라운드에서 비동기로 실행되며, job_id로 상태를 조회할 수 있습니다.
-    """
-    # 입력 파일 확인
     if not INPUTS_PATH.exists():
-        raise HTTPException(status_code=400, detail="입력 폴더가 존재하지 않습니다")
-    
-    files = [f for f in INPUTS_PATH.iterdir() if f.is_file() and not f.name.startswith('.')]
+        raise HTTPException(status_code=400, detail="입력 폴더가 존재하지 않습니다.")
+
+    files = [path for path in INPUTS_PATH.iterdir() if path.is_file() and not path.name.startswith(".")]
     if not files:
-        raise HTTPException(status_code=400, detail="입력 폴더에 파일이 없습니다. workspace/inputs/projects/에 요구사항 파일을 배치해주세요.")
-    
-    # 지원하는 문서 타입 확인
-    valid_types = ["prd", "trd", "wbs", "proposal", "ppt"]
-    for doc_type in request.doc_types:
-        if doc_type not in valid_types:
-            raise HTTPException(status_code=400, detail=f"지원하지 않는 문서 타입: {doc_type}")
-    
-    # 작업 ID 생성
+        raise HTTPException(
+            status_code=400,
+            detail="입력 폴더에 파일이 없습니다. workspace/inputs/projects 에 문서를 먼저 넣어 주세요.",
+        )
+
+    requested = request.doc_types or VALID_DOC_TYPES.copy()
+    invalid = [doc_type for doc_type in requested if doc_type not in VALID_DOC_TYPES]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"지원하지 않는 문서 타입입니다: {', '.join(invalid)}")
+
     job_id = f"auto-doc-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-    
-    # 작업 상태 저장
     generation_jobs[job_id] = {
         "job_id": job_id,
         "status": "pending",
-        "doc_types": request.doc_types,
+        "doc_types": requested,
         "created_at": datetime.now().isoformat(),
         "input_files": len(files),
+        "current_step": None,
+        "current_step_number": 0,
+        "total_steps": len(requested),
+        "progress_percent": 0,
+        "results": [],
+        "errors": [],
     }
-    
-    # 백그라운드 작업 시작
-    background_tasks.add_task(run_generation, job_id, request.doc_types)
-    
+
+    background_tasks.add_task(run_generation, job_id, requested)
+
     return GenerateResponse(
         job_id=job_id,
         status="started",
-        message=f"문서 생성이 시작되었습니다. {len(files)}개의 입력 파일을 처리합니다.",
-        doc_types=request.doc_types,
+        message=f"문서 생성 작업을 시작했습니다. 입력 파일 {len(files)}개를 기준으로 처리합니다.",
+        doc_types=requested,
     )
 
 
 @router.get("/status/{job_id}")
-async def get_generation_status(job_id: str) -> dict:
-    """
-    문서 생성 작업의 상태를 조회합니다.
-    """
+async def get_generation_status(job_id: str) -> dict[str, Any]:
     if job_id not in generation_jobs:
-        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다")
-    
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.")
     return generation_jobs[job_id]

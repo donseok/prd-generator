@@ -24,6 +24,7 @@ from .processing import (
     ReviewItemType,
     ProcessingEvent,
 )
+from .project import Project, DocumentReference
 
 __all__ = [
     # Common models
@@ -54,4 +55,7 @@ __all__ = [
     "ReviewItem",
     "ReviewItemType",
     "ProcessingEvent",
+    # Project models
+    "Project",
+    "DocumentReference",
 ]

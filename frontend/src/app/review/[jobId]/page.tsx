@@ -31,7 +31,7 @@ const ISSUE_LABELS: Record<string, { label: string; tone: string }> = {
   ambiguous: { label: "모호한 표현", tone: "bg-orange-100 text-orange-700" },
   incomplete: { label: "불완전한 정보", tone: "bg-rose-100 text-rose-700" },
   conflict: { label: "충돌 가능성", tone: "bg-violet-100 text-violet-700" },
-  missing_info: { label: "누락 정보", tone: "bg-sky-100 text-sky-700" },
+  missing_info: { label: "누락 정보", tone: "bg-cyan-100 text-cyan-700" },
 };
 
 export default function ReviewPage() {
@@ -127,10 +127,13 @@ export default function ReviewPage() {
           <div className="space-y-4">
             <div>
               <p className="data-label">완료율</p>
-              <p className="mt-2 text-4xl font-semibold tracking-tight text-slate-900">{completionRate}%</p>
+              <p className="mt-2 text-3xl font-bold tracking-tight text-slate-900">{completionRate}%</p>
             </div>
-            <div className="h-3 overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full rounded-full" style={{ width: `${completionRate}%`, background: "var(--gradient-warm)" }} />
+            <div className="h-2.5 overflow-hidden rounded-full bg-slate-200">
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-[#10B981] to-[#34D399] transition-all duration-500"
+                style={{ width: `${completionRate}%` }}
+              />
             </div>
             <div className="surface-muted p-4">
               <p className="data-label">남은 항목</p>
@@ -154,13 +157,13 @@ export default function ReviewPage() {
         />
       ) : error ? (
         <FeedbackState
-          icon={<AlertCircle className="h-10 w-10 text-rose-500" />}
+          icon={<AlertCircle className="h-10 w-10 text-[#F43F5E]" />}
           title="리뷰 항목을 불러오지 못했습니다"
           description="API 연결 상태를 확인한 뒤 다시 시도해 주세요."
         />
       ) : pendingItems.length === 0 ? (
         <FeedbackState
-          icon={<CheckCircle2 className="h-10 w-10 text-emerald-600" />}
+          icon={<CheckCircle2 className="h-10 w-10 text-[#10B981]" />}
           title="검토할 항목이 없습니다"
           description="아래 버튼으로 리뷰를 종료하고 최종 PRD로 이동할 수 있습니다."
           action={
@@ -211,7 +214,7 @@ function FeedbackState({ icon, title, description, action }: { icon: ReactNode; 
     <section className="section-card">
       <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
         {icon}
-        <p className="mt-5 text-2xl font-semibold tracking-tight text-slate-900">{title}</p>
+        <p className="mt-5 text-xl font-semibold tracking-tight text-slate-900">{title}</p>
         <p className="mt-3 max-w-xl text-sm leading-6 text-slate-500">{description}</p>
         {action ? <div className="mt-6">{action}</div> : null}
       </div>
@@ -237,22 +240,22 @@ function ReviewItemCard({
 
   const decisionTone =
     decision?.decision === "approve"
-      ? "border-emerald-200 bg-emerald-50"
+      ? "border-[#10B981]/15 bg-[#10B981]/5"
       : decision?.decision === "reject"
-      ? "border-rose-200 bg-rose-50"
+      ? "border-[#F43F5E]/15 bg-[#F43F5E]/5"
       : decision?.decision === "modify"
-      ? "border-blue-200 bg-blue-50"
-      : "border-slate-200 bg-white/75";
+      ? "border-[#6366F1]/15 bg-[#6366F1]/5"
+      : "border-[var(--line-soft)] bg-[var(--bg-panel)]";
 
   return (
-    <div className={`rounded-[28px] border p-5 transition ${decisionTone}`}>
+    <div className={`rounded-2xl border p-5 transition ${decisionTone}`}>
       <button onClick={onToggle} className="flex w-full items-start justify-between gap-4 text-left">
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`pill-badge ${issue.tone}`}>{issue.label}</span>
             <span className="pill-badge bg-slate-100 text-slate-500">{item.requirement_id}</span>
           </div>
-          <p className="mt-3 text-lg font-semibold tracking-tight text-slate-900">{item.description}</p>
+          <p className="mt-2.5 text-base font-semibold tracking-tight text-slate-900">{item.description}</p>
         </div>
         <div className="flex items-center gap-3">
           {decision ? (
@@ -262,7 +265,7 @@ function ReviewItemCard({
                   ? "bg-emerald-100 text-emerald-700"
                   : decision.decision === "reject"
                   ? "bg-rose-100 text-rose-700"
-                  : "bg-blue-100 text-blue-700"
+                  : "bg-indigo-100 text-indigo-700"
               }`}
             >
               {decision.decision === "approve" ? "승인" : decision.decision === "reject" ? "반려" : "수정"}
@@ -273,7 +276,7 @@ function ReviewItemCard({
       </button>
 
       {expanded ? (
-        <div className="mt-5 border-t border-slate-200 pt-5">
+        <div className="mt-5 border-t border-[var(--line-soft)] pt-5">
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="surface-muted p-4">
               <p className="data-label">원문</p>
@@ -323,20 +326,20 @@ function DecisionButton({
   const toneClass =
     tone === "approve"
       ? active
-        ? "bg-emerald-600 text-white"
-        : "bg-emerald-50 text-emerald-700"
+        ? "bg-gradient-to-br from-emerald-500 to-teal-600 text-white shadow-[0_4px_14px_rgba(16,185,129,0.25)]"
+        : "bg-[#10B981]/8 text-[#10B981] hover:bg-[#10B981]/15"
       : tone === "reject"
       ? active
-        ? "bg-rose-600 text-white"
-        : "bg-rose-50 text-rose-700"
+        ? "bg-gradient-to-br from-rose-500 to-red-500 text-white shadow-[0_4px_14px_rgba(244,63,94,0.25)]"
+        : "bg-[#F43F5E]/8 text-[#F43F5E] hover:bg-[#F43F5E]/15"
       : active
-      ? "bg-blue-600 text-white"
-      : "bg-blue-50 text-blue-700";
+      ? "bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_4px_14px_rgba(99,102,241,0.25)]"
+      : "bg-[#6366F1]/8 text-[#6366F1] hover:bg-[#6366F1]/15";
 
   return (
     <button
       onClick={onClick}
-      className={`inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-sm font-semibold transition hover:-translate-y-0.5 ${toneClass}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition ${toneClass}`}
     >
       {icon}
       {label}

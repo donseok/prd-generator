@@ -350,8 +350,57 @@ export const api = {
   },
 
   // 문서 생성 상태 조회
-  async getGenerationStatus(jobId: string) {
+  async getGenerationStatus(jobId: string): Promise<GenerationStatusResponse> {
     const response = await client.get(`/auto-doc/status/${jobId}`);
+    return response.data;
+  },
+
+  // === 프로젝트 관련 API ===
+
+  async listProjects(skip = 0, limit = 20, status?: string): Promise<ProjectListResponse> {
+    const params = new URLSearchParams({ skip: String(skip), limit: String(limit) });
+    if (status) params.append("status", status);
+    const response = await client.get(`/projects?${params}`);
+    return response.data;
+  },
+
+  async createProject(name: string, description: string = "", tags: string[] = []): Promise<Project> {
+    const response = await client.post("/projects", { name, description, tags });
+    return response.data;
+  },
+
+  async getProject(projectId: string): Promise<Project> {
+    const response = await client.get(`/projects/${projectId}`);
+    return response.data;
+  },
+
+  async updateProject(projectId: string, data: { name?: string; description?: string; status?: string; tags?: string[] }): Promise<Project> {
+    const response = await client.put(`/projects/${projectId}`, data);
+    return response.data;
+  },
+
+  async deleteProject(projectId: string): Promise<{ success: boolean; message: string }> {
+    const response = await client.delete(`/projects/${projectId}`);
+    return response.data;
+  },
+
+  async addDocumentToProject(projectId: string, docId: string, docType: string, title: string = "", sourceDocId?: string): Promise<Project> {
+    const response = await client.post(`/projects/${projectId}/documents`, {
+      doc_id: docId,
+      doc_type: docType,
+      title,
+      source_doc_id: sourceDocId,
+    });
+    return response.data;
+  },
+
+  async removeDocumentFromProject(projectId: string, docId: string): Promise<Project> {
+    const response = await client.delete(`/projects/${projectId}/documents/${docId}`);
+    return response.data;
+  },
+
+  async getProjectDocuments(projectId: string): Promise<ProjectDocumentsResponse> {
+    const response = await client.get(`/projects/${projectId}/documents`);
     return response.data;
   },
 };
@@ -405,6 +454,24 @@ export interface GenerateResponse {
   doc_types: string[];
 }
 
+export interface GenerationStatusResponse {
+  job_id: string;
+  status: string;
+  doc_types: string[];
+  created_at: string;
+  started_at?: string;
+  completed_at?: string;
+  input_files: number;
+  current_step?: string | null;
+  current_step_number?: number;
+  total_steps?: number;
+  progress_percent?: number;
+  results: Array<{ type: string; path: string }>;
+  errors: string[];
+  error?: string;
+  total_time_seconds?: number;
+}
+
 // 문서 삭제 응답
 export interface DeleteAllResponse {
   success: boolean;
@@ -418,6 +485,40 @@ export interface OpenPptxResponse {
   success: boolean;
   message: string;
   file_path: string;
+}
+
+// === 프로젝트 관련 타입 ===
+
+export interface DocumentReference {
+  doc_id: string;
+  doc_type: string;
+  title: string;
+  created_at: string;
+  source_doc_id: string | null;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  documents: DocumentReference[];
+  tags: string[];
+}
+
+export interface ProjectListResponse {
+  total: number;
+  projects: Project[];
+}
+
+export interface ProjectDocumentsResponse {
+  project_id: string;
+  project_name: string;
+  total: number;
+  by_type: Record<string, DocumentReference[]>;
+  documents: DocumentReference[];
 }
 
 export default api;
