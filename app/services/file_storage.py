@@ -12,6 +12,7 @@
 import json
 import logging
 import os
+import re
 import shutil
 import aiofiles
 from datetime import datetime
@@ -31,6 +32,9 @@ T = TypeVar("T", bound=BaseModel)
 class FileStorage:
     """JSON 파일 기반의 단순 저장소 클래스입니다."""
 
+    # ID에 허용되는 문자 패턴 (경로 탐색 방지)
+    _SAFE_ID_CHARS = re.compile(r'^[A-Za-z0-9가-힣_\-]+$')
+
     def __init__(self, base_path: str = "data"):
         # 기본 저장 경로 설정 (기본값: data 폴더)
         self.base_path = Path(base_path)
@@ -41,6 +45,12 @@ class FileStorage:
 
         # 필요한 폴더들이 없으면 만듭니다.
         self._ensure_directories()
+
+    def _validate_id(self, id_value: str, label: str = "ID") -> str:
+        """ID 값의 경로 탐색 문자를 검증합니다."""
+        if not id_value or not self._SAFE_ID_CHARS.match(id_value):
+            raise StorageError(f"유효하지 않은 {label}입니다: {id_value}")
+        return id_value
 
     def _ensure_directories(self):
         """저장소 폴더 생성 함수"""
@@ -57,6 +67,7 @@ class FileStorage:
 
     async def get_prd(self, prd_id: str) -> Optional[PRDDocument]:
         """ID로 PRD 문서를 불러옵니다."""
+        self._validate_id(prd_id, "PRD ID")
         file_path = self.prd_path / f"{prd_id}.json"
         return await self._load_model(file_path, PRDDocument)
 
@@ -112,6 +123,7 @@ class FileStorage:
 
     async def get_job(self, job_id: str) -> Optional[ProcessingJob]:
         """작업 ID로 상태 정보를 조회합니다."""
+        self._validate_id(job_id, "Job ID")
         file_path = self.jobs_path / f"{job_id}.json"
         return await self._load_model(file_path, ProcessingJob)
 
@@ -161,6 +173,10 @@ class FileStorage:
         업로드된 파일을 디스크에 저장합니다.
         문서 ID별로 별도의 폴더에 저장됩니다.
         """
+        self._validate_id(document_id, "Document ID")
+        # 파일명에서 경로 탐색 문자 제거
+        safe_filename = Path(filename).name
+        filename = safe_filename
         # 문서별 폴더 생성
         doc_dir = self.uploads_path / document_id
         doc_dir.mkdir(parents=True, exist_ok=True)
@@ -204,6 +220,7 @@ class FileStorage:
 
     async def get_project(self, project_id: str) -> Optional[Project]:
         """ID로 프로젝트를 불러옵니다."""
+        self._validate_id(project_id, "Project ID")
         file_path = self.projects_path / f"{project_id}.json"
         return await self._load_model(file_path, Project)
 

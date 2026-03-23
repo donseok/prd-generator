@@ -484,8 +484,8 @@ class DocumentOrchestrator:
             
             if verbose:
                 safe_print(f"  ✅ 제안서 저장 완료: {md_path.name}")
-            
-            return md_path
+
+            return json_path
             
         except Exception as e:
             logger.error(f"제안서 생성 오류: {e}", exc_info=True)

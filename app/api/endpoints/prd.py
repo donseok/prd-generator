@@ -71,12 +71,15 @@ async def export_prd(
         )
     elif format == "html":
         # 마크다운을 간단한 HTML 스타일로 변환하여 보여줍니다.
+        import html
         md_content = prd.to_markdown()
+        safe_title = html.escape(prd.title)
+        safe_content = html.escape(md_content)
         html_content = f"""<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <title>{prd.title}</title>
+    <title>{safe_title}</title>
     <style>
         body {{ font-family: 'Pretendard', sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }}
         h1 {{ color: #1a1a1a; border-bottom: 2px solid #e5e5e5; padding-bottom: 10px; }}
@@ -88,7 +91,7 @@ async def export_prd(
     </style>
 </head>
 <body>
-<pre>{md_content}</pre>
+<pre>{safe_content}</pre>
 </body>
 </html>"""
         return Response(

@@ -49,6 +49,7 @@ class SolutionApproach(BaseModel):
     architecture: str = Field("", description="시스템 아키텍처 설명")
     technology_stack: list[str] = Field(default_factory=list, description="기술 스택")
     methodology: str = Field("", description="개발 방법론")
+    key_differentiators: list[str] = Field(default_factory=list, description="차별화 요소")
 
 
 class TimelinePhase(BaseModel):
@@ -96,6 +97,13 @@ class Risk(BaseModel):
     source_requirement_id: Optional[str] = Field(None, description="관련 요구사항 ID")
 
 
+class InvestmentSummary(BaseModel):
+    """투자 요약."""
+    total_cost_estimate: str = Field("", description="총 투자 비용 추정")
+    expected_annual_savings: str = Field("", description="연간 예상 절감액")
+    payback_period: str = Field("", description="투자 회수 기간")
+
+
 class ProposalDocument(BaseModel):
     """고객 제안서 문서."""
 
@@ -116,6 +124,10 @@ class ProposalDocument(BaseModel):
     assumptions: list[str] = Field(default_factory=list)
     expected_benefits: list[str] = Field(default_factory=list)
     next_steps: list[str] = Field(default_factory=list)
+
+    # 신규 섹션 (backward compatible with defaults)
+    competitive_analysis: Optional[list[dict]] = Field(default=None, description="현재 방식 vs 제안 솔루션 비교")
+    investment_summary: Optional[InvestmentSummary] = Field(default=None, description="투자 요약")
 
     # 메타데이터
     metadata: ProposalMetadata
@@ -141,6 +153,17 @@ class ProposalDocument(BaseModel):
             lines.append("")
             lines.append(self.executive_summary)
             lines.append("")
+
+            # 투자 요약 박스 (경영진 요약 바로 뒤)
+            if self.investment_summary:
+                lines.append("### 투자 수익 요약")
+                lines.append("")
+                lines.append("> | 항목 | 내용 |")
+                lines.append("> |------|------|")
+                lines.append(f"> | **총 투자 비용 (추정)** | {self.investment_summary.total_cost_estimate} |")
+                lines.append(f"> | **연간 예상 절감액** | {self.investment_summary.expected_annual_savings} |")
+                lines.append(f"> | **투자 회수 기간** | {self.investment_summary.payback_period} |")
+                lines.append("")
 
         # 2. 프로젝트 개요
         lines.append("## 2. 프로젝트 개요")
@@ -226,8 +249,30 @@ class ProposalDocument(BaseModel):
             lines.append(self.solution_approach.methodology)
             lines.append("")
 
-        # 5. 일정 계획
-        lines.append("## 5. 일정 계획")
+        if self.solution_approach.key_differentiators:
+            lines.append("### 4.5 차별화 요소")
+            lines.append("")
+            for diff in self.solution_approach.key_differentiators:
+                lines.append(f"- {diff}")
+            lines.append("")
+
+        # 5. 현재 방식 vs 제안 솔루션 (신규 섹션)
+        if self.competitive_analysis:
+            lines.append("## 5. 현재 방식 vs 제안 솔루션")
+            lines.append("")
+            lines.append("| 비교 항목 | 현재 방식 | 제안 솔루션 | 개선 효과 |")
+            lines.append("|-----------|-----------|-------------|-----------|")
+            for item in self.competitive_analysis:
+                cat = item.get("category_name", "")
+                current = item.get("current_method", "")
+                proposed = item.get("proposed_method", "")
+                improvement = item.get("improvement_description", "")
+                lines.append(f"| {cat} | {current} | {proposed} | {improvement} |")
+            lines.append("")
+
+        # 6. 일정 계획 (번호 동적 조정)
+        section_num = 6 if self.competitive_analysis else 5
+        lines.append(f"## {section_num}. 일정 계획")
         lines.append("")
 
         if self.timeline.total_duration:
@@ -242,9 +287,10 @@ class ProposalDocument(BaseModel):
                 lines.append(f"| {phase.phase_name} | {phase.duration} | {deliverables_str} |")
             lines.append("")
 
-        # 6. 산출물
+        # 7. 산출물
         if self.deliverables:
-            lines.append("## 6. 산출물")
+            section_num += 1
+            lines.append(f"## {section_num}. 산출물")
             lines.append("")
             lines.append("| 산출물 | 설명 | 단계 |")
             lines.append("|--------|------|------|")
@@ -252,9 +298,10 @@ class ProposalDocument(BaseModel):
                 lines.append(f"| {d.name} | {d.description} | {d.phase} |")
             lines.append("")
 
-        # 7. 투입 인력
+        # 8. 투입 인력
         if self.resource_plan.team_structure:
-            lines.append("## 7. 투입 인력")
+            section_num += 1
+            lines.append(f"## {section_num}. 투입 인력")
             lines.append("")
             lines.append("| 역할 | 인원 | 주요 업무 |")
             lines.append("|------|------|----------|")
@@ -266,9 +313,10 @@ class ProposalDocument(BaseModel):
                 lines.append(f"**총 투입 공수**: {self.resource_plan.total_man_months} M/M")
                 lines.append("")
 
-        # 8. 리스크 및 대응방안
+        # 9. 리스크 및 대응방안
         if self.risks:
-            lines.append("## 8. 리스크 및 대응방안")
+            section_num += 1
+            lines.append(f"## {section_num}. 리스크 및 대응방안")
             lines.append("")
             lines.append("| 리스크 | 위험도 | 영향 | 대응방안 |")
             lines.append("|--------|--------|------|----------|")
@@ -277,25 +325,28 @@ class ProposalDocument(BaseModel):
                 lines.append(f"| {risk.description} | {level_emoji} {risk.level.value} | {risk.impact} | {risk.mitigation} |")
             lines.append("")
 
-        # 9. 전제 조건
+        # 10. 전제 조건
         if self.assumptions:
-            lines.append("## 9. 전제 조건")
+            section_num += 1
+            lines.append(f"## {section_num}. 전제 조건")
             lines.append("")
             for assumption in self.assumptions:
                 lines.append(f"- {assumption}")
             lines.append("")
 
-        # 10. 기대 효과
+        # 11. 기대 효과
         if self.expected_benefits:
-            lines.append("## 10. 기대 효과")
+            section_num += 1
+            lines.append(f"## {section_num}. 기대 효과")
             lines.append("")
             for benefit in self.expected_benefits:
                 lines.append(f"- {benefit}")
             lines.append("")
 
-        # 11. 후속 절차
+        # 12. 후속 절차
+        section_num += 1
         if self.next_steps:
-            lines.append("## 11. 후속 절차")
+            lines.append(f"## {section_num}. 후속 절차")
             lines.append("")
             for i, step in enumerate(self.next_steps, 1):
                 lines.append(f"{i}. {step}")

@@ -18,7 +18,7 @@ import {
   Server,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { AppShell, MetricCard, SectionHeader, TopBar, formatDate } from "@/components/app-shell";
+import { AppShell, SectionHeader, TopBar, formatDate } from "@/components/app-shell";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -142,6 +142,7 @@ export default function TRDViewerPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["trd-doc", docId],
     queryFn: () => api.getOutputDocument(docId, "json"),
+    enabled: !!docId,
   });
 
   const { data: mdData } = useQuery({
@@ -237,12 +238,26 @@ export default function TRDViewerPage() {
         </section>
       ) : null}
 
-      {/* Metric cards */}
-      <section className="grid gap-4 lg:grid-cols-4">
-        <MetricCard label="아키텍처 레이어" value={arch.layers?.length ?? 0} note={arch.architecture_style ?? "정의되지 않음"} />
-        <MetricCard label="컴포넌트" value={arch.components?.length ?? 0} note="시스템 구성 요소" accent="warm" />
-        <MetricCard label="API 엔드포인트" value={apiSpec.endpoints?.length ?? 0} note="정의된 API 수" accent="mint" />
-        <MetricCard label="DB 엔티티" value={dbDesign.entities?.length ?? 0} note="데이터베이스 테이블 수" />
+      <section className="section-card">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div>
+            <p className="data-label">기술 문서 개요</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-900">{trd.title ?? "TRD 문서"}</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+              시스템 아키텍처, API, 데이터베이스 설계를 읽기 중심으로 정리한 기술 문서 화면입니다. 상단에서 전체 구조를 훑고 바로 탭 본문으로 이동할 수 있습니다.
+            </p>
+            {trd.metadata?.source_prd_title ? (
+              <p className="mt-3 text-sm text-slate-500">기반 PRD: {trd.metadata.source_prd_title}</p>
+            ) : null}
+          </div>
+
+          <aside className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+            <MetaTile label="아키텍처 레이어" value={String(arch.layers?.length ?? 0)} />
+            <MetaTile label="컴포넌트" value={String(arch.components?.length ?? 0)} />
+            <MetaTile label="API 엔드포인트" value={String(apiSpec.endpoints?.length ?? 0)} />
+            <MetaTile label="DB 엔티티" value={String(dbDesign.entities?.length ?? 0)} />
+          </aside>
+        </div>
       </section>
 
       {/* Tabs */}
@@ -268,6 +283,15 @@ export default function TRDViewerPage() {
   );
 }
 
+function MetaTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="surface-muted p-4">
+      <p className="data-label">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-900">{value}</p>
+    </div>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 /*  Overview Tab                                                       */
 /* ------------------------------------------------------------------ */
@@ -276,7 +300,7 @@ function OverviewTab({ trd }: { trd: TRDData }) {
   const ctx = trd.context ?? {};
   const stack = trd.technology_stack ?? {};
 
-  const contextEntries = Object.entries(ctx).filter(([, v]) => v !== undefined && v !== null && v !== "");
+  const contextEntries = (typeof ctx === "object" && ctx !== null && !Array.isArray(ctx) ? Object.entries(ctx) : []).filter(([, v]) => v !== undefined && v !== null && v !== "");
 
   return (
     <div className="space-y-6">
@@ -333,7 +357,7 @@ function TechStackCard({ title, items, icon }: { title: string; items?: string[]
         {icon}
         <p className="text-base font-semibold text-slate-900">{title}</p>
       </div>
-      {items && items.length > 0 ? (
+      {Array.isArray(items) && items.length > 0 ? (
         <div className="flex flex-wrap gap-2">
           {items.map((item) => (
             <span key={item} className="pill-badge bg-[#9065B0]/10 text-[#9065B0]">{item}</span>
@@ -373,7 +397,7 @@ function ArchitectureTab({ arch }: { arch: SystemArchitecture }) {
       ) : null}
 
       {/* Layers */}
-      {arch.layers && arch.layers.length > 0 ? (
+      {Array.isArray(arch.layers) && arch.layers.length > 0 ? (
         <div>
           <SectionHeader title="레이어 구성" description="시스템의 계층 구조" />
           <div className="space-y-3">
@@ -389,11 +413,12 @@ function ArchitectureTab({ arch }: { arch: SystemArchitecture }) {
                   <div className="min-w-0 flex-1">
                     <p className="text-base font-bold tracking-[-0.03em] text-slate-900">{layer.name}</p>
                     <p className="mt-1 text-sm leading-7 text-slate-600">{layer.responsibility}</p>
-                    {layer.components.length > 0 ? (
+                    {Array.isArray(layer.components) && layer.components.length > 0 ? (
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {layer.components.map((comp) => (
-                          <span key={comp} className="pill-badge bg-slate-100 text-slate-600">{comp}</span>
-                        ))}
+                        {layer.components.map((comp, ci) => {
+                          const label = typeof comp === "string" ? comp : (comp as Record<string, unknown>)?.name ?? JSON.stringify(comp);
+                          return <span key={ci} className="pill-badge bg-slate-100 text-slate-600">{String(label)}</span>;
+                        })}
                       </div>
                     ) : null}
                   </div>
@@ -405,7 +430,7 @@ function ArchitectureTab({ arch }: { arch: SystemArchitecture }) {
       ) : null}
 
       {/* Components */}
-      {arch.components && arch.components.length > 0 ? (
+      {Array.isArray(arch.components) && arch.components.length > 0 ? (
         <div>
           <SectionHeader title="컴포넌트 상세" description="각 컴포넌트의 인터페이스와 의존성" />
           <div className="space-y-3">
@@ -430,10 +455,10 @@ function ArchitectureTab({ arch }: { arch: SystemArchitecture }) {
                       <div className="grid gap-4 lg:grid-cols-2">
                         <div className="surface-muted p-4">
                           <p className="data-label">인터페이스</p>
-                          {comp.interfaces.length > 0 ? (
+                          {Array.isArray(comp.interfaces) && comp.interfaces.length > 0 ? (
                             <ul className="mt-3 space-y-2 text-sm leading-6 text-slate-700">
-                              {comp.interfaces.map((iface) => (
-                                <li key={iface}>- {iface}</li>
+                              {comp.interfaces.map((iface, ii) => (
+                                <li key={ii}>- {typeof iface === "string" ? iface : String((iface as Record<string, unknown>)?.name ?? JSON.stringify(iface))}</li>
                               ))}
                             </ul>
                           ) : (
@@ -442,11 +467,12 @@ function ArchitectureTab({ arch }: { arch: SystemArchitecture }) {
                         </div>
                         <div className="surface-muted p-4">
                           <p className="data-label">의존성</p>
-                          {comp.dependencies.length > 0 ? (
+                          {Array.isArray(comp.dependencies) && comp.dependencies.length > 0 ? (
                             <div className="mt-3 flex flex-wrap gap-2">
-                              {comp.dependencies.map((dep) => (
-                                <span key={dep} className="pill-badge bg-slate-100 text-slate-600">{dep}</span>
-                              ))}
+                              {comp.dependencies.map((dep, di) => {
+                                const depLabel = typeof dep === "string" ? dep : String((dep as Record<string, unknown>)?.name ?? JSON.stringify(dep));
+                                return <span key={di} className="pill-badge bg-slate-100 text-slate-600">{depLabel}</span>;
+                              })}
                             </div>
                           ) : (
                             <p className="mt-3 text-sm text-slate-500">없음</p>
@@ -463,7 +489,7 @@ function ArchitectureTab({ arch }: { arch: SystemArchitecture }) {
       ) : null}
 
       {/* Data Flow */}
-      {arch.data_flow && arch.data_flow.length > 0 ? (
+      {Array.isArray(arch.data_flow) && arch.data_flow.length > 0 ? (
         <div>
           <SectionHeader title="데이터 플로우" description="시스템 간 데이터 흐름" />
           <div className="overflow-x-auto">
@@ -477,7 +503,7 @@ function ArchitectureTab({ arch }: { arch: SystemArchitecture }) {
                 </tr>
               </thead>
               <tbody>
-                {arch.data_flow.map((flow, index) => (
+                {(Array.isArray(arch.data_flow) ? arch.data_flow : []).map((flow, index) => (
                   <tr key={index} className="border-b border-slate-100">
                     <td className="px-4 py-3 font-medium text-slate-900">{flow.source}</td>
                     <td className="px-4 py-3 text-slate-700">
@@ -499,7 +525,7 @@ function ArchitectureTab({ arch }: { arch: SystemArchitecture }) {
       ) : null}
 
       {/* Empty state */}
-      {!arch.layers?.length && !arch.components?.length && !arch.data_flow?.length ? (
+      {!(Array.isArray(arch.layers) && arch.layers.length) && !(Array.isArray(arch.components) && arch.components.length) && !(Array.isArray(arch.data_flow) && arch.data_flow.length) ? (
         <EmptyPanel title="아키텍처 정보가 없습니다" />
       ) : null}
     </div>
@@ -530,7 +556,7 @@ function APITab({ apiSpec }: { apiSpec: APISpecification }) {
     });
   }
 
-  const endpoints = apiSpec.endpoints ?? [];
+  const endpoints = Array.isArray(apiSpec.endpoints) ? apiSpec.endpoints : [];
 
   if (!endpoints.length) {
     return <EmptyPanel title="API 명세가 없습니다" />;
@@ -541,7 +567,7 @@ function APITab({ apiSpec }: { apiSpec: APISpecification }) {
       <SectionHeader title="엔드포인트 목록" description={`총 ${endpoints.length}개의 API 엔드포인트`} />
       {endpoints.map((ep, index) => {
         const expanded = expandedEndpoints.has(index);
-        const methodClass = METHOD_STYLE[ep.method.toUpperCase()] ?? "bg-slate-100 text-slate-600";
+        const methodClass = METHOD_STYLE[(ep.method ?? "").toUpperCase()] ?? "bg-slate-100 text-slate-600";
         return (
           <div key={index} className="rounded-2xl border border-[var(--line-soft)] bg-[var(--bg-panel)]">
             <button onClick={() => toggleEndpoint(index)} className="flex w-full items-start gap-4 p-5 text-left">
@@ -550,7 +576,7 @@ function APITab({ apiSpec }: { apiSpec: APISpecification }) {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className={`pill-badge font-mono text-xs font-bold ${methodClass}`}>{ep.method.toUpperCase()}</span>
+                  <span className={`pill-badge font-mono text-xs font-bold ${methodClass}`}>{(ep.method ?? "").toUpperCase()}</span>
                   <code className="text-sm font-semibold text-slate-900">{ep.path}</code>
                 </div>
                 <p className="mt-2 text-sm text-slate-600">{ep.description}</p>
@@ -601,7 +627,7 @@ function DatabaseTab({ dbDesign }: { dbDesign: DatabaseDesign }) {
     });
   }
 
-  const entities = dbDesign.entities ?? [];
+  const entities = Array.isArray(dbDesign.entities) ? dbDesign.entities : [];
 
   if (!entities.length) {
     return <EmptyPanel title="데이터베이스 설계 정보가 없습니다" />;
@@ -624,10 +650,10 @@ function DatabaseTab({ dbDesign }: { dbDesign: DatabaseDesign }) {
                   <p className="text-base font-semibold tracking-tight text-slate-900">{entity.name}</p>
                 </div>
                 <p className="mt-1 text-sm text-slate-600">{entity.description}</p>
-                <p className="mt-1 text-xs text-slate-400">{entity.fields?.length ?? 0}개 필드</p>
+                <p className="mt-1 text-xs text-slate-400">{Array.isArray(entity.fields) ? entity.fields.length : 0}개 필드</p>
               </div>
             </button>
-            {expanded && entity.fields?.length ? (
+            {expanded && Array.isArray(entity.fields) && entity.fields.length ? (
               <div className="border-t border-[var(--line-soft)] p-5 pl-14">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">

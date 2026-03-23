@@ -43,9 +43,16 @@ ARROW_COLOR = "#94A3B8"
 def _get_font(size, bold=False):
     """시스템 폰트 로드."""
     font_paths = [
+        # macOS
+        "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+        "/Library/Fonts/Arial Unicode.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+        # Windows
         "C:/Windows/Fonts/malgunbd.ttf" if bold else "C:/Windows/Fonts/malgun.ttf",
         "C:/Windows/Fonts/segoeui.ttf",
+        # Linux
         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
     ]
     for fp in font_paths:
         try:

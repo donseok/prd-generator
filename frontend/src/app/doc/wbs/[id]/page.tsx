@@ -16,7 +16,7 @@ import {
   Users,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { AppShell, MetricCard, SectionHeader, TopBar, formatDate } from "@/components/app-shell";
+import { AppShell, SectionHeader, TopBar, formatDate } from "@/components/app-shell";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -118,6 +118,7 @@ export default function WBSViewerPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["wbs-doc", docId],
     queryFn: () => api.getOutputDocument(docId, "json"),
+    enabled: !!docId,
   });
 
   const { data: mdData } = useQuery({
@@ -223,30 +224,23 @@ export default function WBSViewerPage() {
         </section>
       ) : null}
 
-      {/* Metric cards */}
-      <section className="grid gap-4 lg:grid-cols-4">
-        <MetricCard
-          label="총 공수"
-          value={summary.total_hours != null ? `${summary.total_hours.toLocaleString()}h` : "-"}
-          note={summary.man_months != null ? `${summary.man_months} M/M` : "데이터 없음"}
-          accent="mint"
-        />
-        <MetricCard
-          label="총 태스크"
-          value={summary.total_tasks ?? allTasks.length}
-          note="전체 작업 항목 수"
-          accent="warm"
-        />
-        <MetricCard
-          label="페이즈"
-          value={wbs.phases?.length ?? 0}
-          note="프로젝트 단계 수"
-        />
-        <MetricCard
-          label="팀 규모"
-          value={wbs.context?.team_size ?? "-"}
-          note={wbs.context?.methodology ? `방법론: ${wbs.context.methodology}` : "정의되지 않음"}
-        />
+      <section className="section-card">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div>
+            <p className="data-label">실행 계획 개요</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-900">{wbs.title ?? "WBS 문서"}</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+              페이즈, 작업 패키지, 태스크를 하나의 실행 계획 문서처럼 읽을 수 있게 정리했습니다. 요약 수치만 먼저 보고 바로 페이즈와 태스크 본문으로 이어집니다.
+            </p>
+          </div>
+
+          <aside className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+            <MetaTile label="총 공수" value={summary.total_hours != null ? `${summary.total_hours.toLocaleString()}h` : "-"} />
+            <MetaTile label="총 태스크" value={String(summary.total_tasks ?? allTasks.length)} />
+            <MetaTile label="페이즈" value={String(wbs.phases?.length ?? 0)} />
+            <MetaTile label="팀 규모" value={wbs.context?.team_size != null ? `${wbs.context.team_size}명` : "-"} />
+          </aside>
+        </div>
       </section>
 
       {/* Tabs */}
@@ -270,6 +264,15 @@ export default function WBSViewerPage() {
         {activeTab === "tasks" ? <TasksTab tasks={allTasks} /> : null}
       </section>
     </AppShell>
+  );
+}
+
+function MetaTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="surface-muted p-4">
+      <p className="data-label">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-900">{value}</p>
+    </div>
   );
 }
 
@@ -297,9 +300,9 @@ function SummaryTab({ wbs, allTasks }: { wbs: WBSData; allTasks: Array<WBSTask &
       <div>
         <SectionHeader title="프로젝트 컨텍스트" />
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <ContextCard label="시작일" value={ctx.start_date ?? "-"} icon={<Clock className="h-4 w-4" style={{ color: WBS_ACCENT }} />} />
+          <ContextCard label="시작일" value={ctx.start_date != null && typeof ctx.start_date !== "object" ? String(ctx.start_date) : "-"} icon={<Clock className="h-4 w-4" style={{ color: WBS_ACCENT }} />} />
           <ContextCard label="팀 규모" value={ctx.team_size != null ? `${ctx.team_size}명` : "-"} icon={<Users className="h-4 w-4" style={{ color: WBS_ACCENT }} />} />
-          <ContextCard label="방법론" value={ctx.methodology ?? "-"} icon={<ListChecks className="h-4 w-4" style={{ color: WBS_ACCENT }} />} />
+          <ContextCard label="방법론" value={ctx.methodology != null && typeof ctx.methodology !== "object" ? String(ctx.methodology) : "-"} icon={<ListChecks className="h-4 w-4" style={{ color: WBS_ACCENT }} />} />
           <ContextCard label="스프린트 주기" value={ctx.sprint_duration != null ? `${ctx.sprint_duration}일` : "-"} icon={<Clock className="h-4 w-4" style={{ color: WBS_ACCENT }} />} />
         </div>
       </div>
@@ -358,7 +361,7 @@ function SummaryTab({ wbs, allTasks }: { wbs: WBSData; allTasks: Array<WBSTask &
       ) : null}
 
       {/* Critical Path */}
-      {summary.critical_path && summary.critical_path.length > 0 ? (
+      {Array.isArray(summary.critical_path) && summary.critical_path.length > 0 ? (
         <div>
           <SectionHeader title="크리티컬 패스" description="프로젝트 일정에 직접 영향을 미치는 핵심 경로" />
           <div className="surface-muted p-5">
@@ -417,22 +420,25 @@ function PhasesTab({ phases }: { phases: WBSPhase[] }) {
     });
   }
 
-  if (!phases.length) {
+  const safePhases = Array.isArray(phases) ? phases : [];
+
+  if (!safePhases.length) {
     return <EmptyPanel title="페이즈 정보가 없습니다" />;
   }
 
   return (
     <div className="space-y-4">
-      {phases
+      {safePhases
         .slice()
         .sort((a, b) => a.order - b.order)
         .map((phase) => {
           const phaseExpanded = expandedPhases.has(phase.id);
-          const phaseHours = phase.work_packages.reduce(
-            (sum, pkg) => sum + pkg.tasks.reduce((s, t) => s + (t.estimated_hours || 0), 0),
+          const safeWorkPackages = Array.isArray(phase.work_packages) ? phase.work_packages : [];
+          const phaseHours = safeWorkPackages.reduce(
+            (sum, pkg) => sum + (Array.isArray(pkg.tasks) ? pkg.tasks : []).reduce((s, t) => s + (t.estimated_hours || 0), 0),
             0
           );
-          const phaseTasks = phase.work_packages.reduce((sum, pkg) => sum + pkg.tasks.length, 0);
+          const phaseTasks = safeWorkPackages.reduce((sum, pkg) => sum + (Array.isArray(pkg.tasks) ? pkg.tasks : []).length, 0);
 
           return (
             <div key={phase.id} className="rounded-2xl border border-[var(--line-soft)] bg-[var(--bg-panel)]">
@@ -451,7 +457,7 @@ function PhasesTab({ phases }: { phases: WBSPhase[] }) {
                   <p className="text-base font-bold tracking-[-0.03em] text-slate-900">{phase.name}</p>
                   <p className="mt-1 text-sm text-slate-600">{phase.description}</p>
                   <div className="mt-2 flex flex-wrap gap-3 text-xs text-slate-500">
-                    <span>{phase.work_packages.length}개 작업 패키지</span>
+                    <span>{safeWorkPackages.length}개 작업 패키지</span>
                     <span>{phaseTasks}개 태스크</span>
                     <span>{phaseHours}h</span>
                   </div>
@@ -462,9 +468,10 @@ function PhasesTab({ phases }: { phases: WBSPhase[] }) {
               {phaseExpanded ? (
                 <div className="border-t border-[var(--line-soft)] px-5 pb-5 pl-14 pt-5">
                   <div className="space-y-3">
-                    {phase.work_packages.map((pkg) => {
+                    {safeWorkPackages.map((pkg) => {
                       const pkgExpanded = expandedPackages.has(pkg.id);
-                      const pkgHours = pkg.tasks.reduce((sum, t) => sum + (t.estimated_hours || 0), 0);
+                      const safePkgTasks = Array.isArray(pkg.tasks) ? pkg.tasks : [];
+                      const pkgHours = safePkgTasks.reduce((sum, t) => sum + (t.estimated_hours || 0), 0);
                       return (
                         <div key={pkg.id} className="rounded-xl border border-[var(--line-soft)] bg-[var(--bg-panel)]">
                           <button onClick={() => togglePackage(pkg.id)} className="flex w-full items-start gap-3 p-4 text-left">
@@ -476,7 +483,7 @@ function PhasesTab({ phases }: { phases: WBSPhase[] }) {
                                 <span className="pill-badge bg-[#0F7B6C]/10 text-[#0F7B6C]">{pkg.id}</span>
                                 <span className="text-sm font-semibold text-slate-900">{pkg.name}</span>
                               </div>
-                              <p className="mt-1 text-xs text-slate-500">{pkg.tasks.length}개 태스크 / {pkgHours}h</p>
+                              <p className="mt-1 text-xs text-slate-500">{safePkgTasks.length}개 태스크 / {pkgHours}h</p>
                             </div>
                           </button>
 
@@ -497,7 +504,7 @@ function PhasesTab({ phases }: { phases: WBSPhase[] }) {
                                     </tr>
                                   </thead>
                                   <tbody>
-                                    {pkg.tasks.map((task) => (
+                                    {safePkgTasks.map((task) => (
                                       <tr key={task.id} className="border-b border-slate-100">
                                         <td className="px-2 py-2 font-mono text-xs text-slate-500">{task.id}</td>
                                         <td className="px-2 py-2 font-medium text-slate-900">{task.name}</td>
@@ -548,7 +555,7 @@ function TasksTab({ tasks }: { tasks: Array<WBSTask & { phaseName: string; packa
   }
 
   const sortedTasks = useMemo(() => {
-    const sorted = [...tasks];
+    const sorted = [...(Array.isArray(tasks) ? tasks : [])];
     sorted.sort((a, b) => {
       let cmp = 0;
       switch (sortField) {
@@ -570,7 +577,7 @@ function TasksTab({ tasks }: { tasks: Array<WBSTask & { phaseName: string; packa
     return sorted;
   }, [tasks, sortField, sortAsc]);
 
-  if (!tasks.length) {
+  if (!Array.isArray(tasks) || !tasks.length) {
     return <EmptyPanel title="태스크 정보가 없습니다" />;
   }
 
@@ -613,11 +620,12 @@ function TasksTab({ tasks }: { tasks: Array<WBSTask & { phaseName: string; packa
                   <span className="pill-badge bg-slate-100 text-slate-600">{task.assigned_role || "-"}</span>
                 </td>
                 <td className="px-3 py-3">
-                  {task.dependencies.length > 0 ? (
+                  {Array.isArray(task.dependencies) && task.dependencies.length > 0 ? (
                     <div className="flex flex-wrap gap-1">
-                      {task.dependencies.map((dep) => (
-                        <span key={dep} className="pill-badge bg-[#0F7B6C]/10 text-[#0F7B6C] text-xs">{dep}</span>
-                      ))}
+                      {task.dependencies.map((dep, i) => {
+                        const label = typeof dep === "string" ? dep : (dep as Record<string, unknown>).predecessor_id ?? JSON.stringify(dep);
+                        return <span key={i} className="pill-badge bg-[#0F7B6C]/10 text-[#0F7B6C] text-xs">{String(label)}</span>;
+                      })}
                     </div>
                   ) : (
                     <span className="text-xs text-slate-400">-</span>

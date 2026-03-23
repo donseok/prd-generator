@@ -18,7 +18,7 @@ import {
   Users,
 } from "lucide-react";
 import { api } from "@/lib/api";
-import { AppShell, MetricCard, SectionHeader, TopBar, formatDate } from "@/components/app-shell";
+import { AppShell, SectionHeader, TopBar, formatDate } from "@/components/app-shell";
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
@@ -133,6 +133,7 @@ export default function ProposalViewerPage() {
   const { data, isLoading, error } = useQuery({
     queryKey: ["proposal-doc", docId],
     queryFn: () => api.getOutputDocument(docId, "json"),
+    enabled: !!docId,
   });
 
   const { data: mdData } = useQuery({
@@ -181,9 +182,10 @@ export default function ProposalViewerPage() {
     );
   }
 
-  const risks = proposal.risk_management?.risks ?? [];
+  const risks = Array.isArray(proposal.risk_management?.risks) ? proposal.risk_management!.risks! : [];
   const highRisks = risks.filter((r) => r.level?.toUpperCase() === "HIGH").length;
-  const teamCount = proposal.resource_plan?.team_members?.reduce((sum, m) => sum + (m.count || 0), 0) ?? 0;
+  const rawTeamMembers = proposal.resource_plan?.team_members;
+  const teamCount = Array.isArray(rawTeamMembers) ? rawTeamMembers.reduce((sum, m) => sum + (m.count || 0), 0) : 0;
 
   return (
     <AppShell
@@ -228,30 +230,23 @@ export default function ProposalViewerPage() {
         </section>
       ) : null}
 
-      {/* Metric cards */}
-      <section className="grid gap-4 lg:grid-cols-4">
-        <MetricCard
-          label="총 기간"
-          value={proposal.timeline?.total_duration ?? "-"}
-          note={`${proposal.timeline?.phases?.length ?? 0}개 단계`}
-          accent="warm"
-        />
-        <MetricCard
-          label="팀 규모"
-          value={teamCount > 0 ? `${teamCount}명` : "-"}
-          note={proposal.resource_plan?.total_man_months != null ? `${proposal.resource_plan.total_man_months} M/M` : "데이터 없음"}
-          accent="mint"
-        />
-        <MetricCard
-          label="리스크"
-          value={risks.length}
-          note={highRisks > 0 ? `고위험 ${highRisks}건` : "고위험 없음"}
-        />
-        <MetricCard
-          label="산출물"
-          value={proposal.scope_of_work?.deliverables?.length ?? 0}
-          note="프로젝트 산출물 수"
-        />
+      <section className="section-card">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div>
+            <p className="data-label">제안 문서 개요</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.05em] text-slate-900">{proposal.title ?? "제안서 문서"}</h2>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+              제안서는 서사와 일정, 리스크를 같이 읽는 문서입니다. 상단 요약으로 규모와 기간을 먼저 보고, 아래 탭에서 제안 논리를 순서대로 읽을 수 있도록 정리했습니다.
+            </p>
+          </div>
+
+          <aside className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+            <MetaTile label="총 기간" value={proposal.timeline?.total_duration ?? "-"} />
+            <MetaTile label="팀 규모" value={teamCount > 0 ? `${teamCount}명` : "-"} />
+            <MetaTile label="리스크" value={String(risks.length)} />
+            <MetaTile label="산출물" value={String(Array.isArray(proposal.scope_of_work?.deliverables) ? proposal.scope_of_work!.deliverables!.length : 0)} />
+          </aside>
+        </div>
       </section>
 
       {/* Tabs */}
@@ -275,6 +270,15 @@ export default function ProposalViewerPage() {
         {activeTab === "risk" ? <RiskTab risks={risks} /> : null}
       </section>
     </AppShell>
+  );
+}
+
+function MetaTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="surface-muted p-4">
+      <p className="data-label">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-900">{value}</p>
+    </div>
   );
 }
 
@@ -320,10 +324,10 @@ function ExecutiveTab({ proposal }: { proposal: ProposalData }) {
             <Target className="h-4 w-4" style={{ color: PROPOSAL_ACCENT }} />
             <p className="text-base font-semibold text-slate-900">프로젝트 목표</p>
           </div>
-          {overview.objectives && overview.objectives.length > 0 ? (
+          {Array.isArray(overview.objectives) && overview.objectives.length > 0 ? (
             <ul className="space-y-2 text-sm leading-6 text-slate-700">
               {overview.objectives.map((obj, index) => (
-                <li key={index}>- {obj}</li>
+                <li key={index}>- {typeof obj === "object" ? JSON.stringify(obj) : obj}</li>
               ))}
             </ul>
           ) : (
@@ -391,7 +395,7 @@ function ScopeTab({ proposal }: { proposal: ProposalData }) {
             </div>
           ) : null}
 
-          {solution.key_features && solution.key_features.length > 0 ? (
+          {Array.isArray(solution.key_features) && solution.key_features.length > 0 ? (
             <div>
               <p className="mb-3 text-sm font-semibold text-slate-900">핵심 기능</p>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -404,7 +408,7 @@ function ScopeTab({ proposal }: { proposal: ProposalData }) {
                       >
                         {index + 1}
                       </div>
-                      <p className="text-sm leading-6 text-slate-700">{feature}</p>
+                      <p className="text-sm leading-6 text-slate-700">{typeof feature === "object" ? JSON.stringify(feature) : feature}</p>
                     </div>
                   </div>
                 ))}
@@ -412,13 +416,13 @@ function ScopeTab({ proposal }: { proposal: ProposalData }) {
             </div>
           ) : null}
 
-          {solution.innovation_points && solution.innovation_points.length > 0 ? (
+          {Array.isArray(solution.innovation_points) && solution.innovation_points.length > 0 ? (
             <div>
               <p className="mb-3 text-sm font-semibold text-slate-900">혁신 포인트</p>
               <div className="surface-muted p-5">
                 <ul className="space-y-2 text-sm leading-7 text-slate-700">
                   {solution.innovation_points.map((point, index) => (
-                    <li key={index}>- {point}</li>
+                    <li key={index}>- {typeof point === "object" ? JSON.stringify(point) : point}</li>
                   ))}
                 </ul>
               </div>
@@ -449,10 +453,10 @@ function ScopeCard({
         {icon}
         <p className="text-base font-semibold text-slate-900">{title}</p>
       </div>
-      {items && items.length > 0 ? (
+      {Array.isArray(items) && items.length > 0 ? (
         <ul className="space-y-2 text-sm leading-6 text-slate-700">
           {items.map((item, index) => (
-            <li key={index}>- {item}</li>
+            <li key={index}>- {typeof item === "object" ? JSON.stringify(item) : item}</li>
           ))}
         </ul>
       ) : (
@@ -469,8 +473,8 @@ function ScopeCard({
 function TimelineTab({ proposal }: { proposal: ProposalData }) {
   const timeline = proposal.timeline ?? {};
   const resource = proposal.resource_plan ?? {};
-  const phases = timeline.phases ?? [];
-  const teamMembers = resource.team_members ?? [];
+  const phases = Array.isArray(timeline.phases) ? timeline.phases : [];
+  const teamMembers = Array.isArray(resource.team_members) ? resource.team_members : [];
 
   return (
     <div className="space-y-8">
@@ -493,17 +497,17 @@ function TimelineTab({ proposal }: { proposal: ProposalData }) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-3">
-                      <p className="text-base font-bold tracking-[-0.03em] text-slate-900">{phase.name}</p>
+                      <p className="text-base font-bold tracking-[-0.03em] text-slate-900">{typeof phase.name === "object" ? JSON.stringify(phase.name) : (phase.name ?? "")}</p>
                       <span className="pill-badge bg-[#D9730D]/10 text-[#D9730D]">
-                        <Calendar className="mr-1 inline-block h-3 w-3" />{phase.duration}
+                        <Calendar className="mr-1 inline-block h-3 w-3" />{typeof phase.duration === "object" ? JSON.stringify(phase.duration) : (phase.duration ?? "")}
                       </span>
                     </div>
-                    {phase.deliverables.length > 0 ? (
+                    {Array.isArray(phase.deliverables) && phase.deliverables.length > 0 ? (
                       <div className="mt-3">
                         <p className="data-label">산출물</p>
                         <ul className="mt-2 space-y-1 text-sm leading-6 text-slate-700">
                           {phase.deliverables.map((d, i) => (
-                            <li key={i}>- {d}</li>
+                            <li key={i}>- {typeof d === "object" ? JSON.stringify(d) : d}</li>
                           ))}
                         </ul>
                       </div>
@@ -540,17 +544,17 @@ function TimelineTab({ proposal }: { proposal: ProposalData }) {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <Users className="h-4 w-4" style={{ color: PROPOSAL_ACCENT }} />
-                        <span className="font-medium text-slate-900">{member.role}</span>
+                        <span className="font-medium text-slate-900">{typeof member.role === "object" ? JSON.stringify(member.role) : (member.role ?? "")}</span>
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <span className="pill-badge bg-[#D9730D]/10 text-[#D9730D] font-semibold">{member.count}명</span>
+                      <span className="pill-badge bg-[#D9730D]/10 text-[#D9730D] font-semibold">{member.count != null ? member.count : 0}명</span>
                     </td>
                     <td className="px-4 py-3">
-                      {member.responsibilities.length > 0 ? (
+                      {Array.isArray(member.responsibilities) && member.responsibilities.length > 0 ? (
                         <ul className="space-y-1 text-slate-600">
                           {member.responsibilities.map((resp, i) => (
-                            <li key={i}>- {resp}</li>
+                            <li key={i}>- {typeof resp === "object" ? JSON.stringify(resp) : resp}</li>
                           ))}
                         </ul>
                       ) : (
@@ -575,7 +579,7 @@ function TimelineTab({ proposal }: { proposal: ProposalData }) {
 /* ------------------------------------------------------------------ */
 
 function RiskTab({ risks }: { risks: Risk[] }) {
-  if (!risks.length) {
+  if (!Array.isArray(risks) || !risks.length) {
     return (
       <div className="flex flex-col items-center justify-center px-6 py-16 text-center">
         <CheckCircle2 className="h-10 w-10 text-[#0F7B6C]" />
@@ -622,7 +626,7 @@ function RiskTab({ risks }: { risks: Risk[] }) {
 
       {/* Risk cards */}
       <div className="space-y-3">
-        {risks.map((risk, index) => {
+        {(Array.isArray(risks) ? risks : []).map((risk, index) => {
           const levelKey = risk.level?.toUpperCase() ?? "MEDIUM";
           const levelStyle = RISK_LEVEL_STYLE[levelKey] ?? RISK_LEVEL_STYLE.MEDIUM;
           const levelLabel = RISK_LEVEL_LABEL[levelKey] ?? risk.level;
@@ -643,15 +647,15 @@ function RiskTab({ risks }: { risks: Risk[] }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`pill-badge font-semibold ${levelStyle}`}>{levelLabel}</span>
                   </div>
-                  <p className="mt-2 text-base font-semibold text-slate-900">{risk.description}</p>
+                  <p className="mt-2 text-base font-semibold text-slate-900">{typeof risk.description === "object" ? JSON.stringify(risk.description) : (risk.description || "")}</p>
                   <div className="mt-4 grid gap-4 lg:grid-cols-2">
                     <div className="surface-muted p-4">
                       <p className="data-label">영향</p>
-                      <p className="mt-2 text-sm leading-7 text-slate-700">{risk.impact || "-"}</p>
+                      <p className="mt-2 text-sm leading-7 text-slate-700">{typeof risk.impact === "object" ? JSON.stringify(risk.impact) : (risk.impact || "-")}</p>
                     </div>
                     <div className="surface-muted p-4">
                       <p className="data-label">대응 방안</p>
-                      <p className="mt-2 text-sm leading-7 text-slate-700">{risk.mitigation || "-"}</p>
+                      <p className="mt-2 text-sm leading-7 text-slate-700">{typeof risk.mitigation === "object" ? JSON.stringify(risk.mitigation) : (risk.mitigation || "-")}</p>
                     </div>
                   </div>
                 </div>

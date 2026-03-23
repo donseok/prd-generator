@@ -1,7 +1,7 @@
 import axios from "axios";
 
 // API 서버 주소 (환경변수 또는 기본값)
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
 
 // Axios 클라이언트 설정
 const client = axios.create({
@@ -366,7 +366,7 @@ export const api = {
 
   async createProject(name: string, description: string = "", tags: string[] = []): Promise<Project> {
     const response = await client.post("/projects", { name, description, tags });
-    return response.data;
+    return response.data.project ?? response.data;
   },
 
   async getProject(projectId: string): Promise<Project> {
@@ -376,15 +376,15 @@ export const api = {
 
   async updateProject(projectId: string, data: { name?: string; description?: string; status?: string; tags?: string[] }): Promise<Project> {
     const response = await client.put(`/projects/${projectId}`, data);
-    return response.data;
+    return response.data.project ?? response.data;
   },
 
-  async deleteProject(projectId: string): Promise<{ success: boolean; message: string }> {
+  async deleteProject(projectId: string): Promise<{ message: string; id: string }> {
     const response = await client.delete(`/projects/${projectId}`);
     return response.data;
   },
 
-  async addDocumentToProject(projectId: string, docId: string, docType: string, title: string = "", sourceDocId?: string): Promise<Project> {
+  async addDocumentToProject(projectId: string, docId: string, docType: string, title: string = "", sourceDocId?: string): Promise<{ message: string; project_id: string; document: { doc_id: string; doc_type: string; title: string } }> {
     const response = await client.post(`/projects/${projectId}/documents`, {
       doc_id: docId,
       doc_type: docType,
@@ -394,7 +394,7 @@ export const api = {
     return response.data;
   },
 
-  async removeDocumentFromProject(projectId: string, docId: string): Promise<Project> {
+  async removeDocumentFromProject(projectId: string, docId: string): Promise<{ message: string; project_id: string; doc_id: string }> {
     const response = await client.delete(`/projects/${projectId}/documents/${docId}`);
     return response.data;
   },
@@ -508,17 +508,33 @@ export interface Project {
   tags: string[];
 }
 
+export interface ProjectSummary {
+  id: string;
+  name: string;
+  description: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  document_count: number;
+  tags: string[];
+}
+
 export interface ProjectListResponse {
   total: number;
-  projects: Project[];
+  projects: ProjectSummary[];
+}
+
+export interface DocumentGroup {
+  doc_type: string;
+  documents: Array<{ doc_id: string; title: string; created_at: string; source_doc_id: string | null }>;
+  count: number;
 }
 
 export interface ProjectDocumentsResponse {
   project_id: string;
   project_name: string;
-  total: number;
-  by_type: Record<string, DocumentReference[]>;
-  documents: DocumentReference[];
+  total_documents: number;
+  groups: DocumentGroup[];
 }
 
 export default api;

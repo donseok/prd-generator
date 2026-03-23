@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from functools import lru_cache
 
 
@@ -8,9 +8,11 @@ class Settings(BaseSettings):
     환경 변수(.env 파일)에서 설정값을 읽어옵니다.
     """
 
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
     # API 설정: AI 모델 사용을 위한 키와 모델 이름
     anthropic_api_key: str = ""
-    claude_model: str = "claude-sonnet-4-20250514"  # 사용할 Claude AI 모델 버전
+    claude_model: str = "sonnet"  # Claude CLI의 최신 Sonnet 별칭
 
     # 검증 및 처리 로직 설정
     auto_approve_threshold: float = 0.8  # 자동 승인 점수 기준 (이 점수 이상이면 자동 통과)
@@ -27,11 +29,6 @@ class Settings(BaseSettings):
     # 서버 설정: 서버가 실행될 주소와 포트 번호
     host: str = "0.0.0.0"  # 모든 외부 접속 허용
     port: int = 8000
-
-    class Config:
-        # 설정을 읽어올 파일 지정
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 @lru_cache()

@@ -395,11 +395,16 @@ class WBSGenerator(BaseGenerator[PRDDocument, WBSDocument, WBSContext]):
                         dependency_type=DependencyType.FINISH_TO_START,
                     ))
 
+                try:
+                    estimated_hours = float(task_data.get("estimated_hours", 8))
+                except (ValueError, TypeError):
+                    estimated_hours = 8.0
+
                 tasks_by_wp[wp_id].append(WBSTask(
                     id=task_id,
                     name=task_data.get("name", f"Task {counter}"),
                     description=task_data.get("description", ""),
-                    estimated_hours=float(task_data.get("estimated_hours", 8)),
+                    estimated_hours=estimated_hours,
                     resources=resources,
                     dependencies=dependencies,
                     deliverables=task_data.get("deliverables", []),
