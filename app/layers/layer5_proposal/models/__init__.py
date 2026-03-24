@@ -14,6 +14,7 @@ from .proposal import (
     TeamMember,
     Risk,
     RiskLevel,
+    InvestmentSummary,
 )
 
 __all__ = [
@@ -30,4 +31,5 @@ __all__ = [
     "TeamMember",
     "Risk",
     "RiskLevel",
+    "InvestmentSummary",
 ]

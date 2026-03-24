@@ -84,6 +84,17 @@ async def main():
     json_path.write_text(wbs.to_json(), encoding='utf-8')
     print(f'JSON 저장: {json_path}')
 
+    # Excel 업로드 양식 자동 생성
+    try:
+        from app.scripts.wbs_excel_maker import generate_wbs_excel
+        import json as _json
+        wbs_data = _json.loads(wbs.to_json())
+        xlsx_path = output_dir / f'WBS_업로드_{timestamp}.xlsx'
+        row_count = generate_wbs_excel(wbs_data, xlsx_path)
+        print(f'Excel 저장: {xlsx_path} ({row_count}행)')
+    except Exception as e:
+        print(f'⚠ Excel 생성 실패 (WBS MD/JSON은 정상 저장됨): {e}')
+
     return wbs
 
 

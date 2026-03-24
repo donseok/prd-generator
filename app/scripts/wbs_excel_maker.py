@@ -175,7 +175,7 @@ def flatten_wbs_to_rows(wbs_data: dict) -> list[dict]:
                 # 담당자
                 assignee = ""
                 resources = task.get("resources", [])
-                if resources:
+                if resources and isinstance(resources[0], dict):
                     assignee = resources[0].get("resource_type", "")
 
                 # 산출물
@@ -395,13 +395,12 @@ def main():
 
     phase_count = len(wbs_data.get("phases", []))
     task_count = sum(
-        len(task)
+        len(wp.get("tasks", []))
         for phase in wbs_data.get("phases", [])
-        for task in [
-            t for wp in phase.get("work_packages", []) for t in [wp.get("tasks", [])]
-        ]
+        for wp in phase.get("work_packages", [])
     )
     print(f"총 단계: {phase_count}개")
+    print(f"총 작업: {task_count}개")
 
     # Excel 생성
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")

@@ -20,6 +20,7 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
 from app.exceptions import ClaudeClientError
+from app.config import get_settings
 
 # 로깅 설정: 시스템의 동작 상태를 기록합니다.
 logging.basicConfig(
@@ -49,6 +50,7 @@ class ClaudeClient:
         """
         self._max_retries = 2  # 최대 2번까지 재시도 (빠른 실패)
         self._retry_delay = 1  # 재시도 전 1초 대기
+        self._model = get_settings().claude_model or "sonnet"
 
         # CPU 코어 수 확인 후 작업자(Worker) 수 설정
         cpu_count = os.cpu_count() or 4
@@ -56,7 +58,22 @@ class ClaudeClient:
         max_workers = min(8, max(2, cpu_count))
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
 
-        logger.info(f"[ClaudeClient] CLI 모드 초기화 완료 (작업자 수={max_workers})")
+        logger.info(
+            f"[ClaudeClient] CLI 모드 초기화 완료 "
+            f"(작업자 수={max_workers}, 모델={self._model})"
+        )
+
+    def shutdown(self) -> None:
+        """ThreadPoolExecutor를 정리합니다."""
+        self._executor.shutdown(wait=True)
+        logger.info("[ClaudeClient] Executor 종료 완료")
+
+    def __del__(self) -> None:
+        """안전망: GC 시 executor를 정리합니다."""
+        try:
+            self._executor.shutdown(wait=False)
+        except Exception:
+            pass
 
     async def complete(
         self,
@@ -180,9 +197,12 @@ class ClaudeClient:
             result = await self._execute_claude_cli(full_prompt)
             return result
         finally:
-            # 임시 파일 삭제
-            if os.path.exists(tmp_path):
-                os.unlink(tmp_path)
+            # 임시 파일 삭제 (Windows 파일 잠금 대비)
+            try:
+                if os.path.exists(tmp_path):
+                    os.unlink(tmp_path)
+            except OSError as e:
+                logger.warning("[CLI] 임시 파일 삭제 실패 (%s): %s", tmp_path, e)
 
     def _get_env(self) -> dict:
         """Claude CLI 실행을 위한 환경 변수 설정 (명령어 경로 등)"""
@@ -239,7 +259,7 @@ class ClaudeClient:
             try:
                 with open(prompt_file_path, 'r', encoding='utf-8') as pf:
                     result = subprocess.run(
-                        ["claude", "-p", "--output-format", "text",
+                        ["claude", "-p", "--output-format", "text", "--model", self._model,
                          "--dangerously-skip-permissions", "--setting-sources", "user",
                          "--no-session-persistence"],
                         stdin=pf,
@@ -274,7 +294,7 @@ class ClaudeClient:
         """파일 첨부와 함께 Claude CLI 실행 (stdin 파이핑)"""
         env = self._get_env()
 
-        cmd = ["claude", "-p", "--output-format", "text",
+        cmd = ["claude", "-p", "--output-format", "text", "--model", self._model,
                "--dangerously-skip-permissions", "--setting-sources", "user",
                "--no-session-persistence"]
         for file_path in file_paths:

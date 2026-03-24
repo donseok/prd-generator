@@ -61,7 +61,15 @@ async def start_processing(
 
     # 백그라운드에서 AI 처리 작업 시작 (사용자는 기다리지 않고 바로 응답을 받음)
     import asyncio
-    asyncio.create_task(run_pipeline(job.job_id))
+
+    def _task_done_callback(t: asyncio.Task) -> None:
+        if t.cancelled():
+            logger.warning("[Pipeline] 작업이 취소됨: %s", job.job_id)
+        elif t.exception():
+            logger.error("[Pipeline] 작업에서 처리되지 않은 예외 발생 (%s): %s", job.job_id, t.exception())
+
+    task = asyncio.create_task(run_pipeline(job.job_id))
+    task.add_done_callback(_task_done_callback)
 
     return {
         "job_id": job.job_id,

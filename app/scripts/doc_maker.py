@@ -17,6 +17,26 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+# Emoji-only removal pattern (preserves Korean punctuation and other valid characters)
+_EMOJI_PATTERN = re.compile("["
+    u"\U0001F600-\U0001F64F"  # emoticons
+    u"\U0001F300-\U0001F5FF"  # symbols & pictographs
+    u"\U0001F680-\U0001F6FF"  # transport & map
+    u"\U0001F1E0-\U0001F1FF"  # flags
+    u"\U00002702-\U000027B0"
+    u"\U000024C2-\U0001F251"
+    u"\U0001f926-\U0001f937"
+    u"\U00010000-\U0010ffff"
+    u"\u2640-\u2642"
+    u"\u2600-\u2B55"
+    u"\u200d"
+    u"\u23cf"
+    u"\u23e9"
+    u"\u231a"
+    u"\ufe0f"
+    u"\u3030"
+    "]+", flags=re.UNICODE)
+
 from docx import Document
 from docx.shared import Pt, Inches, Cm, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -304,7 +324,7 @@ def md_to_docx(md_content: str, doc_type: str, title: str = None) -> Document:
             quote_text = re.sub(r'^>\s*', '', stripped)
             quote_text = re.sub(r'\*\*(.+?)\*\*', r'\1', quote_text)
             # 이모지 제거
-            quote_text = re.sub(r'[^\w\s가-힣a-zA-Z0-9.,;:!?(){}[\]<>@#$%^&*+=\-_/\\|~`"\']', '', quote_text).strip()
+            quote_text = _EMOJI_PATTERN.sub('', quote_text).strip()
             if quote_text:
                 p = doc.add_paragraph()
                 p.paragraph_format.left_indent = Cm(1.0)
@@ -324,7 +344,7 @@ def md_to_docx(md_content: str, doc_type: str, title: str = None) -> Document:
             text = list_match.group(3)
             text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
             # 이모지 정리
-            text = re.sub(r'[^\w\s가-힣a-zA-Z0-9.,;:!?(){}[\]<>@#$%^&*+=\-_/\\|~`"\']', '', text).strip()
+            text = _EMOJI_PATTERN.sub('', text).strip()
             if text:
                 p = doc.add_paragraph(style='List Bullet')
                 # Bold 처리
@@ -345,7 +365,7 @@ def md_to_docx(md_content: str, doc_type: str, title: str = None) -> Document:
         # 일반 텍스트
         text = stripped
         text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-        text = re.sub(r'[^\w\s가-힣a-zA-Z0-9.,;:!?(){}[\]<>@#$%^&*+=\-_/\\|~`"\']', '', text).strip()
+        text = _EMOJI_PATTERN.sub('', text).strip()
         if text:
             p = doc.add_paragraph()
             run = p.add_run(text)

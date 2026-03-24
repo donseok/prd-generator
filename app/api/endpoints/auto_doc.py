@@ -53,6 +53,22 @@ class GenerateResponse(BaseModel):
 
 generation_jobs: dict[str, dict[str, Any]] = {}
 
+_JOB_TTL_SECONDS = 3600  # 1시간
+
+
+def _cleanup_old_jobs() -> None:
+    """1시간 이상 된 작업 항목을 제거하여 메모리 누수를 방지합니다."""
+    now = datetime.now()
+    expired_ids = [
+        job_id
+        for job_id, job_data in generation_jobs.items()
+        if (now - datetime.fromisoformat(job_data["created_at"])).total_seconds() > _JOB_TTL_SECONDS
+    ]
+    for job_id in expired_ids:
+        del generation_jobs[job_id]
+    if expired_ids:
+        logger.info("만료된 작업 %d건 정리 완료", len(expired_ids))
+
 
 @router.get("/inputs", response_model=InputFilesResponse)
 async def list_input_files() -> InputFilesResponse:
@@ -136,9 +152,13 @@ async def generate_documents(
         )
 
     requested = request.doc_types or VALID_DOC_TYPES.copy()
+    if not requested:
+        raise HTTPException(status_code=400, detail="doc_types must not be empty")
     invalid = [doc_type for doc_type in requested if doc_type not in VALID_DOC_TYPES]
     if invalid:
         raise HTTPException(status_code=400, detail=f"지원하지 않는 문서 타입입니다: {', '.join(invalid)}")
+
+    _cleanup_old_jobs()
 
     job_id = f"auto-doc-{datetime.now().strftime('%Y%m%d%H%M%S')}"
     generation_jobs[job_id] = {

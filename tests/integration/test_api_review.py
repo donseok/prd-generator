@@ -25,7 +25,7 @@ class TestGetPendingReviews:
         response = await client.get("/api/v1/review/pending/nonexistent-job")
         assert response.status_code == 404
 
-    async def test_existing_job_returns_review_data(self, client: AsyncClient, sample_job, temp_storage):
+    async def test_existing_job_returns_review_data(self, client: AsyncClient, sample_job):
         """존재하는 작업이 있으면 검토 데이터를 반환한다."""
         from unittest.mock import patch, AsyncMock
         from app.services import file_storage

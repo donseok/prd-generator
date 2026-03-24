@@ -310,6 +310,8 @@ FR=기능, NFR=비기능(수치 정량화 필수), CONSTRAINT=제약. JSON만 �
             elif "LOW" in priority_str:
                 priority = Priority.LOW
             else:
+                if priority_str not in ("MEDIUM", ""):
+                    logger.warning(f"[convert] Unexpected priority value '{priority_str}', falling back to MEDIUM")
                 priority = Priority.MEDIUM
 
             # AI 신뢰도 추출 (기본값 0.7)

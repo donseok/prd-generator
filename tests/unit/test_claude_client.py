@@ -6,6 +6,8 @@ Tests the JSON extraction logic that handles various AI response formats:
 - Error handling for unparseable content
 """
 
+from types import SimpleNamespace
+
 import pytest
 
 from app.services.claude_client import ClaudeClient
@@ -104,3 +106,55 @@ class TestParseJsonResponseInvalid:
         """Malformed JSON after bracket extraction should raise ClaudeClientError."""
         with pytest.raises(ClaudeClientError):
             client._parse_json_response("result: {broken json without closing")
+
+
+class TestClaudeCliCommand:
+    def test_run_claude_sync_uses_configured_model(self, monkeypatch):
+        captured = {}
+
+        monkeypatch.setattr(
+            "app.services.claude_client.get_settings",
+            lambda: SimpleNamespace(claude_model="claude-sonnet-4-6"),
+        )
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+        monkeypatch.setattr("app.services.claude_client.subprocess.run", fake_run)
+
+        client = ClaudeClient()
+        result = client._run_claude_sync("hello")
+
+        assert result == "ok"
+        assert "--model" in captured["cmd"]
+        assert captured["cmd"][captured["cmd"].index("--model") + 1] == "claude-sonnet-4-6"
+
+    def test_run_claude_sync_with_files_uses_configured_model(self, monkeypatch, tmp_path):
+        captured = {}
+        attachment = tmp_path / "attachment.txt"
+        attachment.write_text("test", encoding="utf-8")
+
+        monkeypatch.setattr(
+            "app.services.claude_client.get_settings",
+            lambda: SimpleNamespace(claude_model="sonnet"),
+        )
+
+        def fake_run(cmd, **kwargs):
+            captured["cmd"] = cmd
+            return SimpleNamespace(returncode=0, stdout="ok", stderr="")
+
+        monkeypatch.setattr("app.services.claude_client.subprocess.run", fake_run)
+
+        client = ClaudeClient()
+        result = client._run_claude_sync_with_files("hello", [str(attachment)])
+
+        assert result == "ok"
+        assert captured["cmd"][:6] == [
+            "claude",
+            "-p",
+            "--output-format",
+            "text",
+            "--model",
+            "sonnet",
+        ]

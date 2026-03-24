@@ -23,7 +23,19 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
+import matplotlib.font_manager as fm
 from PIL import Image, ImageDraw
+
+# 한글 폰트 설정 (macOS: Apple SD Gothic Neo, Windows: 맑은 고딕, fallback: Nanum Gothic)
+_KR_FONT_CANDIDATES = ['Apple SD Gothic Neo', 'Malgun Gothic', 'Nanum Gothic', 'NanumGothic']
+_KR_FONT = None
+for _fname in _KR_FONT_CANDIDATES:
+    if any(f.name == _fname for f in fm.fontManager.ttflist):
+        _KR_FONT = _fname
+        break
+if _KR_FONT:
+    plt.rcParams['font.family'] = _KR_FONT
+plt.rcParams['axes.unicode_minus'] = False
 
 from pptx import Presentation
 from pptx.util import Inches, Pt, Emu
@@ -1735,12 +1747,13 @@ def _normalize_legacy_format(data: dict) -> dict:
 
 def _get_or_generate_arch_diagram() -> Path | None:
     """아키텍처 다이어그램 PNG 가져오기 또는 TRD에서 자동 생성."""
-    diagram_dir = Path("workspace/outputs/diagrams")
+    project_root = Path(__file__).parent.parent.parent
+    diagram_dir = project_root / "workspace/outputs/diagrams"
     existing = list(diagram_dir.glob("ARCH-*.png")) if diagram_dir.exists() else []
     if existing:
         return max(existing, key=lambda x: x.stat().st_mtime)
 
-    trd_dir = Path("workspace/outputs/trd")
+    trd_dir = project_root / "workspace/outputs/trd"
     trd_files = list(trd_dir.glob("TRD-*.json")) if trd_dir.exists() else []
     if not trd_files:
         return None
@@ -1940,7 +1953,8 @@ def main():
     print(f'테마: {args.theme}')
     print("=" * 70)
 
-    proposal_dir = Path("workspace/outputs/proposals")
+    project_root = Path(__file__).parent.parent.parent
+    proposal_dir = project_root / "workspace/outputs/proposals"
     md_files = list(proposal_dir.glob("PROP-*.md"))
 
     if not md_files:
@@ -1951,7 +1965,7 @@ def main():
     proposal_path = max(md_files, key=lambda x: x.stat().st_mtime)
     print(f"\n[입력] 제안서: {proposal_path}")
 
-    output_dir = Path("workspace/outputs/ppt")
+    output_dir = project_root / "workspace/outputs/ppt"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")

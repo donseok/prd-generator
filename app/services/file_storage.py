@@ -182,9 +182,9 @@ class FileStorage:
         doc_dir.mkdir(parents=True, exist_ok=True)
 
         file_path = doc_dir / filename
-        # 파일 쓰기
-        with open(file_path, "wb") as f:
-            f.write(file_content)
+        # 파일 쓰기 (비동기)
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(file_content)
 
         # 저장된 파일의 절대 경로 반환
         return str(file_path.resolve())
@@ -195,8 +195,8 @@ class FileStorage:
         if not file_path.exists():
             return None
 
-        with open(file_path, "rb") as f:
-            return f.read()
+        async with aiofiles.open(file_path, "rb") as f:
+            return await f.read()
 
     async def delete_upload(self, document_id: str) -> bool:
         """특정 문서와 관련된 모든 업로드 파일을 삭제합니다."""
@@ -298,8 +298,8 @@ class FileStorage:
     async def _save_model(self, file_path: Path, model: BaseModel):
         """데이터 모델을 JSON 파일로 저장하는 공통 함수"""
         try:
-            with open(file_path, "w", encoding="utf-8") as f:
-                f.write(model.model_dump_json(indent=2))
+            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
+                await f.write(model.model_dump_json(indent=2))
         except Exception as e:
             logger.error(f"파일 저장 실패 {file_path}: {e}", exc_info=True)
             raise StorageError(
@@ -313,8 +313,8 @@ class FileStorage:
             return None
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            async with aiofiles.open(file_path, "r", encoding="utf-8") as f:
+                content = await f.read()
                 return model_class.model_validate_json(content)
         except Exception as e:
             logger.error(f"파일 로딩 에러 {file_path}: {e}", exc_info=True)

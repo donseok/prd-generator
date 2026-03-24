@@ -32,13 +32,13 @@ async def lifespan(app: FastAPI):
     """
     # 시작 시: 서비스 초기화
     settings = get_settings()
-    logger.info(f"PRD 생성기가 다음 주소에서 시작됩니다: {settings.host}:{settings.port}")
+    logger.info(f"D'Maker가 다음 주소에서 시작됩니다: {settings.host}:{settings.port}")
     logger.info("AI 처리를 위해 Claude Code CLI를 사용합니다")
 
     yield
 
     # 종료 시: 리소스 정리
-    logger.info("PRD 생성기가 종료됩니다")
+    logger.info("D'Maker가 종료됩니다")
 
 
 def create_app() -> FastAPI:
@@ -53,8 +53,8 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(
-        title="PRD 자동 생성 시스템",
-        description="다양한 입력 형식을 표준 PRD로 변환하는 4단계 AI 파이프라인",
+        title="D'Maker",
+        description="AI 기반 문서 자동화 시스템 - PRD, TRD, WBS, 제안서, PPT 생성",
         version="1.0.0",
         lifespan=lifespan,
         docs_url="/docs",  # 개발자용 문서 주소
@@ -66,7 +66,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
         allow_credentials=True,
-        allow_methods=["*"],  # 모든 통신 방식 허용 (GET, POST 등)
+        allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
         allow_headers=["*"],  # 모든 헤더 정보 허용
     )
 
@@ -114,7 +114,7 @@ async def root():
     접속 시 서버의 기본 정보를 반환합니다.
     """
     return {
-        "name": "PRD 자동 생성 시스템",
+        "name": "D'Maker",
         "version": "1.0.0",
         "description": "다양한 입력 형식을 표준 PRD로 변환",
         "docs": "/docs",

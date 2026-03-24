@@ -219,7 +219,7 @@ export const api = {
     });
 
     return {
-      documents: response.data.documents.map((doc: { id: string; filename: string }) => ({
+      documents: (response.data.documents || []).map((doc: { id: string; filename: string }) => ({
         id: doc.id,
         filename: doc.filename,
       })),

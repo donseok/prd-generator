@@ -3,9 +3,12 @@
 Pandas 라이브러리를 사용하여 데이터를 읽고 표 형태로 변환합니다.
 """
 
+import logging
 from pathlib import Path
 from typing import Optional
 import pandas as pd
+
+logger = logging.getLogger(__name__)
 
 from app.models import InputType, ParsedContent, InputMetadata
 from ..base_parser import BaseParser
@@ -67,7 +70,7 @@ class ExcelParser(BaseParser):
                 analysis = await self._analyze_with_claude(raw_text)
                 structured_data["ai_analysis"] = analysis
             except Exception as e:
-                print(f"Claude 엑셀 분석 실패: {e}")
+                logger.warning(f"Claude 엑셀 분석 실패: {e}")
 
         return ParsedContent(
             raw_text=raw_text,

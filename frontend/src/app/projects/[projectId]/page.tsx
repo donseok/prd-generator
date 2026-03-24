@@ -21,8 +21,8 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { api, type DocumentReference, type OutputDocument } from "@/lib/api";
-import { AppShell, TopBar, HeroPanel, MetricCard, SectionHeader, formatDate } from "@/components/app-shell";
+import { api, type DocumentReference } from "@/lib/api";
+import { AppShell, TopBar, SectionHeader, formatDate } from "@/components/app-shell";
 
 /* -------------------------------------------------------------------------- */
 /*  Constants                                                                  */
@@ -34,8 +34,6 @@ const DOC_TYPE_META: Record<
     label: string;
     shortLabel: string;
     icon: typeof FileText;
-    tone: string;
-    shadowClass: string;
     note: string;
     dotColor: string;
   }
@@ -44,46 +42,36 @@ const DOC_TYPE_META: Record<
     label: "제품 요구사항 문서",
     shortLabel: "PRD",
     icon: FileText,
-    tone: "bg-gradient-to-br from-blue-500 to-blue-600",
-    shadowClass: "shadow-[0_4px_14px_rgba(35,131,226,0.2)]",
     note: "서비스 방향과 요구사항 정의",
-    dotColor: "bg-blue-500",
+    dotColor: "bg-sky-600",
   },
   TRD: {
     label: "기술 요구사항 문서",
     shortLabel: "TRD",
     icon: FileCode2,
-    tone: "bg-gradient-to-br from-purple-500 to-purple-600",
-    shadowClass: "shadow-[0_4px_14px_rgba(144,101,176,0.2)]",
     note: "구현 관점의 기술 설계",
-    dotColor: "bg-purple-500",
+    dotColor: "bg-cyan-600",
   },
   WBS: {
     label: "작업 분해 구조",
     shortLabel: "WBS",
     icon: LayoutDashboard,
-    tone: "bg-gradient-to-br from-emerald-500 to-teal-600",
-    shadowClass: "shadow-[0_4px_14px_rgba(15,123,108,0.2)]",
     note: "실행 일정과 작업 구조",
-    dotColor: "bg-emerald-500",
+    dotColor: "bg-emerald-600",
   },
   Proposal: {
     label: "제안서",
     shortLabel: "제안서",
     icon: FileStack,
-    tone: "bg-gradient-to-br from-orange-400 to-orange-600",
-    shadowClass: "shadow-[0_4px_14px_rgba(217,115,13,0.2)]",
     note: "대외 공유용 문서",
-    dotColor: "bg-orange-500",
+    dotColor: "bg-amber-600",
   },
   PPT: {
     label: "발표 자료",
     shortLabel: "PPT",
     icon: Presentation,
-    tone: "bg-gradient-to-br from-rose-400 to-red-500",
-    shadowClass: "shadow-[0_4px_14px_rgba(224,62,62,0.2)]",
     note: "프레젠테이션 산출물",
-    dotColor: "bg-rose-500",
+    dotColor: "bg-rose-600",
   },
 };
 
@@ -211,8 +199,8 @@ export default function ProjectDetailPage() {
           <TopBar title="프로젝트를 찾을 수 없습니다" href="/projects" />
         }
       >
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-gradient-to-b from-[var(--bg-panel-muted)] to-[var(--bg-panel)] border border-[var(--line-soft)] px-6 py-24 text-center">
-          <FolderOpen className="h-14 w-14 text-[#9B9A97]" />
+        <div className="flex flex-col items-center justify-center rounded-[1.4rem] border border-[var(--line-soft)] bg-[var(--bg-panel-muted)] px-6 py-24 text-center">
+          <FolderOpen className="h-14 w-14 text-slate-400" />
           <p className="mt-4 text-xl font-semibold tracking-tight text-slate-800">
             프로젝트를 찾을 수 없습니다
           </p>
@@ -258,34 +246,35 @@ export default function ProjectDetailPage() {
         />
       }
     >
-      {/* Hero */}
-      <HeroPanel
-        kicker="프로젝트 상세"
-        title={project.name}
-        description={project.description || "프로젝트 설명이 없습니다."}
-        actions={
-          <div className="flex flex-wrap items-center gap-3">
-            <span className={`pill-badge ${badge.className}`}>{badge.label}</span>
-            {project.tags.map((tag) => (
-              <span
-                key={tag}
-                className="pill-badge bg-slate-100 text-slate-600"
-              >
-                {tag}
-              </span>
-            ))}
+      <section className="section-card">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+          <div>
+            <p className="data-label">프로젝트 개요</p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <h2 className="text-3xl font-semibold tracking-[-0.05em] text-slate-900">{project.name}</h2>
+              <span className={`pill-badge ${badge.className}`}>{badge.label}</span>
+            </div>
+            <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">{project.description || "프로젝트 설명이 없습니다."}</p>
+            {(project.tags ?? []).length ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {(project.tags ?? []).map((tag) => (
+                  <span key={tag} className="pill-badge bg-slate-100 text-slate-600">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
-        }
-      />
 
-      {/* Metrics */}
-      <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <MetricCard label="전체 문서" value={stats.total || 0} note="연결된 문서" />
-        <MetricCard label="PRD" value={stats.PRD || 0} note="요구사항 문서" accent="brand" />
-        <MetricCard label="TRD" value={stats.TRD || 0} note="기술 설계" accent="brand" />
-        <MetricCard label="WBS" value={stats.WBS || 0} note="작업 분해" accent="mint" />
-        <MetricCard label="제안서" value={stats.Proposal || 0} note="제안 문서" accent="warm" />
-        <MetricCard label="PPT" value={stats.PPT || 0} note="발표 자료" accent="warm" />
+          <aside className="grid gap-3 sm:grid-cols-2 xl:grid-cols-2">
+            <ProjectStatTile label="전체 문서" value={stats.total || 0} />
+            <ProjectStatTile label="PRD" value={stats.PRD || 0} />
+            <ProjectStatTile label="TRD" value={stats.TRD || 0} />
+            <ProjectStatTile label="WBS" value={stats.WBS || 0} />
+            <ProjectStatTile label="제안서" value={stats.Proposal || 0} />
+            <ProjectStatTile label="PPT" value={stats.PPT || 0} />
+          </aside>
+        </div>
       </section>
 
       {/* Link Document Form */}
@@ -304,8 +293,8 @@ export default function ProjectDetailPage() {
         />
 
         {docs.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl bg-gradient-to-b from-[var(--bg-panel-muted)] to-[var(--bg-panel)] border border-[var(--line-soft)] px-6 py-16 text-center">
-            <FolderOpen className="h-12 w-12 text-[#9B9A97]" />
+          <div className="flex flex-col items-center justify-center rounded-[1.4rem] border border-[var(--line-soft)] bg-[var(--bg-panel-muted)] px-6 py-16 text-center">
+            <FolderOpen className="h-12 w-12 text-slate-400" />
             <p className="mt-3 text-base font-semibold text-slate-800">연결된 문서가 없습니다</p>
             <p className="mt-1.5 max-w-md text-sm text-slate-500">
               위의 &quot;문서 연결&quot; 버튼으로 기존 문서를 이 프로젝트에 추가하세요.
@@ -319,9 +308,7 @@ export default function ProjectDetailPage() {
               return (
                 <div key={type}>
                   <div className="mb-3 flex items-center gap-2">
-                    <div
-                      className={`flex h-8 w-8 items-center justify-center rounded-lg ${meta.tone} text-white`}
-                    >
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl border border-[var(--line-soft)] bg-[var(--bg-panel-muted)] text-slate-700">
                       <Icon className="h-4 w-4" />
                     </div>
                     <h4 className="text-base font-semibold text-slate-900">
@@ -389,7 +376,7 @@ function DocumentRow({
           <div className="mt-1 flex items-center gap-2 text-xs text-slate-400">
             <span className="inline-flex items-center gap-1">
               <Clock3 className="h-3 w-3" />
-              {formatDate(doc.created_at, {
+              {formatDate(doc.created_at ?? "", {
                 year: "numeric",
                 month: "short",
                 day: "numeric",
@@ -430,7 +417,7 @@ function DocumentRow({
             onRemove();
           }}
           disabled={isRemoving}
-          className="secondary-button !rounded-md !px-2.5 !py-1.5 disabled:opacity-50"
+          className="secondary-button disabled:opacity-50"
           title="프로젝트에서 문서 연결 해제"
         >
           {isRemoving ? (
@@ -452,6 +439,15 @@ function DocumentRow({
   }
 
   return <div className="list-card">{content}</div>;
+}
+
+function ProjectStatTile({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="surface-muted p-4">
+      <p className="data-label">{label}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-slate-900">{value}</p>
+    </div>
+  );
 }
 
 /* -------------------------------------------------------------------------- */
@@ -581,7 +577,7 @@ function ProjectSettingsSection({
   const [editName, setEditName] = useState(project.name);
   const [editDescription, setEditDescription] = useState(project.description);
   const [editStatus, setEditStatus] = useState(project.status);
-  const [editTags, setEditTags] = useState(project.tags.join(", "));
+  const [editTags, setEditTags] = useState((project.tags ?? []).join(", "));
 
   const updateMutation = useMutation({
     mutationFn: () => {

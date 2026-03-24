@@ -256,11 +256,17 @@ class PipelineOrchestrator:
         # 모든 문서에 대해 파싱 작업을 동시에 시작하고 결과를 기다림
         results = await asyncio.gather(
             *[parse_document(doc) for doc in documents],
-            return_exceptions=False
+            return_exceptions=True
         )
 
-        # 성공한 결과만 모으기
-        parsed_contents = [r for r in results if r is not None]
+        # 성공한 결과만 모으고, 예외는 경고로 기록
+        parsed_contents = []
+        for i, r in enumerate(results):
+            if isinstance(r, BaseException):
+                doc_id = documents[i].id if i < len(documents) else "unknown"
+                logger.warning("파싱 중 예외 발생 (문서 %s): %s", doc_id, r)
+            elif r is not None:
+                parsed_contents.append(r)
 
         # 결과 기록
         layer_result = LayerResult(
