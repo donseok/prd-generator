@@ -1,0 +1,338 @@
+{
+  "id": "TRD-20260324-124537",
+  "title": "시스템 모니터링 웹 대시보드 TRD",
+  "executive_summary": "본 프로젝트는 단일 서버의 CPU, 메모리, 디스크, 네트워크 리소스를 실시간으로 시각화하는 웹 대시보드이다. React + Recharts 프론트엔드와 Python FastAPI + psutil 백엔드를 2-Tier 모놀리식 아키텍처로 구성한다. 인메모리 Ring Buffer로 최근 5분간의 시계열 데이터를 유지하며, 3초 간격 HTTP 폴링으로 실시간 데이터를 갱신한다. Docker 기반 배포로 환경 일관성을 확보한다.",
+  "technology_stack": [
+    {
+      "category": "Frontend",
+      "technologies": ["React 18.3", "TypeScript 5.x", "Vite 6.x", "Recharts 2.x", "Axios 1.x", "CSS Modules"],
+      "rationale": "PRD 지정 기술(React, Recharts) 기반. TypeScript로 타입 안정성 확보, Vite로 빠른 개발 환경 구성."
+    },
+    {
+      "category": "Backend",
+      "technologies": ["Python 3.11+", "FastAPI 0.115", "psutil 6.x", "Uvicorn 0.32"],
+      "rationale": "PRD 지정 기술(Python, psutil) 기반. FastAPI의 비동기 처리와 자동 API 문서 생성 활용."
+    },
+    {
+      "category": "Infrastructure",
+      "technologies": ["Docker 27.x", "Nginx 1.27", "docker-compose"],
+      "rationale": "컨테이너 기반 배포로 환경 일관성 확보. Nginx로 정적 파일 서빙 및 API 프록시."
+    }
+  ],
+  "system_architecture": {
+    "overview": "프론트엔드 SPA와 백엔드 REST API로 구성된 2-Tier 모놀리식 아키텍처. Nginx가 리버스 프록시로 프론트엔드와 백엔드를 통합.",
+    "architecture_style": "모놀리식",
+    "layers": [
+      {
+        "name": "Presentation Layer",
+        "description": "React SPA 기반 대시보드 UI. 4종 리소스를 차트로 시각화하고 3초 간격으로 자동 갱신.",
+        "components": [
+          {
+            "name": "Dashboard",
+            "type": "페이지 컴포넌트",
+            "description": "4종 모니터링 차트를 그리드 레이아웃으로 배치하는 메인 대시보드",
+            "responsibilities": ["차트 레이아웃 구성", "시스템 정보 헤더 표시"],
+            "dependencies": ["CpuChart", "MemoryChart", "DiskChart", "NetworkChart", "useSystemStats"],
+            "interfaces": []
+          },
+          {
+            "name": "CpuChart",
+            "type": "차트 컴포넌트",
+            "description": "CPU 사용률 실시간 라인 차트",
+            "responsibilities": ["CPU 사용률 시각화", "시간축 트렌드 표시"],
+            "dependencies": ["Recharts LineChart"],
+            "interfaces": ["props: { data: CpuData[], history: CpuHistory[] }"]
+          },
+          {
+            "name": "MemoryChart",
+            "type": "차트 컴포넌트",
+            "description": "메모리 사용률 라인 차트 + 전체 대비 사용량 표시",
+            "responsibilities": ["메모리 사용률 시각화", "전체/사용 용량 표시"],
+            "dependencies": ["Recharts LineChart"],
+            "interfaces": ["props: { data: MemoryData[], history: MemoryHistory[] }"]
+          },
+          {
+            "name": "DiskChart",
+            "type": "차트 컴포넌트",
+            "description": "디스크 사용량 파이 차트 (드라이브별)",
+            "responsibilities": ["디스크 사용/잔여 파이 차트", "드라이브별 개별 표시"],
+            "dependencies": ["Recharts PieChart"],
+            "interfaces": ["props: { data: DiskData[] }"]
+          },
+          {
+            "name": "NetworkChart",
+            "type": "차트 컴포넌트",
+            "description": "네트워크 IN/OUT 트래픽 실시간 차트",
+            "responsibilities": ["송수신 트래픽 구분 시각화", "단위 자동 변환"],
+            "dependencies": ["Recharts LineChart"],
+            "interfaces": ["props: { data: NetworkData[], history: NetworkHistory[] }"]
+          },
+          {
+            "name": "useSystemStats",
+            "type": "커스텀 훅",
+            "description": "3초 간격 API 폴링, 데이터 상태 관리, 에러 핸들링",
+            "responsibilities": ["3초 간격 자동 폴링", "데이터 캐싱", "에러 시 재시도"],
+            "dependencies": ["Axios", "React hooks"],
+            "interfaces": ["return: { stats, history, isLoading, error }"]
+          }
+        ]
+      },
+      {
+        "name": "API Layer",
+        "description": "FastAPI REST API. 시스템 리소스 정보를 JSON으로 제공.",
+        "components": [
+          {
+            "name": "SystemRouter",
+            "type": "API 라우터",
+            "description": "시스템 정보 관련 API 엔드포인트 그룹",
+            "responsibilities": ["엔드포인트 라우팅", "요청/응답 직렬화"],
+            "dependencies": ["FastAPI", "SystemCollector"],
+            "interfaces": ["GET /api/v1/system/stats", "GET /api/v1/system/stats/history", "GET /api/v1/system/info"]
+          },
+          {
+            "name": "SystemCollector",
+            "type": "서비스",
+            "description": "psutil 래퍼. OS로부터 시스템 리소스 정보를 수집하여 구조화된 데이터로 반환.",
+            "responsibilities": ["CPU/메모리/디스크/네트워크 데이터 수집", "네트워크 delta 계산", "데이터 정규화"],
+            "dependencies": ["psutil"],
+            "interfaces": ["get_snapshot() -> SystemSnapshot", "get_system_info() -> SystemInfo"]
+          },
+          {
+            "name": "RingBuffer",
+            "type": "데이터 저장소",
+            "description": "인메모리 링 버퍼. 최근 100개(약 5분) 데이터 포인트를 FIFO로 관리.",
+            "responsibilities": ["시계열 데이터 저장", "오래된 데이터 자동 삭제", "히스토리 조회"],
+            "dependencies": ["collections.deque"],
+            "interfaces": ["push(snapshot)", "get_history(limit) -> list"]
+          }
+        ]
+      },
+      {
+        "name": "Infrastructure Layer",
+        "description": "Nginx 리버스 프록시, Docker 컨테이너",
+        "components": [
+          {
+            "name": "Nginx",
+            "type": "리버스 프록시",
+            "description": "프론트엔드 정적 파일 서빙 및 백엔드 API 프록시",
+            "responsibilities": ["정적 파일 서빙", "API 프록시", "보안 헤더"],
+            "dependencies": [],
+            "interfaces": ["Port 80"]
+          }
+        ]
+      }
+    ],
+    "data_flow": "1. SystemCollector가 psutil을 통해 OS에서 리소스 정보 수집 → 2. RingBuffer에 타임스탬프와 함께 인메모리 저장 → 3. FastAPI 엔드포인트가 현재 스냅샷 + 히스토리를 JSON 응답 → 4. React 프론트엔드가 3초 간격으로 폴링하여 Recharts로 렌더링",
+    "deployment_diagram": "Docker Compose로 3개 컨테이너(nginx, frontend, backend) 구성. Nginx가 포트 80에서 요청을 받아 / 경로는 프론트엔드, /api 경로는 백엔드로 라우팅."
+  },
+  "database_design": {
+    "database_type": "인메모리 (Ring Buffer)",
+    "recommended_engine": "Python collections.deque",
+    "entities": [
+      {
+        "name": "SystemSnapshot",
+        "description": "특정 시점의 시스템 리소스 전체 스냅샷",
+        "attributes": [
+          "timestamp: datetime (수집 시각)",
+          "cpu: CpuData (CPU 사용률, 코어 수)",
+          "memory: MemoryData (메모리 사용률, 용량 정보)",
+          "disk: list[DiskData] (파티션별 디스크 정보)",
+          "network: NetworkData (네트워크 트래픽 정보)"
+        ],
+        "primary_key": "timestamp",
+        "relationships": []
+      }
+    ],
+    "indexing_strategy": "Ring Buffer의 deque 구조로 O(1) 삽입/삭제. 시간순 정렬 보장.",
+    "partitioning_strategy": "해당 없음 (인메모리 구조)"
+  },
+  "api_specification": {
+    "base_url": "/api/v1",
+    "authentication_method": "없음 (PRD 범위 외)",
+    "endpoints": [
+      {
+        "path": "/system/stats",
+        "method": "GET",
+        "description": "현재 시스템 리소스 스냅샷 조회",
+        "request_body": null,
+        "response_body": "{ timestamp, cpu: { usage_percent, core_count }, memory: { usage_percent, total_gb, used_gb, available_gb }, disk: [{ device, mountpoint, total_gb, used_gb, free_gb, usage_percent }], network: { bytes_sent, bytes_recv, bytes_sent_per_sec, bytes_recv_per_sec } }",
+        "authentication": false,
+        "related_requirement_id": "FR-001,FR-002,FR-003,FR-004,FR-005,FR-007"
+      },
+      {
+        "path": "/system/stats/history",
+        "method": "GET",
+        "description": "최근 5분간 시계열 데이터 조회",
+        "request_body": null,
+        "response_body": "{ data: [{ timestamp, cpu, memory, network }], count, interval_seconds }",
+        "authentication": false,
+        "related_requirement_id": "FR-001,FR-002,FR-004"
+      },
+      {
+        "path": "/system/info",
+        "method": "GET",
+        "description": "시스템 기본 정보 (OS, CPU 모델, 메모리 용량 등)",
+        "request_body": null,
+        "response_body": "{ hostname, os, os_version, cpu_model, cpu_cores, total_memory_gb, boot_time }",
+        "authentication": false,
+        "related_requirement_id": "FR-007"
+      },
+      {
+        "path": "/health",
+        "method": "GET",
+        "description": "서버 헬스 체크",
+        "request_body": null,
+        "response_body": "{ status: 'healthy' }",
+        "authentication": false,
+        "related_requirement_id": ""
+      }
+    ],
+    "common_headers": {
+      "Content-Type": "application/json"
+    },
+    "error_handling": "{ error: { code: 'ERROR_CODE', message: '설명' } } 형식. HTTP 상태코드: 400(잘못된 요청), 500(서버 에러), 503(수집 실패)"
+  },
+  "security_requirements": [
+    {
+      "category": "CORS",
+      "requirement": "허용된 오리진에서만 API 접근",
+      "implementation": "FastAPI CORSMiddleware, 허용 도메인 화이트리스트",
+      "priority": "HIGH"
+    },
+    {
+      "category": "입력 검증",
+      "requirement": "API 쿼리 파라미터 검증",
+      "implementation": "Pydantic 모델 + FastAPI 자동 검증",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "헤더 보안",
+      "requirement": "보안 관련 HTTP 헤더 설정",
+      "implementation": "Nginx: X-Content-Type-Options, X-Frame-Options, X-XSS-Protection",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "정보 노출 방지",
+      "requirement": "민감 시스템 정보 비노출",
+      "implementation": "프로세스 목록, 사용자 정보, 환경 변수 등 API에서 제외",
+      "priority": "MEDIUM"
+    },
+    {
+      "category": "Rate Limiting",
+      "requirement": "API 호출 빈도 제한",
+      "implementation": "Nginx limit_req (초당 10회)",
+      "priority": "LOW"
+    }
+  ],
+  "performance_requirements": [
+    {
+      "metric": "API 응답 시간 (p95)",
+      "target_value": "< 200ms",
+      "measurement_method": "FastAPI 미들웨어 로깅",
+      "related_component": "Backend API"
+    },
+    {
+      "metric": "API 응답 시간 (p99)",
+      "target_value": "< 500ms",
+      "measurement_method": "FastAPI 미들웨어 로깅",
+      "related_component": "Backend API"
+    },
+    {
+      "metric": "대시보드 초기 로딩",
+      "target_value": "< 2초",
+      "measurement_method": "Lighthouse 측정",
+      "related_component": "Frontend SPA"
+    },
+    {
+      "metric": "갱신 주기 준수율",
+      "target_value": "> 99%",
+      "measurement_method": "프론트엔드 타이머 모니터링",
+      "related_component": "Frontend 폴링"
+    },
+    {
+      "metric": "브라우저 메모리 사용",
+      "target_value": "< 200MB",
+      "measurement_method": "Chrome DevTools Memory",
+      "related_component": "Frontend SPA"
+    },
+    {
+      "metric": "동시 접속 지원",
+      "target_value": "20 사용자",
+      "measurement_method": "k6 부하 테스트",
+      "related_component": "전체"
+    },
+    {
+      "metric": "psutil 수집 시간",
+      "target_value": "< 100ms",
+      "measurement_method": "Python time 모듈",
+      "related_component": "SystemCollector"
+    }
+  ],
+  "infrastructure_requirements": [
+    {
+      "category": "애플리케이션 서버",
+      "specification": "2 vCPU, 4GB RAM, 20GB SSD",
+      "quantity": "1",
+      "purpose": "FastAPI + React 서빙",
+      "estimated_cost": "월 $20~40 (클라우드 기준)"
+    },
+    {
+      "category": "Docker Engine",
+      "specification": "Docker 27.x",
+      "quantity": "1",
+      "purpose": "컨테이너 런타임",
+      "estimated_cost": "무료 (오픈소스)"
+    },
+    {
+      "category": "OS",
+      "specification": "Ubuntu 22.04 LTS",
+      "quantity": "1",
+      "purpose": "호스트 운영체제",
+      "estimated_cost": "무료"
+    }
+  ],
+  "technical_risks": [
+    {
+      "description": "psutil이 특정 OS에서 권한 부족으로 일부 데이터 수집 실패",
+      "level": "MEDIUM",
+      "impact": "일부 모니터링 데이터 누락",
+      "mitigation": "권한 체크 후 graceful fallback (N/A 표시)",
+      "contingency": "Docker privileged 모드 또는 sudo 실행"
+    },
+    {
+      "description": "3초 폴링으로 인한 브라우저 메모리 누수 (장시간 운영 시)",
+      "level": "MEDIUM",
+      "impact": "브라우저 탭 메모리 증가, 성능 저하",
+      "mitigation": "Ring Buffer 패턴으로 DOM 노드 수 제한, useEffect cleanup",
+      "contingency": "Web Worker로 데이터 처리 분리"
+    },
+    {
+      "description": "Recharts 대량 데이터 포인트 렌더링 성능 저하",
+      "level": "LOW",
+      "impact": "차트 렌더링 지연",
+      "mitigation": "100개 포인트 제한 + SVG 최적화",
+      "contingency": "Canvas 기반 차트 라이브러리(Chart.js)로 교체"
+    },
+    {
+      "description": "네트워크 트래픽 카운터 overflow",
+      "level": "LOW",
+      "impact": "트래픽 수치 음수 또는 비정상 표시",
+      "mitigation": "delta 계산 시 overflow 감지 로직 추가",
+      "contingency": "주기적 카운터 리셋"
+    },
+    {
+      "description": "다중 디스크 파티션 시 파이 차트 가독성 저하",
+      "level": "LOW",
+      "impact": "UI 가독성 저하",
+      "mitigation": "상위 5개 파티션만 표시 + 기타 그룹핑",
+      "contingency": "테이블 뷰 대체 옵션"
+    }
+  ],
+  "metadata": {
+    "version": "1.0",
+    "status": "draft",
+    "created_at": "2026-03-24T12:45:37+09:00",
+    "source_prd_id": "PRD-20260324-124240",
+    "source_prd_title": "시스템 모니터링 웹 대시보드"
+  }
+}

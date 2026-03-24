@@ -1,0 +1,781 @@
+{
+  "id": "WBS-20260324-124842",
+  "title": "시스템 모니터링 웹 대시보드 WBS",
+  "phases": [
+    {
+      "id": "P1",
+      "name": "분석 및 설계",
+      "description": "요구사항 확정, UI/UX 설계, 시스템 아키텍처 설계, API 명세 작성",
+      "order": 1,
+      "start_date": "2026-04-01",
+      "end_date": "2026-04-18",
+      "milestone": "M1 - 설계 완료",
+      "deliverables": ["요구사항 정의서", "화면설계서", "디자인 시스템", "아키텍처 문서", "OpenAPI 명세서", "데이터 모델 문서"],
+      "work_packages": [
+        {
+          "id": "WP-1",
+          "name": "요구사항 분석 및 설계",
+          "description": "요구사항 확정, UI/UX 와이어프레임, 기술 설계, API 명세",
+          "start_date": "2026-04-01",
+          "end_date": "2026-04-18",
+          "tasks": [
+            {
+              "id": "WP-1.1",
+              "name": "요구사항 분석 및 확정",
+              "description": "PRD 기반 요구사항 리뷰 및 확정, 미해결 사항 해소",
+              "estimated_hours": 24,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "PM/PL", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [],
+              "start_date": "2026-04-01",
+              "end_date": "2026-04-04",
+              "related_requirement_ids": ["FR-001", "FR-002", "FR-003", "FR-004", "FR-005", "FR-006", "FR-007"],
+              "deliverables": ["요구사항 정의서"],
+              "notes": ""
+            },
+            {
+              "id": "WP-1.2",
+              "name": "UI/UX 와이어프레임 설계",
+              "description": "대시보드 레이아웃, 4종 차트 배치, 반응형 그리드 설계",
+              "estimated_hours": 32,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "UI/UX 디자이너", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-1.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-08",
+              "end_date": "2026-04-14",
+              "related_requirement_ids": ["FR-006"],
+              "deliverables": ["와이어프레임", "화면설계서"],
+              "notes": ""
+            },
+            {
+              "id": "WP-1.3",
+              "name": "다크 테마 디자인 시스템",
+              "description": "다크 테마 컬러 팔레트, 차트 색상, 타이포그래피 정의",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "UI/UX 디자이너", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-1.2", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-15",
+              "end_date": "2026-04-17",
+              "related_requirement_ids": ["FR-006"],
+              "deliverables": ["디자인 토큰", "컬러 팔레트"],
+              "notes": ""
+            },
+            {
+              "id": "WP-1.4",
+              "name": "시스템 아키텍처 설계",
+              "description": "2-Tier 아키텍처 상세 설계, 컴포넌트 구조, 데이터 흐름 정의",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-1.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-08",
+              "end_date": "2026-04-11",
+              "related_requirement_ids": ["FR-007"],
+              "deliverables": ["아키텍처 문서"],
+              "notes": ""
+            },
+            {
+              "id": "WP-1.5",
+              "name": "API 명세서 작성",
+              "description": "REST API 엔드포인트 설계, Request/Response 정의, OpenAPI 문서화",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-1.4", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-14",
+              "end_date": "2026-04-16",
+              "related_requirement_ids": ["FR-005", "FR-007"],
+              "deliverables": ["OpenAPI 명세서"],
+              "notes": ""
+            },
+            {
+              "id": "WP-1.6",
+              "name": "데이터 모델 설계",
+              "description": "SystemSnapshot, RingBuffer 등 인메모리 데이터 구조 설계",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-1.4", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-17",
+              "end_date": "2026-04-18",
+              "related_requirement_ids": ["FR-007"],
+              "deliverables": ["데이터 모델 문서"],
+              "notes": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P2",
+      "name": "개발",
+      "description": "백엔드 API 개발, 프론트엔드 대시보드 구현, 통합 및 최적화",
+      "order": 2,
+      "start_date": "2026-04-21",
+      "end_date": "2026-05-23",
+      "milestone": "M2 - 개발 완료",
+      "deliverables": ["백엔드 소스 코드", "프론트엔드 소스 코드", "통합 빌드"],
+      "work_packages": [
+        {
+          "id": "WP-2",
+          "name": "백엔드 개발",
+          "description": "FastAPI 기반 시스템 정보 수집 API 개발",
+          "start_date": "2026-04-21",
+          "end_date": "2026-05-09",
+          "tasks": [
+            {
+              "id": "WP-2.1",
+              "name": "FastAPI 프로젝트 초기 설정",
+              "description": "프로젝트 구조, 의존성, 설정 파일 구성",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-1.5", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-21",
+              "end_date": "2026-04-22",
+              "related_requirement_ids": ["FR-007"],
+              "deliverables": ["프로젝트 스캐폴딩"],
+              "notes": ""
+            },
+            {
+              "id": "WP-2.2",
+              "name": "SystemCollector 구현 (psutil)",
+              "description": "CPU, 메모리, 디스크, 네트워크 정보 수집기. 네트워크 delta 계산 포함.",
+              "estimated_hours": 24,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-2.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-22",
+              "end_date": "2026-04-25",
+              "related_requirement_ids": ["FR-001", "FR-002", "FR-003", "FR-004"],
+              "deliverables": ["SystemCollector 모듈"],
+              "notes": ""
+            },
+            {
+              "id": "WP-2.3",
+              "name": "RingBuffer 인메모리 저장소",
+              "description": "collections.deque 기반 100포인트 링 버퍼 구현",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-2.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-22",
+              "end_date": "2026-04-24",
+              "related_requirement_ids": ["FR-005"],
+              "deliverables": ["RingBuffer 모듈"],
+              "notes": ""
+            },
+            {
+              "id": "WP-2.4",
+              "name": "REST API 엔드포인트 구현",
+              "description": "/system/stats, /stats/history, /info, /health 엔드포인트 구현",
+              "estimated_hours": 24,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [
+                {"predecessor_id": "WP-2.2", "dependency_type": "FS", "lag_days": 0},
+                {"predecessor_id": "WP-2.3", "dependency_type": "FS", "lag_days": 0}
+              ],
+              "start_date": "2026-04-28",
+              "end_date": "2026-05-02",
+              "related_requirement_ids": ["FR-005", "FR-007"],
+              "deliverables": ["API 엔드포인트"],
+              "notes": ""
+            },
+            {
+              "id": "WP-2.5",
+              "name": "CORS 및 보안 미들웨어",
+              "description": "CORSMiddleware 설정, Rate Limiting, 보안 헤더",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-2.4", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-05",
+              "end_date": "2026-05-06",
+              "related_requirement_ids": ["NFR-001"],
+              "deliverables": ["보안 설정"],
+              "notes": ""
+            },
+            {
+              "id": "WP-2.6",
+              "name": "백엔드 단위 테스트",
+              "description": "pytest 기반 API 엔드포인트, SystemCollector, RingBuffer 테스트",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-2.4", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-06",
+              "end_date": "2026-05-09",
+              "related_requirement_ids": [],
+              "deliverables": ["pytest 테스트"],
+              "notes": ""
+            }
+          ]
+        },
+        {
+          "id": "WP-3",
+          "name": "프론트엔드 개발",
+          "description": "React + Recharts 기반 모니터링 대시보드 구현",
+          "start_date": "2026-04-28",
+          "end_date": "2026-05-16",
+          "tasks": [
+            {
+              "id": "WP-3.1",
+              "name": "React+Vite 프로젝트 초기 설정",
+              "description": "프로젝트 스캐폴딩, TypeScript 설정, 다크 테마 CSS 변수 셋업",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-1.2", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-28",
+              "end_date": "2026-04-29",
+              "related_requirement_ids": ["FR-006"],
+              "deliverables": ["프로젝트 스캐폴딩"],
+              "notes": ""
+            },
+            {
+              "id": "WP-3.2",
+              "name": "대시보드 레이아웃 구현",
+              "description": "반응형 그리드 레이아웃, 헤더, 4종 차트 배치 영역",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [
+                {"predecessor_id": "WP-3.1", "dependency_type": "FS", "lag_days": 0},
+                {"predecessor_id": "WP-1.3", "dependency_type": "FS", "lag_days": 0}
+              ],
+              "start_date": "2026-04-29",
+              "end_date": "2026-05-02",
+              "related_requirement_ids": ["FR-006"],
+              "deliverables": ["반응형 그리드 레이아웃"],
+              "notes": ""
+            },
+            {
+              "id": "WP-3.3",
+              "name": "CPU 사용률 라인 차트",
+              "description": "Recharts LineChart 기반 CPU 사용률 실시간 트렌드 차트",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-3.2", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-05",
+              "end_date": "2026-05-07",
+              "related_requirement_ids": ["FR-001"],
+              "deliverables": ["CpuChart 컴포넌트"],
+              "notes": ""
+            },
+            {
+              "id": "WP-3.4",
+              "name": "메모리 사용률 라인 차트",
+              "description": "메모리 사용률 차트 + 전체 대비 사용량 표시",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-3.2", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-05",
+              "end_date": "2026-05-07",
+              "related_requirement_ids": ["FR-002"],
+              "deliverables": ["MemoryChart 컴포넌트"],
+              "notes": ""
+            },
+            {
+              "id": "WP-3.5",
+              "name": "디스크 사용량 파이 차트",
+              "description": "Recharts PieChart 기반 드라이브별 사용량 시각화",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-3.2", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-08",
+              "end_date": "2026-05-09",
+              "related_requirement_ids": ["FR-003"],
+              "deliverables": ["DiskChart 컴포넌트"],
+              "notes": ""
+            },
+            {
+              "id": "WP-3.6",
+              "name": "네트워크 트래픽 차트",
+              "description": "IN/OUT 구분 라인 차트, 단위 자동 변환(KB/s, MB/s)",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-3.2", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-08",
+              "end_date": "2026-05-09",
+              "related_requirement_ids": ["FR-004"],
+              "deliverables": ["NetworkChart 컴포넌트"],
+              "notes": ""
+            },
+            {
+              "id": "WP-3.7",
+              "name": "useSystemStats 폴링 훅",
+              "description": "3초 간격 API 폴링, 상태 관리, 에러 시 재시도 로직",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-3.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-29",
+              "end_date": "2026-05-02",
+              "related_requirement_ids": ["FR-005"],
+              "deliverables": ["useSystemStats 훅"],
+              "notes": ""
+            },
+            {
+              "id": "WP-3.8",
+              "name": "차트 툴팁 및 인터랙션",
+              "description": "마우스 호버 시 상세 수치 툴팁, 숫자 포맷팅",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [
+                {"predecessor_id": "WP-3.3", "dependency_type": "FS", "lag_days": 0},
+                {"predecessor_id": "WP-3.4", "dependency_type": "FS", "lag_days": 0},
+                {"predecessor_id": "WP-3.5", "dependency_type": "FS", "lag_days": 0},
+                {"predecessor_id": "WP-3.6", "dependency_type": "FS", "lag_days": 0}
+              ],
+              "start_date": "2026-05-12",
+              "end_date": "2026-05-13",
+              "related_requirement_ids": ["NFR-002"],
+              "deliverables": ["차트 인터랙션"],
+              "notes": ""
+            },
+            {
+              "id": "WP-3.9",
+              "name": "반응형 대응 (태블릿)",
+              "description": "768px 미디어 쿼리, 차트 리사이징, 모바일 터치 대응",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-3.2", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-13",
+              "end_date": "2026-05-14",
+              "related_requirement_ids": ["FR-006", "NFR-003"],
+              "deliverables": ["반응형 스타일"],
+              "notes": ""
+            },
+            {
+              "id": "WP-3.10",
+              "name": "프론트엔드 단위 테스트",
+              "description": "Vitest 기반 컴포넌트 및 훅 테스트",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [
+                {"predecessor_id": "WP-3.3", "dependency_type": "FS", "lag_days": 0},
+                {"predecessor_id": "WP-3.7", "dependency_type": "FS", "lag_days": 0}
+              ],
+              "start_date": "2026-05-14",
+              "end_date": "2026-05-16",
+              "related_requirement_ids": [],
+              "deliverables": ["Vitest 테스트"],
+              "notes": ""
+            }
+          ]
+        },
+        {
+          "id": "WP-4",
+          "name": "통합 및 최적화",
+          "description": "프론트엔드-백엔드 통합, 실시간 갱신 검증, 성능 최적화",
+          "start_date": "2026-05-16",
+          "end_date": "2026-05-23",
+          "tasks": [
+            {
+              "id": "WP-4.1",
+              "name": "프론트엔드-백엔드 통합",
+              "description": "API 연동 테스트, 데이터 바인딩 검증",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [
+                {"resource_type": "프론트엔드 개발자", "allocation_percentage": 50, "person_count": 1},
+                {"resource_type": "백엔드 개발자", "allocation_percentage": 50, "person_count": 1}
+              ],
+              "dependencies": [
+                {"predecessor_id": "WP-2.4", "dependency_type": "FS", "lag_days": 0},
+                {"predecessor_id": "WP-3.7", "dependency_type": "FS", "lag_days": 0}
+              ],
+              "start_date": "2026-05-16",
+              "end_date": "2026-05-19",
+              "related_requirement_ids": ["FR-005", "FR-007"],
+              "deliverables": ["통합 빌드"],
+              "notes": ""
+            },
+            {
+              "id": "WP-4.2",
+              "name": "실시간 갱신 E2E 검증",
+              "description": "3초 간격 갱신 동작 확인, 데이터 정합성 검증",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-4.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-19",
+              "end_date": "2026-05-20",
+              "related_requirement_ids": ["FR-005"],
+              "deliverables": ["E2E 검증 결과"],
+              "notes": ""
+            },
+            {
+              "id": "WP-4.3",
+              "name": "성능 최적화",
+              "description": "번들 크기 최적화, 차트 렌더링 최적화, Lighthouse 점검",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "프론트엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-4.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-20",
+              "end_date": "2026-05-22",
+              "related_requirement_ids": ["NFR-001"],
+              "deliverables": ["Lighthouse 리포트"],
+              "notes": ""
+            },
+            {
+              "id": "WP-4.4",
+              "name": "에러 핸들링 및 폴백",
+              "description": "API 장애 시 UI 폴백, 연결 재시도, 에러 메시지 표시",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [
+                {"resource_type": "프론트엔드 개발자", "allocation_percentage": 50, "person_count": 1},
+                {"resource_type": "백엔드 개발자", "allocation_percentage": 50, "person_count": 1}
+              ],
+              "dependencies": [{"predecessor_id": "WP-4.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-22",
+              "end_date": "2026-05-23",
+              "related_requirement_ids": ["FR-005"],
+              "deliverables": ["에러 핸들링 구현"],
+              "notes": ""
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "P3",
+      "name": "테스트 및 배포",
+      "description": "기능/성능 테스트, Docker 배포, 운영 이관",
+      "order": 3,
+      "start_date": "2026-05-26",
+      "end_date": "2026-06-06",
+      "milestone": "M3 - 배포 완료",
+      "deliverables": ["테스트 보고서", "Docker 이미지", "운영 가이드", "인수 테스트 보고서"],
+      "work_packages": [
+        {
+          "id": "WP-5",
+          "name": "테스트",
+          "description": "기능, 크로스 브라우저, 성능, 안정성 테스트",
+          "start_date": "2026-05-26",
+          "end_date": "2026-06-03",
+          "tasks": [
+            {
+              "id": "WP-5.1",
+              "name": "테스트 계획 수립",
+              "description": "테스트 시나리오, 테스트 케이스, 합격 기준 정의",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "QA", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-1.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-14",
+              "end_date": "2026-04-15",
+              "related_requirement_ids": [],
+              "deliverables": ["테스트 계획서"],
+              "notes": "설계 단계에서 미리 작성"
+            },
+            {
+              "id": "WP-5.2",
+              "name": "기능 테스트 (4종 차트)",
+              "description": "CPU, 메모리, 디스크, 네트워크 차트 기능 검증",
+              "estimated_hours": 24,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "QA", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-4.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-26",
+              "end_date": "2026-05-28",
+              "related_requirement_ids": ["FR-001", "FR-002", "FR-003", "FR-004"],
+              "deliverables": ["기능 테스트 보고서"],
+              "notes": ""
+            },
+            {
+              "id": "WP-5.3",
+              "name": "크로스 브라우저 테스트",
+              "description": "Chrome, Firefox, Safari, Edge 호환성 검증",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "QA", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-4.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-26",
+              "end_date": "2026-05-28",
+              "related_requirement_ids": ["NFR-003"],
+              "deliverables": ["호환성 테스트 보고서"],
+              "notes": ""
+            },
+            {
+              "id": "WP-5.4",
+              "name": "성능 테스트",
+              "description": "API 응답시간, 브라우저 메모리, 동시 접속 부하 테스트",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [
+                {"resource_type": "QA", "allocation_percentage": 50, "person_count": 1},
+                {"resource_type": "백엔드 개발자", "allocation_percentage": 50, "person_count": 1}
+              ],
+              "dependencies": [{"predecessor_id": "WP-4.3", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-28",
+              "end_date": "2026-05-30",
+              "related_requirement_ids": ["NFR-001"],
+              "deliverables": ["성능 테스트 보고서"],
+              "notes": ""
+            },
+            {
+              "id": "WP-5.5",
+              "name": "장시간 안정성 테스트 (24h)",
+              "description": "24시간 연속 운영 시 메모리 누수, 성능 저하 검증",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "QA", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-5.2", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-29",
+              "end_date": "2026-05-30",
+              "related_requirement_ids": ["NFR-001"],
+              "deliverables": ["안정성 테스트 보고서"],
+              "notes": ""
+            },
+            {
+              "id": "WP-5.6",
+              "name": "버그 수정 및 재테스트",
+              "description": "테스트에서 발견된 버그 수정 및 확인 테스트",
+              "estimated_hours": 24,
+              "status": "NOT_STARTED",
+              "resources": [
+                {"resource_type": "프론트엔드 개발자", "allocation_percentage": 50, "person_count": 1},
+                {"resource_type": "백엔드 개발자", "allocation_percentage": 50, "person_count": 1}
+              ],
+              "dependencies": [
+                {"predecessor_id": "WP-5.2", "dependency_type": "FS", "lag_days": 0},
+                {"predecessor_id": "WP-5.3", "dependency_type": "FS", "lag_days": 0},
+                {"predecessor_id": "WP-5.4", "dependency_type": "FS", "lag_days": 0}
+              ],
+              "start_date": "2026-05-30",
+              "end_date": "2026-06-03",
+              "related_requirement_ids": [],
+              "deliverables": ["버그 수정 완료"],
+              "notes": ""
+            }
+          ]
+        },
+        {
+          "id": "WP-6",
+          "name": "배포 및 운영 이관",
+          "description": "Docker 배포, Nginx 설정, 운영 가이드 작성, 인수 테스트",
+          "start_date": "2026-05-26",
+          "end_date": "2026-06-06",
+          "tasks": [
+            {
+              "id": "WP-6.1",
+              "name": "Dockerfile 작성",
+              "description": "프론트엔드/백엔드 Dockerfile, docker-compose.yml 작성",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-4.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-26",
+              "end_date": "2026-05-27",
+              "related_requirement_ids": [],
+              "deliverables": ["Dockerfile", "docker-compose.yml"],
+              "notes": ""
+            },
+            {
+              "id": "WP-6.2",
+              "name": "Nginx 설정",
+              "description": "리버스 프록시, 정적 파일 서빙, 보안 헤더 설정",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-6.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-27",
+              "end_date": "2026-05-28",
+              "related_requirement_ids": [],
+              "deliverables": ["nginx.conf"],
+              "notes": ""
+            },
+            {
+              "id": "WP-6.3",
+              "name": "배포 스크립트 작성",
+              "description": "docker-compose up 자동화, 헬스 체크 스크립트",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-6.2", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-05-28",
+              "end_date": "2026-05-29",
+              "related_requirement_ids": [],
+              "deliverables": ["배포 스크립트"],
+              "notes": ""
+            },
+            {
+              "id": "WP-6.4",
+              "name": "운영 환경 배포",
+              "description": "운영 서버에 Docker 컨테이너 배포 및 동작 확인",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "백엔드 개발자", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [
+                {"predecessor_id": "WP-5.6", "dependency_type": "FS", "lag_days": 0},
+                {"predecessor_id": "WP-6.3", "dependency_type": "FS", "lag_days": 0}
+              ],
+              "start_date": "2026-06-03",
+              "end_date": "2026-06-04",
+              "related_requirement_ids": [],
+              "deliverables": ["운영 서버 배포 완료"],
+              "notes": ""
+            },
+            {
+              "id": "WP-6.5",
+              "name": "운영 가이드 작성",
+              "description": "운영 매뉴얼, 트러블슈팅 가이드, 모니터링 항목 설명",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "PM/PL", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-6.4", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-06-04",
+              "end_date": "2026-06-05",
+              "related_requirement_ids": [],
+              "deliverables": ["운영 매뉴얼", "트러블슈팅 가이드"],
+              "notes": ""
+            },
+            {
+              "id": "WP-6.6",
+              "name": "인수 테스트 및 이관",
+              "description": "고객 인수 테스트, 최종 승인, 운영 이관",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [
+                {"resource_type": "PM/PL", "allocation_percentage": 50, "person_count": 1},
+                {"resource_type": "QA", "allocation_percentage": 50, "person_count": 1}
+              ],
+              "dependencies": [{"predecessor_id": "WP-6.4", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-06-05",
+              "end_date": "2026-06-06",
+              "related_requirement_ids": [],
+              "deliverables": ["인수 테스트 보고서"],
+              "notes": ""
+            }
+          ]
+        },
+        {
+          "id": "WP-7",
+          "name": "프로젝트 관리",
+          "description": "프로젝트 계획, 주간 회의, 스프린트 관리, 종료 보고",
+          "start_date": "2026-04-01",
+          "end_date": "2026-06-06",
+          "tasks": [
+            {
+              "id": "WP-7.1",
+              "name": "킥오프 및 프로젝트 계획",
+              "description": "프로젝트 킥오프 미팅, 상세 일정 수립, 역할 배정",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "PM/PL", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [],
+              "start_date": "2026-04-01",
+              "end_date": "2026-04-02",
+              "related_requirement_ids": [],
+              "deliverables": ["프로젝트 계획서"],
+              "notes": ""
+            },
+            {
+              "id": "WP-7.2",
+              "name": "주간 회의 및 이슈 관리",
+              "description": "주간 진척 회의, 이슈 트래킹, 리스크 모니터링 (10주간)",
+              "estimated_hours": 40,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "PM/PL", "allocation_percentage": 50, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-7.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-03",
+              "end_date": "2026-06-06",
+              "related_requirement_ids": [],
+              "deliverables": ["주간 보고서", "이슈 로그"],
+              "notes": "전 기간 투입"
+            },
+            {
+              "id": "WP-7.3",
+              "name": "스프린트 리뷰/회고",
+              "description": "2주 주기 스프린트 리뷰 및 회고 (5회)",
+              "estimated_hours": 16,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "PM/PL", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-7.1", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-04-14",
+              "end_date": "2026-06-06",
+              "related_requirement_ids": [],
+              "deliverables": ["스프린트 리뷰 기록"],
+              "notes": "2주 주기, 총 5회"
+            },
+            {
+              "id": "WP-7.4",
+              "name": "프로젝트 종료 보고",
+              "description": "프로젝트 결과 보고, 교훈 정리, 후속 개선 사항 도출",
+              "estimated_hours": 8,
+              "status": "NOT_STARTED",
+              "resources": [{"resource_type": "PM/PL", "allocation_percentage": 100, "person_count": 1}],
+              "dependencies": [{"predecessor_id": "WP-6.6", "dependency_type": "FS", "lag_days": 0}],
+              "start_date": "2026-06-06",
+              "end_date": "2026-06-06",
+              "related_requirement_ids": [],
+              "deliverables": ["프로젝트 종료 보고서"],
+              "notes": ""
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "summary": {
+    "total_phases": 3,
+    "total_work_packages": 7,
+    "total_tasks": 32,
+    "total_hours": 880,
+    "total_man_days": 110,
+    "total_man_months": 5.5,
+    "estimated_duration_days": 50,
+    "critical_path": ["WP-1.1", "WP-1.4", "WP-1.5", "WP-2.1", "WP-2.2", "WP-2.4", "WP-4.1", "WP-5.2", "WP-5.6", "WP-6.4", "WP-6.6"],
+    "resource_summary": [
+      {
+        "resource_type": "PM/PL",
+        "total_hours": 120,
+        "total_days": 15,
+        "peak_allocation": 1
+      },
+      {
+        "resource_type": "프론트엔드 개발자",
+        "total_hours": 176,
+        "total_days": 22,
+        "peak_allocation": 1
+      },
+      {
+        "resource_type": "백엔드 개발자",
+        "total_hours": 168,
+        "total_days": 21,
+        "peak_allocation": 1
+      },
+      {
+        "resource_type": "UI/UX 디자이너",
+        "total_hours": 48,
+        "total_days": 6,
+        "peak_allocation": 1
+      },
+      {
+        "resource_type": "QA",
+        "total_hours": 80,
+        "total_days": 10,
+        "peak_allocation": 1
+      }
+    ]
+  },
+  "metadata": {
+    "version": "1.0",
+    "status": "draft",
+    "created_at": "2026-03-24T12:48:42+09:00",
+    "source_prd_id": "PRD-20260324-124240",
+    "source_prd_title": "시스템 모니터링 웹 대시보드"
+  }
+}
